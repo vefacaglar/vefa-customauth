@@ -2,12 +2,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using Vefa.CustomAuth.Core.Models;
 
-namespace Vefa.CustomAuth.Core.Stores;
+namespace Vefa.CustomAuth.Core.Managers;
 
 /// <summary>
-/// Defines persistence operations for OAuth2 / OIDC clients.
+/// Defines business operations for managing OAuth2/OIDC clients.
 /// </summary>
-public interface ICustomAuthClientStore
+public interface ICustomAuthClientManager
 {
     /// <summary>
     /// Finds a client by its unique client ID.
@@ -26,17 +26,25 @@ public interface ICustomAuthClientStore
     Task<CustomAuthPagedResult<CustomAuthClient>> GetPagedAsync(CustomAuthPagedRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Persists a new or updated client.
+    /// Validates and registers a new client.
     /// </summary>
-    /// <param name="client">The client to persist.</param>
+    /// <param name="client">The client to register.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
-    Task StoreAsync(CustomAuthClient client, CancellationToken cancellationToken = default);
+    Task CreateAsync(CustomAuthClient client, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Validates and updates an existing client configuration.
+    /// </summary>
+    /// <param name="client">The updated client model.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    Task UpdateAsync(CustomAuthClient client, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Deletes a client by its unique client ID.
     /// </summary>
-    /// <param name="clientId">The client ID of the client to delete.</param>
+    /// <param name="clientId">The client ID to delete.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     Task DeleteAsync(string clientId, CancellationToken cancellationToken = default);

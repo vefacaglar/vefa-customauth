@@ -3,31 +3,31 @@ using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
+using Vefa.CustomAuth.Core.Managers;
 using Vefa.CustomAuth.Core.Options;
-using Vefa.CustomAuth.Core.Stores;
 using Vefa.CustomAuth.Tokens.Signing;
 
 namespace Vefa.CustomAuth.AspNetCore.Endpoints;
 
 internal sealed class LogoutEndpointService
 {
-    private readonly ICustomAuthSessionStore _sessionStore;
-    private readonly ICustomAuthClientStore _clientStore;
+    private readonly ICustomAuthSessionManager _sessionManager;
+    private readonly ICustomAuthClientManager _clientManager;
     private readonly SessionCookieService _sessionCookieService;
     private readonly ISigningCredentialsProvider _signingCredentialsProvider;
     private readonly IOptionsMonitor<CustomAuthOptions> _options;
     private readonly TimeProvider _timeProvider;
 
     public LogoutEndpointService(
-        ICustomAuthSessionStore sessionStore,
-        ICustomAuthClientStore clientStore,
+        ICustomAuthSessionManager sessionManager,
+        ICustomAuthClientManager clientManager,
         SessionCookieService sessionCookieService,
         ISigningCredentialsProvider signingCredentialsProvider,
         IOptionsMonitor<CustomAuthOptions> options,
         TimeProvider timeProvider)
     {
-        _sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
-        _clientStore = clientStore ?? throw new ArgumentNullException(nameof(clientStore));
+        _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
+        _clientManager = clientManager ?? throw new ArgumentNullException(nameof(clientManager));
         _sessionCookieService = sessionCookieService ?? throw new ArgumentNullException(nameof(sessionCookieService));
         _signingCredentialsProvider = signingCredentialsProvider ?? throw new ArgumentNullException(nameof(signingCredentialsProvider));
         _options = options ?? throw new ArgumentNullException(nameof(options));
@@ -40,10 +40,9 @@ internal sealed class LogoutEndpointService
 
         // 1. Terminate the active SSO session if present
         var session = await _sessionCookieService.GetCurrentSessionAsync(context, cancellationToken).ConfigureAwait(false);
-        var now = _timeProvider.GetUtcNow();
         if (session is not null)
         {
-            await _sessionStore.RevokeAsync(session.Id, now, cancellationToken).ConfigureAwait(false);
+            await _sessionManager.RevokeAsync(session.Id, cancellationToken).ConfigureAwait(false);
         }
 
         // Clear the cookie anyway
@@ -110,7 +109,7 @@ internal sealed class LogoutEndpointService
         var isValidRedirect = false;
         if (!string.IsNullOrWhiteSpace(clientId) && !string.IsNullOrWhiteSpace(postLogoutRedirectUri))
         {
-            var client = await _clientStore.FindByClientIdAsync(clientId, cancellationToken).ConfigureAwait(false);
+            var client = await _clientManager.FindByClientIdAsync(clientId, cancellationToken).ConfigureAwait(false);
             if (client is not null && client.PostLogoutRedirectUris.Contains(postLogoutRedirectUri, StringComparer.Ordinal))
             {
                 isValidRedirect = true;

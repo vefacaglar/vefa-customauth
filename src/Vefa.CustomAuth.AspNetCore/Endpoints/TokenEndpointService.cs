@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
+using Vefa.CustomAuth.Core.Managers;
 using Vefa.CustomAuth.Core.Models;
 using Vefa.CustomAuth.Core.Options;
 using Vefa.CustomAuth.Core.Stores;
@@ -9,26 +10,23 @@ namespace Vefa.CustomAuth.AspNetCore.Endpoints;
 
 internal sealed class TokenEndpointService
 {
-    private readonly ICustomAuthClientStore _clientStore;
-    private readonly ICustomAuthAuthorizationCodeStore _codeStore;
-    private readonly ICustomAuthRefreshTokenStore _refreshTokenStore;
+    private readonly ICustomAuthClientManager _clientManager;
+    private readonly ICustomAuthTokenManager _tokenManager;
     private readonly ICustomAuthUserStore _userStore;
     private readonly ITokenIssuer _tokenIssuer;
     private readonly IOptionsMonitor<CustomAuthOptions> _options;
     private readonly TimeProvider _timeProvider;
 
     public TokenEndpointService(
-        ICustomAuthClientStore clientStore,
-        ICustomAuthAuthorizationCodeStore codeStore,
-        ICustomAuthRefreshTokenStore refreshTokenStore,
+        ICustomAuthClientManager clientManager,
+        ICustomAuthTokenManager tokenManager,
         ICustomAuthUserStore userStore,
         ITokenIssuer tokenIssuer,
         IOptionsMonitor<CustomAuthOptions> options,
         TimeProvider timeProvider)
     {
-        _clientStore = clientStore ?? throw new ArgumentNullException(nameof(clientStore));
-        _codeStore = codeStore ?? throw new ArgumentNullException(nameof(codeStore));
-        _refreshTokenStore = refreshTokenStore ?? throw new ArgumentNullException(nameof(refreshTokenStore));
+        _clientManager = clientManager ?? throw new ArgumentNullException(nameof(clientManager));
+        _tokenManager = tokenManager ?? throw new ArgumentNullException(nameof(tokenManager));
         _userStore = userStore ?? throw new ArgumentNullException(nameof(userStore));
         _tokenIssuer = tokenIssuer ?? throw new ArgumentNullException(nameof(tokenIssuer));
         _options = options ?? throw new ArgumentNullException(nameof(options));
@@ -68,13 +66,13 @@ internal sealed class TokenEndpointService
             return EndpointResults.OAuthError("invalid_request", "code, redirect_uri, client_id, and code_verifier are required.");
         }
 
-        var client = await _clientStore.FindByClientIdAsync(clientId, cancellationToken).ConfigureAwait(false);
+        var client = await _clientManager.FindByClientIdAsync(clientId, cancellationToken).ConfigureAwait(false);
         if (client is null)
         {
             return EndpointResults.OAuthError("invalid_client", "The client is not registered.", StatusCodes.Status401Unauthorized);
         }
 
-        var code = await _codeStore.FindByHashAsync(TokenHasher.Hash(codeValue), cancellationToken).ConfigureAwait(false);
+        var code = await _tokenManager.FindAuthorizationCodeByHashAsync(TokenHasher.Hash(codeValue), cancellationToken).ConfigureAwait(false);
         var now = _timeProvider.GetUtcNow();
         if (code is null
             || code.ConsumedAt is not null
@@ -106,7 +104,7 @@ internal sealed class TokenEndpointService
             cancellationToken).ConfigureAwait(false);
 
         await StoreRefreshTokenAsync(issued.RefreshToken, client, user.UserId, code.Scope, null, now, cancellationToken).ConfigureAwait(false);
-        await _codeStore.MarkConsumedAsync(code.Id, now, cancellationToken).ConfigureAwait(false);
+        await _tokenManager.MarkAuthorizationCodeConsumedAsync(code.Id, now, cancellationToken).ConfigureAwait(false);
 
         return Results.Json(CreateTokenResponse(issued, code.Scope, client.AllowRefreshTokens));
     }
@@ -121,7 +119,7 @@ internal sealed class TokenEndpointService
             return EndpointResults.OAuthError("invalid_request", "refresh_token and client_id are required.");
         }
 
-        var client = await _clientStore.FindByClientIdAsync(clientId, cancellationToken).ConfigureAwait(false);
+        var client = await _clientManager.FindByClientIdAsync(clientId, cancellationToken).ConfigureAwait(false);
         if (client is null)
         {
             return EndpointResults.OAuthError("invalid_client", "The client is not registered.", StatusCodes.Status401Unauthorized);
@@ -132,7 +130,7 @@ internal sealed class TokenEndpointService
             return EndpointResults.OAuthError("unsupported_grant_type", "Refresh tokens are not enabled for this client.");
         }
 
-        var refreshToken = await _refreshTokenStore.FindByHashAsync(TokenHasher.Hash(refreshTokenValue), cancellationToken).ConfigureAwait(false);
+        var refreshToken = await _tokenManager.FindRefreshTokenByHashAsync(TokenHasher.Hash(refreshTokenValue), cancellationToken).ConfigureAwait(false);
         var now = _timeProvider.GetUtcNow();
         if (refreshToken is null
             || refreshToken.ConsumedAt is not null
@@ -167,7 +165,7 @@ internal sealed class TokenEndpointService
             refreshToken.SessionId,
             now,
             cancellationToken).ConfigureAwait(false);
-        await _refreshTokenStore.MarkConsumedAsync(refreshToken.Id, now, cancellationToken).ConfigureAwait(false);
+        await _tokenManager.MarkRefreshTokenConsumedAsync(refreshToken.Id, now, cancellationToken).ConfigureAwait(false);
 
         return Results.Json(CreateTokenResponse(issued, refreshToken.Scope, includeRefreshToken: true));
     }
@@ -186,7 +184,7 @@ internal sealed class TokenEndpointService
             return;
         }
 
-        await _refreshTokenStore.StoreAsync(
+        await _tokenManager.StoreRefreshTokenAsync(
             new CustomAuthRefreshToken
             {
                 Id = Guid.NewGuid(),

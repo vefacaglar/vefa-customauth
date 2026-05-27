@@ -1,6 +1,7 @@
 using System.Net;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
+using Vefa.CustomAuth.Core.Managers;
 using Vefa.CustomAuth.Core.Models;
 using Vefa.CustomAuth.Core.Options;
 using Vefa.CustomAuth.Core.Stores;
@@ -10,20 +11,20 @@ namespace Vefa.CustomAuth.AspNetCore.Endpoints;
 internal sealed class LoginEndpointService
 {
     private readonly ICustomAuthUserStore _userStore;
-    private readonly ICustomAuthSessionStore _sessionStore;
+    private readonly ICustomAuthSessionManager _sessionManager;
     private readonly SessionCookieService _sessionCookieService;
     private readonly IOptionsMonitor<CustomAuthOptions> _options;
     private readonly TimeProvider _timeProvider;
 
     public LoginEndpointService(
         ICustomAuthUserStore userStore,
-        ICustomAuthSessionStore sessionStore,
+        ICustomAuthSessionManager sessionManager,
         SessionCookieService sessionCookieService,
         IOptionsMonitor<CustomAuthOptions> options,
         TimeProvider timeProvider)
     {
         _userStore = userStore ?? throw new ArgumentNullException(nameof(userStore));
-        _sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
+        _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
         _sessionCookieService = sessionCookieService ?? throw new ArgumentNullException(nameof(sessionCookieService));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
@@ -66,7 +67,7 @@ internal sealed class LoginEndpointService
             ExpiresAt = now.Add(_options.CurrentValue.RefreshTokenLifetime),
         };
 
-        await _sessionStore.StoreAsync(session, cancellationToken).ConfigureAwait(false);
+        await _sessionManager.CreateAsync(session, cancellationToken).ConfigureAwait(false);
         _sessionCookieService.SignIn(context, session);
 
         return Results.Redirect(IsLocalReturnUrl(returnUrl) ? returnUrl : "/");

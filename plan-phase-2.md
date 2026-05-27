@@ -679,6 +679,8 @@ The same test suite should be reusable across EF Core, MongoDB, and custom provi
 
 ### v0.5 — Manager Layer and Store Contracts
 
+Status: completed
+
 ```text
 Finalize provider-neutral store interfaces
 Introduce manager layer
