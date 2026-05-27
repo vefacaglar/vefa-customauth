@@ -13,7 +13,7 @@
     <Authors>Vefa Çağlar Özcan</Authors>
     <Company>Vefa</Company>
     <Product>Vefa.CustomAuth</Product>
-    <Description>OAuth2 / OpenID Connect tabanlı custom SSO kütüphanesi.</Description>
+    <Description>OAuth2 / OpenID Connect based custom SSO library for ASP.NET Core.</Description>
     <PackageProjectUrl>https://github.com/vefacaglar/vefa-customauth</PackageProjectUrl>
     <RepositoryUrl>https://github.com/vefacaglar/vefa-customauth</RepositoryUrl>
     <RepositoryType>git</RepositoryType>

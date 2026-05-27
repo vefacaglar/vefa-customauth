@@ -5,6 +5,7 @@ public sealed class TokenIssueRequest
     public string Subject { get; set; } = default!;
     public string ClientId { get; set; } = default!;
     public string Scope { get; set; } = default!;
+    public DateTimeOffset? AuthTime { get; set; }
     public IReadOnlyDictionary<string, string>? AdditionalClaims { get; set; }
 }
 
