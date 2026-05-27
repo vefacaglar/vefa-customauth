@@ -482,6 +482,8 @@ Options validation should be added before publishing the package.
 
 ## 16. Sample Scenarios
 
+Status: completed
+
 At least three sample projects should exist:
 
 ```text
