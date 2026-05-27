@@ -59,7 +59,7 @@ Vefa.CustomAuth.EntityFrameworkCore
 
 ## 2. Intended Usage
 
-Status: partial — `AddVefaCustomAuth`, `MapVefaCustomAuthEndpoints`, and `AddJwtTokenSigning` extension methods exist; `AddEntityFrameworkStores<AppDbContext>` builder API is not implemented yet.
+Status: partial — `AddVefaCustomAuth`, `MapVefaCustomAuthEndpoints`, `AddJwtTokenSigning`, and `AddInMemoryStores` extension methods exist; `AddEntityFrameworkStores<AppDbContext>` builder API is not implemented yet.
 
 A developer should be able to add the library to an ASP.NET Core project like this:
 
