@@ -28,11 +28,16 @@ public sealed class EfCustomAuthSigningKeyStore<TContext> : ICustomAuthSigningKe
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<CustomAuthSigningKey>> GetAllAsync(CancellationToken cancellationToken = default)
-        => await _context.Set<CustomAuthSigningKey>()
+    {
+        var keys = await _context.Set<CustomAuthSigningKey>()
             .AsNoTracking()
-            .OrderByDescending(key => key.CreatedAt)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
+
+        return keys
+            .OrderByDescending(key => key.CreatedAt)
+            .ToList();
+    }
 
     /// <inheritdoc />
     public async Task StoreAsync(CustomAuthSigningKey key, CancellationToken cancellationToken = default)

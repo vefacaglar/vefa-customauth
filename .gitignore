@@ -41,6 +41,7 @@ _ReSharper*/
 *.env
 secrets.json
 appsettings.*.Local.json
+samples/Vefa.CustomAuth.Sample.AuthServer/customauth-sample.db*
 
 # Claude
 .claude/

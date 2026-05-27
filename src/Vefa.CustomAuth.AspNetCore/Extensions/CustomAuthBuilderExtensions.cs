@@ -17,8 +17,8 @@ public static class CustomAuthBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
 
         builder.Services.TryAddSingleton(TimeProvider.System);
-        builder.Services.TryAddSingleton<ISigningCredentialsProvider, RsaSigningCredentialsProvider>();
-        builder.Services.TryAddSingleton<ITokenIssuer, JwtTokenIssuer>();
+        builder.Services.TryAddScoped<ISigningCredentialsProvider, RsaSigningCredentialsProvider>();
+        builder.Services.TryAddScoped<ITokenIssuer, JwtTokenIssuer>();
 
         return builder;
     }

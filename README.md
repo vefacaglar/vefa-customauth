@@ -35,7 +35,7 @@ tests/
 - JWT access token and ID token issuance.
 - Opaque refresh token issuance and rotation.
 - Hashed authorization code and refresh token storage.
-- In-memory stores for samples and tests.
+- In-memory stores for tests and simple local scenarios.
 - EF Core `DbContext` and store implementations.
 
 ## Supported Endpoints
@@ -80,6 +80,8 @@ demo / demo
 ```
 
 Press `Ctrl+C` in the script terminal to stop all sample apps.
+
+The AuthServer sample uses SQLite-backed EF stores for clients, authorization codes, refresh tokens, sessions, and signing keys. The demo user store is still in-memory because user persistence is intentionally owned by the host application.
 
 ## Sample Flow
 

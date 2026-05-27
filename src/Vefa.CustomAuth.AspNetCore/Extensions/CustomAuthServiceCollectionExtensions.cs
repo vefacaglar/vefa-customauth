@@ -17,7 +17,7 @@ public static class CustomAuthServiceCollectionExtensions
         services.TryAddScoped<AuthorizationEndpointService>();
         services.TryAddScoped<LoginEndpointService>();
         services.TryAddScoped<TokenEndpointService>();
-        services.TryAddSingleton<SessionCookieService>();
+        services.TryAddScoped<SessionCookieService>();
 
         return new CustomAuthBuilder(services);
     }
