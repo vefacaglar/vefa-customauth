@@ -454,7 +454,7 @@ Client secret support is not required in the first version. Public clients with 
 
 ## 15. Configuration Requirements
 
-Status: partial — `CustomAuthOptions` matches the spec exactly; options validation (`IValidateOptions<CustomAuthOptions>`) at startup is not implemented yet.
+Status: completed
 
 Suggested options model:
 
