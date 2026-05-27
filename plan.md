@@ -395,7 +395,7 @@ Minimal API endpoint mapping is preferable to controllers because it is more pac
 
 ## 13. EF Core Package
 
-Status: partial — `CustomAuthDbContext`, entity configurations, and the `AddVefaCustomAuthEntityFrameworkCore` extension are in place; per-store EF implementations (`EfCustomAuthClientStore` and the others) and the `AddVefaCustomAuthStores<TContext>` overload are not implemented yet.
+Status: completed
 
 `Vefa.CustomAuth.EntityFrameworkCore` should provide persistence support.
 

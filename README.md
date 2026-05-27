@@ -36,7 +36,7 @@ tests/
 - Opaque refresh token issuance and rotation.
 - Hashed authorization code and refresh token storage.
 - In-memory stores for samples and tests.
-- EF Core model and `DbContext` scaffold.
+- EF Core `DbContext` and store implementations.
 
 ## Supported Endpoints
 
@@ -128,4 +128,4 @@ dotnet test --no-build -v:minimal
 
 ## Status
 
-This repository is still in active development. The current implementation is useful for validating the package design and sample SSO flow, but it still needs EF-backed store implementations, options validation, broader tests, and production hardening before publishing.
+This repository is still in active development. The current implementation is useful for validating the package design and sample SSO flow, but it still needs options validation, broader host scenarios, and production hardening before publishing.
