@@ -14,6 +14,7 @@ window.adminApp = function() {
         loading: false,
         configFormat: 'json',
         modalOpen: false,
+        selectedClientId: null,
         
         // Toast Notification State
         toast: {
@@ -50,6 +51,15 @@ window.adminApp = function() {
                 
                 const data = await response.json();
                 this.clients = data.items || [];
+                
+                // Set/Maintain active selection
+                if (this.clients.length > 0) {
+                    if (!this.selectedClientId || !this.clients.some(c => c.clientId === this.selectedClientId)) {
+                        this.selectedClientId = this.clients[0].clientId;
+                    }
+                } else {
+                    this.selectedClientId = null;
+                }
             } catch (error) {
                 this.showToast(error.message, 'danger');
             } finally {
@@ -180,7 +190,8 @@ window.adminApp = function() {
 
         // Live Code Previews Generators
         getActiveClientId() {
-            if (this.form.clientId) return this.form.clientId;
+            if (this.modalOpen && this.form.clientId) return this.form.clientId;
+            if (this.selectedClientId) return this.selectedClientId;
             if (this.clients.length > 0) return this.clients[0].clientId;
             return 'sample-webapp';
         },
