@@ -19,7 +19,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageTags>oauth2;oidc;sso;authentication;aspnetcore</PackageTags>
-    <Version>0.1.0-alpha</Version>
+    <Version>0.1.0</Version>
   </PropertyGroup>
 
 </Project>
