@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-Project-specific rules for Claude when working on **Vefa.CustomAuth**.
+Project-specific rules for Codex when working on **Vefa.CustomAuth**.
 
 ## Current progress (handoff note)
 
@@ -10,24 +10,23 @@ Read this first. The previous session ended here and the user will continue with
 
 1. **Solution scaffolding** — sln (`Vefa.CustomAuth.slnx`), 5 src projects, 3 sample projects, 2 test projects all on `net8.0`. `Directory.Build.props` carries shared package metadata; `src/`, `samples/`, `tests/` each override `IsPackable`. Project references and NuGet dependencies are wired. `dotnet build` is 0 warnings / 0 errors.
 2. **Domain models, store abstractions, options** — `Vefa.CustomAuth.Core` contains all 5 models (`CustomAuthClient`, `CustomAuthAuthorizationCode`, `CustomAuthRefreshToken`, `CustomAuthSession`, `CustomAuthSigningKey`), 6 store interfaces (`ICustomAuth*Store`), and `CustomAuthOptions`. See `src/Vefa.CustomAuth.Core/`.
-3. **JWT signing + token issuance** (plan §8 partial) — `Vefa.CustomAuth.Tokens` has `TokenHasher` (SHA-256 + base64url + opaque token generator), `RsaKeyGenerator`, `RsaSigningCredentialsProvider` (auto-bootstraps an RSA key on first use), and `JwtTokenIssuer` (access + id JWTs, opaque refresh). Registered via `AddJwtTokenSigning()`.
-4. **EF Core scaffold** (plan §13 partial) — `CustomAuthDbContext` + entity configurations in `Vefa.CustomAuth.EntityFrameworkCore`. Registered via `AddVefaCustomAuthEntityFrameworkCore(optsAction)`. **EF store implementations are NOT written yet.**
-5. **ASP.NET Core DI + endpoint scaffold** (plan §12 partial) — `AddVefaCustomAuth(configure)` returns a `CustomAuthBuilder`; `MapVefaCustomAuthEndpoints()` maps the v0.1 routes but **handlers return placeholder responses**.
-6. **In-memory stores** — full set in `src/Vefa.CustomAuth.AspNetCore/Stores/InMemory/`, registered via `AddInMemoryStores(configure)` with optional client + user seed lists. `InMemoryUserStore` uses `CryptographicOperations.FixedTimeEquals` for password compare. Sample-only, not production.
+3. **JWT signing + token issuance** — `Vefa.CustomAuth.Tokens` has `TokenHasher` (SHA-256 + base64url + opaque token generator), `RsaKeyGenerator`, `RsaSigningCredentialsProvider` (auto-bootstraps an RSA key on first use), and `JwtTokenIssuer` (access + id JWTs, opaque refresh). Registered via `AddJwtTokenSigning()`. Signing/token services are scoped so they can consume scoped EF stores.
+4. **Real v0.1 auth endpoints** — `MapVefaCustomAuthEndpoints()` now maps working handlers for discovery, JWKS, authorize, token, and login. Endpoint helpers live in `src/Vefa.CustomAuth.AspNetCore/Endpoints/`. Implemented behavior includes exact redirect URI validation, scope subset validation, required PKCE, SSO session cookie lookup, authorization-code creation, authorization-code exchange, refresh-token rotation, and OAuth-style error JSON.
+5. **In-memory stores** — full set in `src/Vefa.CustomAuth.AspNetCore/Stores/InMemory/`, registered via `AddInMemoryStores(configure)` with optional client + user seed lists. `InMemoryUserStore` uses `CryptographicOperations.FixedTimeEquals` for password compare. Sample-only, not production.
+6. **EF Core stores** — `CustomAuthDbContext`, entity configurations, and all EF-backed store implementations are in `Vefa.CustomAuth.EntityFrameworkCore`. Registration is available via `AddVefaCustomAuthEntityFrameworkCore(optionsAction)` and `AddVefaCustomAuthStores<TContext>()`. `EfCustomAuthSigningKeyStore.GetAllAsync()` orders in memory to avoid SQLite `DateTimeOffset` ordering limitations.
+7. **Runnable sample flow** — `scripts/run-samples.sh` builds and starts all three sample apps. `Sample.AuthServer` uses SQLite-backed EF stores for clients, authorization codes, refresh tokens, sessions, and signing keys; only the demo user store remains in-memory because user persistence is host-owned. `Sample.WebApp` uses ASP.NET Core OpenID Connect with code + PKCE and calls `Sample.Api`; `Sample.Api` validates JWT access tokens with `JwtBearer`.
+8. **README and tests** — `README.md` exists. Integration tests cover invalid redirect URI, wrong PKCE verifier, single-use and expired authorization codes, refresh-token rotation and revoked-token rejection, discovery/JWKS metadata, JWT signature validation, and issuer/audience validation. EF store tests cover all EF-backed store implementations and registration.
 
 ### What is the user's intended next step
 
-**Step 3 in the working plan: real endpoint handlers.** Replace the placeholder responses in `src/Vefa.CustomAuth.AspNetCore/Extensions/CustomAuthEndpointRouteExtensions.cs` with real implementations:
+The next useful step is **options validation and hardening**:
 
-- `GET /.well-known/openid-configuration` — emit discovery JSON sourced from `CustomAuthOptions.Issuer`.
-- `GET /.well-known/jwks.json` — read `ISigningCredentialsProvider.GetJsonWebKeySetAsync()` and emit `{ keys: [...] }`.
-- `GET /connect/authorize` — validate `client_id` (`ICustomAuthClientStore`), exact-match `redirect_uri`, `response_type=code`, `scope` subset of `AllowedScopes`, `state`, `code_challenge` + `code_challenge_method` (S256 / plain). If no SSO cookie, redirect to `LoginPath` with `returnUrl`. If cookie present, mint an authorization code (random opaque), store its hash via `ICustomAuthAuthorizationCodeStore`, redirect to `redirect_uri` with `code` + `state`.
-- `GET/POST /login` — render a minimal form, validate credentials via `ICustomAuthUserStore.ValidateCredentialsAsync`, persist a session via `ICustomAuthSessionStore`, write the SSO cookie (name from `CustomAuthOptions.CookieName`, `HttpOnly`, `Secure`, `SameSite=Lax`), redirect to `returnUrl`.
-- `POST /connect/token` — `grant_type=authorization_code`: look up code by `TokenHasher.Hash(code)`, ensure single-use (`ConsumedAt is null`) and not expired, exact-match `redirect_uri`, verify PKCE `code_verifier` against the stored challenge (S256 = `Base64UrlEncoder.Encode(SHA256(verifier))`), then call `ITokenIssuer.IssueAsync(...)`, hash and persist the returned refresh token via `ICustomAuthRefreshTokenStore`, mark the code consumed, return the standard JSON response. `grant_type=refresh_token`: rotate (consume old, issue new pair). v0.1 does not require reuse detection.
+- Add `IValidateOptions<CustomAuthOptions>` to fail fast when `Issuer`, lifetimes, cookie name, or HTTPS settings are invalid.
+- Add tests for invalid option combinations.
+- Consider improving sample logging/noise so EF SQL logs do not dominate normal sample output.
+- After that, consider packaging/CI work: package metadata review, XML docs pass, `dotnet pack`, and a GitHub Actions build/test workflow.
 
-Keep handlers small — extract a `ClientValidator`, `PkceVerifier`, `AuthorizationCodeService`, `TokenExchangeService` etc. as helper classes inside `Vefa.CustomAuth.AspNetCore/`. All public types need XML docs.
-
-After step 3 completes, the next user-facing step is wiring up `samples/Vefa.CustomAuth.Sample.AuthServer/Program.cs` with `AddVefaCustomAuth` + `AddJwtTokenSigning` + `AddInMemoryStores` and seed data, then driving the flow end-to-end from `Sample.WebApp` (OIDC client) to `Sample.Api` (JwtBearer).
+Recent troubleshooting note: if `http://localhost:5043/` shows a 401 from the API after previous successful login, the browser likely has an old WebApp auth cookie containing tokens signed by an older local signing key. Open `http://localhost:5043/logout`, then reload `http://localhost:5043/` and sign in again with `demo / demo`.
 
 ### Operating rules reminder for the next model
 
@@ -59,7 +58,7 @@ Everything that ships inside the repository as part of the codebase must be in *
 
 Turkish is allowed **only** in:
 
-- `CLAUDE.local.md` if it exists (personal scratch, gitignored).
+- `Codex.local.md` if it exists (personal scratch, gitignored).
 - Conversational replies to the user in this chat.
 
 If you find existing Turkish content in the codebase, flag it and offer to convert it.
