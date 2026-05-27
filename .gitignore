@@ -1,0 +1,47 @@
+# Build output
+bin/
+obj/
+artifacts/
+out/
+publish/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userprefs
+*.swp
+*.DotSettings.user
+
+# OS
+.DS_Store
+Thumbs.db
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+
+# Test
+TestResults/
+coverage/
+*.coverage
+*.trx
+
+# Rider / ReSharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+
+# Logs
+*.log
+
+# Local secrets
+*.env
+secrets.json
+appsettings.*.Local.json
+
+# Claude
+.claude/
+CLAUDE.local.md
