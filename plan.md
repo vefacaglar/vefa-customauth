@@ -23,6 +23,8 @@ The project should first be built as a complete working reference implementation
 
 ## 1. Solution Structure
 
+Status: completed
+
 ```text
 Vefa.CustomAuth.sln
 
@@ -57,6 +59,8 @@ Vefa.CustomAuth.EntityFrameworkCore
 
 ## 2. Intended Usage
 
+Status: partial — `AddVefaCustomAuth`, `MapVefaCustomAuthEndpoints`, and `AddJwtTokenSigning` extension methods exist; `AddEntityFrameworkStores<AppDbContext>` builder API is not implemented yet.
+
 A developer should be able to add the library to an ASP.NET Core project like this:
 
 ```csharp
@@ -84,6 +88,8 @@ Client applications should be able to connect to the auth server using a normal 
 ---
 
 ## 3. Supported Endpoints
+
+Status: partial — v0.1 routes are mapped via `MapVefaCustomAuthEndpoints` but the handlers return placeholder responses; real authorize/token/login/discovery/JWKS logic is pending.
 
 ### v0.1
 
@@ -140,6 +146,8 @@ Hybrid Flow
 
 ## 5. Domain Models
 
+Status: completed
+
 Minimum required models:
 
 ```csharp
@@ -163,6 +171,8 @@ A sample user model can exist in the sample project, but the main package should
 ---
 
 ## 6. Client Model
+
+Status: completed
 
 ```csharp
 public sealed class CustomAuthClient
@@ -188,6 +198,8 @@ The client configuration should enforce exact redirect URI matching. Partial or 
 ---
 
 ## 7. Authorization Code Requirements
+
+Status: partial — `CustomAuthAuthorizationCode` model and `TokenHasher` exist; issuance, single-use enforcement, and PKCE binding logic in the authorize/token endpoints are not implemented yet.
 
 Authorization codes must be:
 
@@ -230,6 +242,8 @@ The raw authorization code should not be stored in the database. Only a hash of 
 ---
 
 ## 8. Token Requirements
+
+Status: partial — `JwtTokenIssuer` issues JWT access + id tokens with the required claims and an opaque refresh token; consumption-side flow (token endpoint exchanging codes for tokens) is not wired up yet.
 
 The system should issue the following tokens:
 
@@ -275,6 +289,8 @@ email
 ---
 
 ## 9. Refresh Token Requirements
+
+Status: partial — `CustomAuthRefreshToken` model and opaque token / hash helpers are in place; rotation and reuse-detection flow at the token endpoint is not implemented yet.
 
 Refresh tokens must be:
 
@@ -331,6 +347,8 @@ If the user logs in through App A, the auth server stores the session cookie. La
 
 ## 11. Store Interfaces
 
+Status: completed
+
 The `Core` package should contain abstractions only.
 
 ```csharp
@@ -347,6 +365,8 @@ The EF Core package should provide default implementations of these interfaces.
 ---
 
 ## 12. ASP.NET Core Package
+
+Status: partial — DI extensions (`AddVefaCustomAuth`, `AddJwtTokenSigning`) and the endpoint mapping scaffold (`MapVefaCustomAuthEndpoints`) exist; real endpoint handlers (Authorize, Token, Login, Discovery, Jwks, UserInfo, Logout) are not implemented yet.
 
 `Vefa.CustomAuth.AspNetCore` should provide the ASP.NET Core integration layer.
 
@@ -374,6 +394,8 @@ Minimal API endpoint mapping is preferable to controllers because it is more pac
 ---
 
 ## 13. EF Core Package
+
+Status: partial — `CustomAuthDbContext`, entity configurations, and the `AddVefaCustomAuthEntityFrameworkCore` extension are in place; per-store EF implementations (`EfCustomAuthClientStore` and the others) and the `AddVefaCustomAuthStores<TContext>` overload are not implemented yet.
 
 `Vefa.CustomAuth.EntityFrameworkCore` should provide persistence support.
 
@@ -431,6 +453,8 @@ Client secret support is not required in the first version. Public clients with 
 ---
 
 ## 15. Configuration Requirements
+
+Status: partial — `CustomAuthOptions` matches the spec exactly; options validation (`IValidateOptions<CustomAuthOptions>`) at startup is not implemented yet.
 
 Suggested options model:
 
