@@ -19,12 +19,12 @@ Read this first. The previous session ended here and the user will continue with
 9. **v0.2 Endpoints** — Fully implemented and mapped `/connect/logout`, `/connect/userinfo`, and `/connect/revoke` OIDC endpoints, registered them in DI, updated the discovery configuration, and added comprehensive end-to-end integration tests (all 36 tests pass!).
 10. **v0.4 Packaging & CI Automation** — Versioned to `0.1.0` in `Directory.Build.props`, completed XML comments on public models, and created a GitHub Actions CI workflow under `.github/workflows/build-test.yml` running on Node 24 (addressing Node 20 deprecation warnings) that restores, builds, tests, and packs the solution in Release mode.
 11. **v0.5-v0.7 Admin UI SPA & Decoupled Persistence** — Implemented the provider-agnostic `Vefa.CustomAuth.AdminUI` class library using Alpine.js and Tailwind CSS. Built full client CRUD Minimal API endpoints connected to core Managers and Stores. Added complete integration tests (`AdminUIEndpointTests.cs`) and resolved trailing-slash relative assets resolving issues and Alpine execution race conditions. The dashboard is fully dynamic, featuring interactive client selection, visual selection highlights, and real-time C#/JSON integration code generators.
+12. **v0.8 MongoDB Provider** — Implemented `Vefa.CustomAuth.MongoDB` package with all 7 store implementations (`MongoCustomAuthClientStore`, `MongoCustomAuthAuthorizationCodeStore`, `MongoCustomAuthRefreshTokenStore`, `MongoCustomAuthSessionStore`, `MongoCustomAuthSigningKeyStore`, `MongoCustomAuthScopeStore`, `MongoCustomAuthAuditLogStore`), `MongoCustomAuthCleanupService`, `MongoCustomAuthIndexManager` for index creation, BsonClassMap registrations, and `AddVefaCustomAuthMongoDbStores` DI extension. Added 12 comprehensive contract tests using Testcontainers.MongoDb (all pass). Total test count: 56 (24 store/manager + 32 AspNetCore).
 
 ### What is the user's intended next step
 
-The initial Phase 2 goals up to `v0.7` (embedded Admin UI v1) are fully implemented, polished, and hardened! The next major milestones are:
-1. **v0.8 — MongoDB Provider**: Implement provider stores for MongoDB and run shared store contract tests against the MongoDB package.
-2. **v0.9 — Admin UI Extended Management**: Extend the SPA dashboard with scope management, active session viewer, token/session revocation, signing key viewer, and audit log viewer.
+Phase 2 goals up to `v0.8` (MongoDB Provider) are fully implemented! The next major milestone is:
+1. **v0.9 — Admin UI Extended Management**: Extend the SPA dashboard with scope management, active session viewer, token/session revocation, signing key viewer, and audit log viewer.
 
 Recent troubleshooting note: if `http://localhost:5043/` shows a 401 from the API after previous successful login, the browser likely has an old WebApp auth cookie containing tokens signed by an older local signing key. Open `http://localhost:5043/logout`, then reload `http://localhost:5043/` and sign in again with `demo / demo`.
 

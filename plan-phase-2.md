@@ -719,6 +719,8 @@ Add generated client configuration view
 
 ### v0.8 — MongoDB Provider
 
+Status: completed
+
 ```text
 Implement MongoDB stores
 Add MongoDB collection mappings
