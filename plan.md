@@ -89,7 +89,7 @@ Client applications should be able to connect to the auth server using a normal 
 
 ## 3. Supported Endpoints
 
-Status: partial — v0.1 routes now have real discovery, JWKS, authorize, token, and login handlers; v0.2+ logout, userinfo, revoke, and later endpoints remain pending.
+Status: partial — v0.1 and v0.2 routes (discovery, JWKS, authorize, token, login, logout, userinfo, revoke) are fully completed; v0.3+ (introspect, consent) remain pending.
 
 ### v0.1
 
@@ -366,7 +366,7 @@ The EF Core package should provide default implementations of these interfaces.
 
 ## 12. ASP.NET Core Package
 
-Status: partial — DI extensions (`AddVefaCustomAuth`, `AddJwtTokenSigning`) and v0.1 endpoint handlers (Authorize, Token, Login, Discovery, Jwks) are implemented; UserInfo and Logout remain future endpoints.
+Status: completed
 
 `Vefa.CustomAuth.AspNetCore` should provide the ASP.NET Core integration layer.
 

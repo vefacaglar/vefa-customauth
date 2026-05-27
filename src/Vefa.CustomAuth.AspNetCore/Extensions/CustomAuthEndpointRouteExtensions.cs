@@ -23,6 +23,9 @@ public static class CustomAuthEndpointRouteExtensions
                 authorization_endpoint = $"{issuer}/connect/authorize",
                 token_endpoint = $"{issuer}/connect/token",
                 jwks_uri = $"{issuer}/.well-known/jwks.json",
+                end_session_endpoint = $"{issuer}/connect/logout",
+                userinfo_endpoint = $"{issuer}/connect/userinfo",
+                revocation_endpoint = $"{issuer}/connect/revoke",
                 response_types_supported = new[] { "code" },
                 grant_types_supported = new[] { "authorization_code", "refresh_token" },
                 subject_types_supported = new[] { "public" },
@@ -68,6 +71,26 @@ public static class CustomAuthEndpointRouteExtensions
             HttpContext context,
             LoginEndpointService service,
             CancellationToken cancellationToken) => service.HandleAsync(context, cancellationToken));
+
+        endpoints.MapGet("/connect/logout", (
+            HttpContext context,
+            LogoutEndpointService service,
+            CancellationToken cancellationToken) => service.HandleAsync(context, cancellationToken));
+
+        endpoints.MapPost("/connect/logout", (
+            HttpContext context,
+            LogoutEndpointService service,
+            CancellationToken cancellationToken) => service.HandleAsync(context, cancellationToken));
+
+        endpoints.MapGet("/connect/userinfo", (
+            HttpContext context,
+            UserInfoEndpointService service,
+            CancellationToken cancellationToken) => service.HandleAsync(context, cancellationToken));
+
+        endpoints.MapPost("/connect/revoke", (
+            HttpRequest request,
+            RevocationEndpointService service,
+            CancellationToken cancellationToken) => service.HandleAsync(request, cancellationToken));
 
         return endpoints;
     }

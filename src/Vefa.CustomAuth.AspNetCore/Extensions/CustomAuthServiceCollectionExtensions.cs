@@ -24,6 +24,9 @@ public static class CustomAuthServiceCollectionExtensions
         services.TryAddScoped<LoginEndpointService>();
         services.TryAddScoped<TokenEndpointService>();
         services.TryAddScoped<SessionCookieService>();
+        services.TryAddScoped<LogoutEndpointService>();
+        services.TryAddScoped<UserInfoEndpointService>();
+        services.TryAddScoped<RevocationEndpointService>();
 
         return new CustomAuthBuilder(services);
     }

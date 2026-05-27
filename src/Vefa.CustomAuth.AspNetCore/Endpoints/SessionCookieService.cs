@@ -60,4 +60,19 @@ internal sealed class SessionCookieService
                 Expires = session.ExpiresAt,
             });
     }
+
+    public void SignOut(HttpContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var options = _options.CurrentValue;
+        context.Response.Cookies.Delete(
+            options.CookieName,
+            new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = options.RequireHttps,
+                SameSite = SameSiteMode.Lax,
+            });
+    }
 }
