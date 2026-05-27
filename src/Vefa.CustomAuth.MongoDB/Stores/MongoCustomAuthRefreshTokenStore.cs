@@ -1,6 +1,8 @@
 using System;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using global::MongoDB.Bson;
 using MongoDB.Driver;
 using Vefa.CustomAuth.Core.Models;
 using Vefa.CustomAuth.Core.Stores;
@@ -41,6 +43,33 @@ public sealed class MongoCustomAuthRefreshTokenStore : ICustomAuthRefreshTokenSt
         ArgumentException.ThrowIfNullOrEmpty(tokenHash);
         var filter = Builders<CustomAuthRefreshToken>.Filter.Eq(t => t.TokenHash, tokenHash);
         return await _collection.Find(filter).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc/>
+    public async Task<CustomAuthPagedResult<CustomAuthRefreshToken>> GetPagedAsync(CustomAuthPagedRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var filter = Builders<CustomAuthRefreshToken>.Filter.Empty;
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var regex = new BsonRegularExpression(Regex.Escape(request.Search), "i");
+            filter = Builders<CustomAuthRefreshToken>.Filter.Regex(t => t.ClientId, regex)
+                | Builders<CustomAuthRefreshToken>.Filter.Regex(t => t.UserId, regex);
+        }
+
+        var page = request.Page > 0 ? request.Page : 1;
+        var pageSize = request.PageSize > 0 ? request.PageSize : 10;
+
+        var totalCount = (int)await _collection.CountDocumentsAsync(filter, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var items = await _collection.Find(filter)
+            .SortByDescending(t => t.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Limit(pageSize)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return new CustomAuthPagedResult<CustomAuthRefreshToken> { Items = items, TotalCount = totalCount };
     }
 
     /// <inheritdoc/>

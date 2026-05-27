@@ -52,6 +52,14 @@ public interface ICustomAuthTokenManager
     Task<CustomAuthRefreshToken?> FindRefreshTokenByHashAsync(string tokenHash, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Gets a paged list of refresh tokens with optional search.
+    /// </summary>
+    /// <param name="request">The paged request parameters.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A paged result of refresh tokens.</returns>
+    Task<CustomAuthPagedResult<CustomAuthRefreshToken>> GetRefreshTokensPagedAsync(CustomAuthPagedRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Marks a refresh token as consumed (rotated/exchanged).
     /// </summary>
     /// <param name="id">The unique identifier of the refresh token.</param>

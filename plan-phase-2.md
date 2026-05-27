@@ -731,6 +731,8 @@ Run shared store contract tests against MongoDB
 
 ### v0.9 — Admin UI Extended Management
 
+Status: completed
+
 ```text
 Scope management
 Session viewer

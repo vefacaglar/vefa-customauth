@@ -43,6 +43,13 @@ public sealed class CustomAuthSessionManager : ICustomAuthSessionManager
     }
 
     /// <inheritdoc/>
+    public Task<CustomAuthPagedResult<CustomAuthSession>> GetPagedAsync(CustomAuthPagedRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return _sessionStore.GetPagedAsync(request, cancellationToken);
+    }
+
+    /// <inheritdoc/>
     public async Task CreateAsync(CustomAuthSession session, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(session);

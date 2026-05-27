@@ -96,6 +96,13 @@ public sealed class CustomAuthTokenManager : ICustomAuthTokenManager
     }
 
     /// <inheritdoc/>
+    public Task<CustomAuthPagedResult<CustomAuthRefreshToken>> GetRefreshTokensPagedAsync(CustomAuthPagedRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return _refreshTokenStore.GetPagedAsync(request, cancellationToken);
+    }
+
+    /// <inheritdoc/>
     public async Task MarkRefreshTokenConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default)
     {
         if (id == Guid.Empty)

@@ -27,6 +27,29 @@ public sealed class EfCustomAuthSessionStore<TContext> : ICustomAuthSessionStore
             .SingleOrDefaultAsync(session => session.Id == sessionId, cancellationToken);
 
     /// <inheritdoc />
+    public async Task<CustomAuthPagedResult<CustomAuthSession>> GetPagedAsync(CustomAuthPagedRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var query = _context.Set<CustomAuthSession>().AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var search = request.Search;
+            query = query.Where(s => s.UserId.Contains(search));
+        }
+
+        query = query.OrderByDescending(s => s.CreatedAt);
+
+        var totalCount = await query.CountAsync(cancellationToken).ConfigureAwait(false);
+        var page = request.Page > 0 ? request.Page : 1;
+        var pageSize = request.PageSize > 0 ? request.PageSize : 10;
+        var items = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken).ConfigureAwait(false);
+
+        return new CustomAuthPagedResult<CustomAuthSession> { Items = items, TotalCount = totalCount };
+    }
+
+    /// <inheritdoc />
     public async Task StoreAsync(CustomAuthSession session, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(session);

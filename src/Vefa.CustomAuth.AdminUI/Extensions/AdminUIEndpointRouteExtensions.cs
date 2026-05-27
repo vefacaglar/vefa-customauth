@@ -151,6 +151,177 @@ public static class AdminUIEndpointRouteExtensions
             }
         });
 
+        // Scope management endpoints
+        endpoints.MapGet($"{normalizedPrefix}/api/scopes", async (
+            ICustomAuthScopeManager scopeManager,
+            CancellationToken cancellationToken) =>
+        {
+            var result = await scopeManager.GetAllAsync(cancellationToken).ConfigureAwait(false);
+            return Results.Ok(result);
+        });
+
+        endpoints.MapPost($"{normalizedPrefix}/api/scopes", async (
+            [FromBody] CustomAuthScope scope,
+            ICustomAuthScopeManager scopeManager,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                await scopeManager.CreateAsync(scope, cancellationToken).ConfigureAwait(false);
+                return Results.Created($"{normalizedPrefix}/api/scopes/{scope.Name}", scope);
+            }
+            catch (ArgumentException ex)
+            {
+                return Results.BadRequest(ex.Message);
+            }
+        });
+
+        endpoints.MapPut($"{normalizedPrefix}/api/scopes/{{name}}", async (
+            [FromRoute] string name,
+            [FromBody] CustomAuthScope scope,
+            ICustomAuthScopeManager scopeManager,
+            CancellationToken cancellationToken) =>
+        {
+            if (!string.Equals(name, scope.Name, StringComparison.Ordinal))
+            {
+                return Results.BadRequest("Scope name mismatch.");
+            }
+
+            try
+            {
+                await scopeManager.UpdateAsync(scope, cancellationToken).ConfigureAwait(false);
+                return Results.Ok(scope);
+            }
+            catch (ArgumentException ex)
+            {
+                return Results.BadRequest(ex.Message);
+            }
+        });
+
+        endpoints.MapDelete($"{normalizedPrefix}/api/scopes/{{name}}", async (
+            [FromRoute] string name,
+            ICustomAuthScopeManager scopeManager,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                await scopeManager.DeleteAsync(name, cancellationToken).ConfigureAwait(false);
+                return Results.NoContent();
+            }
+            catch (ArgumentException ex)
+            {
+                return Results.BadRequest(ex.Message);
+            }
+        });
+
+        // Session viewer endpoints
+        endpoints.MapGet($"{normalizedPrefix}/api/sessions", async (
+            [FromQuery] int page,
+            [FromQuery] int pageSize,
+            [FromQuery] string? search,
+            ICustomAuthSessionManager sessionManager,
+            CancellationToken cancellationToken) =>
+        {
+            var pagedRequest = new CustomAuthPagedRequest
+            {
+                Page = page > 0 ? page : 1,
+                PageSize = pageSize > 0 ? pageSize : 10,
+                Search = search
+            };
+
+            var result = await sessionManager.GetPagedAsync(pagedRequest, cancellationToken).ConfigureAwait(false);
+            return Results.Ok(result);
+        });
+
+        endpoints.MapPost($"{normalizedPrefix}/api/sessions/{{sessionId}}/revoke", async (
+            [FromRoute] Guid sessionId,
+            ICustomAuthSessionManager sessionManager,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                await sessionManager.RevokeAsync(sessionId, cancellationToken).ConfigureAwait(false);
+                return Results.NoContent();
+            }
+            catch (ArgumentException ex)
+            {
+                return Results.BadRequest(ex.Message);
+            }
+        });
+
+        // Refresh token viewer endpoints
+        endpoints.MapGet($"{normalizedPrefix}/api/refresh-tokens", async (
+            [FromQuery] int page,
+            [FromQuery] int pageSize,
+            [FromQuery] string? search,
+            ICustomAuthTokenManager tokenManager,
+            CancellationToken cancellationToken) =>
+        {
+            var pagedRequest = new CustomAuthPagedRequest
+            {
+                Page = page > 0 ? page : 1,
+                PageSize = pageSize > 0 ? pageSize : 10,
+                Search = search
+            };
+
+            var result = await tokenManager.GetRefreshTokensPagedAsync(pagedRequest, cancellationToken).ConfigureAwait(false);
+            return Results.Ok(result);
+        });
+
+        endpoints.MapPost($"{normalizedPrefix}/api/refresh-tokens/{{tokenId}}/revoke", async (
+            [FromRoute] Guid tokenId,
+            ICustomAuthTokenManager tokenManager,
+            TimeProvider timeProvider,
+            CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                await tokenManager.RevokeRefreshTokenAsync(tokenId, timeProvider.GetUtcNow(), cancellationToken).ConfigureAwait(false);
+                return Results.NoContent();
+            }
+            catch (ArgumentException ex)
+            {
+                return Results.BadRequest(ex.Message);
+            }
+        });
+
+        // Signing key viewer endpoints
+        endpoints.MapGet($"{normalizedPrefix}/api/signing-keys", async (
+            ICustomAuthSigningKeyManager signingKeyManager,
+            CancellationToken cancellationToken) =>
+        {
+            var keys = await signingKeyManager.GetAllAsync(cancellationToken).ConfigureAwait(false);
+            var safeKeys = keys.Select(k => new
+            {
+                k.KeyId,
+                k.Algorithm,
+                k.CreatedAt,
+                k.RetiredAt,
+                k.IsActive,
+                PublicKeyPem = k.PublicKeyPem
+            }).ToList();
+            return Results.Ok(safeKeys);
+        });
+
+        // Audit log viewer endpoints
+        endpoints.MapGet($"{normalizedPrefix}/api/audit-logs", async (
+            [FromQuery] int page,
+            [FromQuery] int pageSize,
+            [FromQuery] string? search,
+            ICustomAuthAuditLogManager auditLogManager,
+            CancellationToken cancellationToken) =>
+        {
+            var pagedRequest = new CustomAuthPagedRequest
+            {
+                Page = page > 0 ? page : 1,
+                PageSize = pageSize > 0 ? pageSize : 10,
+                Search = search
+            };
+
+            var result = await auditLogManager.GetPagedAsync(pagedRequest, cancellationToken).ConfigureAwait(false);
+            return Results.Ok(result);
+        });
+
         return indexRoute;
     }
 }
