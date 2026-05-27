@@ -36,6 +36,11 @@ public static class AdminUIEndpointRouteExtensions
         // 1. Serve embedded static SPA resources
         var indexRoute = endpoints.MapGet(normalizedPrefix, async (HttpContext context) =>
         {
+            if (!context.Request.Path.Value!.EndsWith("/", StringComparison.Ordinal))
+            {
+                return Results.Redirect(context.Request.Path.Value + "/");
+            }
+
             using var stream = assembly.GetManifestResourceStream("Vefa.CustomAuth.AdminUI.Resources.index.html");
             if (stream == null)
             {

@@ -26,11 +26,16 @@ public sealed class AdminUIEndpointTests
         await using var app = await CreateAppAsync();
         using var client = app.GetTestClient();
 
-        // 1. Test HTML
-        var htmlResponse = await client.GetAsync("/customauth");
+        // 1. Test HTML (Redirect to trailing slash)
+        var redirectResponse = await client.GetAsync("/customauth");
+        Assert.Equal(HttpStatusCode.Found, redirectResponse.StatusCode);
+        Assert.Equal("/customauth/", redirectResponse.Headers.Location?.OriginalString);
+
+        // 2. Test HTML (Success)
+        var htmlResponse = await client.GetAsync("/customauth/");
         Assert.Equal(HttpStatusCode.OK, htmlResponse.StatusCode);
         var htmlContent = await htmlResponse.Content.ReadAsStringAsync();
-        Assert.Contains("<title>Vefa.CustomAuth Admin Portal</title>", htmlContent);
+        Assert.Contains("<title>Vefa.CustomAuth Admin Center</title>", htmlContent);
 
         // 2. Test CSS
         var cssResponse = await client.GetAsync("/customauth/css/admin.css");
