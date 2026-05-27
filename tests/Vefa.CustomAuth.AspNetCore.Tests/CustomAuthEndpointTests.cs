@@ -9,7 +9,10 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
+using Vefa.CustomAuth.Core.Stores;
+using Vefa.CustomAuth.Tokens;
 using Vefa.CustomAuth.AspNetCore.Extensions;
 using Vefa.CustomAuth.AspNetCore.Stores.InMemory;
 using Vefa.CustomAuth.Core.Models;
@@ -103,6 +106,55 @@ public sealed class CustomAuthEndpointTests
         var reuseResponse = await ExchangeRefreshTokenAsync(client, firstRefreshToken);
         Assert.Equal(HttpStatusCode.BadRequest, reuseResponse.StatusCode);
         Assert.Equal("invalid_grant", await ReadJsonPropertyAsync(reuseResponse, "error"));
+    }
+
+    [Fact]
+    public async Task RevokedRefreshTokenIsRejected()
+    {
+        var timeProvider = new ManualTimeProvider(new DateTimeOffset(2026, 5, 28, 0, 0, 0, TimeSpan.Zero));
+        await using var app = await CreateAppAsync(timeProvider);
+        using var client = app.GetTestClient();
+
+        var verifier = CreateVerifier();
+        var code = await IssueAuthorizationCodeAsync(client, verifier);
+        var tokenResponse = await ExchangeCodeAsync(client, code, verifier);
+        var refreshToken = await ReadJsonPropertyAsync(tokenResponse, "refresh_token");
+
+        var refreshTokenStore = app.Services.GetRequiredService<ICustomAuthRefreshTokenStore>();
+        var storedRefreshToken = await refreshTokenStore.FindByHashAsync(TokenHasher.Hash(refreshToken));
+        Assert.NotNull(storedRefreshToken);
+        await refreshTokenStore.RevokeAsync(storedRefreshToken!.Id, timeProvider.GetUtcNow());
+
+        var response = await ExchangeRefreshTokenAsync(client, refreshToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("invalid_grant", await ReadJsonPropertyAsync(response, "error"));
+    }
+
+    [Fact]
+    public async Task IssuedAccessTokenHasValidSignatureIssuerAndAudience()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        var accessToken = await IssueAccessTokenAsync(client);
+        var validationResult = await ValidateAccessTokenAsync(client, accessToken, "http://localhost", ClientId);
+
+        Assert.True(validationResult.IsValid, validationResult.Exception?.Message);
+    }
+
+    [Fact]
+    public async Task IssuedAccessTokenRejectsWrongIssuerAndAudience()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        var accessToken = await IssueAccessTokenAsync(client);
+        var wrongIssuerResult = await ValidateAccessTokenAsync(client, accessToken, "http://wrong-issuer", ClientId);
+        var wrongAudienceResult = await ValidateAccessTokenAsync(client, accessToken, "http://localhost", "wrong-audience");
+
+        Assert.False(wrongIssuerResult.IsValid);
+        Assert.False(wrongAudienceResult.IsValid);
     }
 
     [Fact]
@@ -216,6 +268,40 @@ public sealed class CustomAuthEndpointTests
                 ["client_id"] = ClientId,
                 ["refresh_token"] = refreshToken,
             }));
+
+    private static async Task<string> IssueAccessTokenAsync(HttpClient client)
+    {
+        var verifier = CreateVerifier();
+        var code = await IssueAuthorizationCodeAsync(client, verifier);
+        var tokenResponse = await ExchangeCodeAsync(client, code, verifier);
+        return await ReadJsonPropertyAsync(tokenResponse, "access_token");
+    }
+
+    private static async Task<TokenValidationResult> ValidateAccessTokenAsync(
+        HttpClient client,
+        string accessToken,
+        string validIssuer,
+        string validAudience)
+    {
+        var jwksResponse = await client.GetAsync("/.well-known/jwks.json");
+        var jwksJson = await jwksResponse.Content.ReadAsStringAsync();
+        var jwks = new JsonWebKeySet(jwksJson);
+        var handler = new JsonWebTokenHandler();
+
+        return await handler.ValidateTokenAsync(
+            accessToken,
+            new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidIssuer = validIssuer,
+                ValidateAudience = true,
+                ValidAudience = validAudience,
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKeys = jwks.Keys,
+                ValidateLifetime = true,
+                ClockSkew = TimeSpan.Zero,
+            });
+    }
 
     private static string BuildAuthorizeUrl(string verifier, string redirectUri = RedirectUri)
     {

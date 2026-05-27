@@ -510,7 +510,7 @@ The sample projects are important because they verify the package design before 
 
 ## 17. Test Requirements
 
-Status: partial — integration tests now cover invalid redirect URI, wrong PKCE verifier, single-use authorization codes, expired authorization codes, refresh token rotation, and discovery/JWKS metadata; revoked refresh token and JWT validation cases remain.
+Status: completed
 
 Priority test cases:
 
