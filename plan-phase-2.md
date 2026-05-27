@@ -706,6 +706,8 @@ Add cleanup service implementation
 
 ### v0.7 — Embedded Admin UI v1
 
+Status: completed
+
 ```text
 Add optional Admin UI package
 Add client management screens

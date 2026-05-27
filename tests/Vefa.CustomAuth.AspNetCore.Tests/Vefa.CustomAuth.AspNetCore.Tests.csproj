@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Vefa.CustomAuth.AspNetCore\Vefa.CustomAuth.AspNetCore.csproj" />
+    <ProjectReference Include="..\..\src\Vefa.CustomAuth.AdminUI\Vefa.CustomAuth.AdminUI.csproj" />
   </ItemGroup>
 
 </Project>
