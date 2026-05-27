@@ -1,19 +1,19 @@
 using Microsoft.AspNetCore.Http;
-using Vefa.CustomAuth.Core.Stores;
+using Vefa.CustomAuth.Core.Managers;
 using Vefa.CustomAuth.Tokens;
 
 namespace Vefa.CustomAuth.AspNetCore.Endpoints;
 
 internal sealed class RevocationEndpointService
 {
-    private readonly ICustomAuthRefreshTokenStore _refreshTokenStore;
+    private readonly ICustomAuthTokenManager _tokenManager;
     private readonly TimeProvider _timeProvider;
 
     public RevocationEndpointService(
-        ICustomAuthRefreshTokenStore refreshTokenStore,
+        ICustomAuthTokenManager tokenManager,
         TimeProvider timeProvider)
     {
-        _refreshTokenStore = refreshTokenStore ?? throw new ArgumentNullException(nameof(refreshTokenStore));
+        _tokenManager = tokenManager ?? throw new ArgumentNullException(nameof(tokenManager));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
@@ -41,12 +41,12 @@ internal sealed class RevocationEndpointService
         // We only support revoking refresh tokens in v0.2.
         // Hashing the token because we store refresh tokens as hashes.
         var tokenHash = TokenHasher.Hash(token);
-        var storedToken = await _refreshTokenStore.FindByHashAsync(tokenHash, cancellationToken).ConfigureAwait(false);
+        var storedToken = await _tokenManager.FindRefreshTokenByHashAsync(tokenHash, cancellationToken).ConfigureAwait(false);
 
         if (storedToken is not null && storedToken.RevokedAt is null)
         {
             var now = _timeProvider.GetUtcNow();
-            await _refreshTokenStore.RevokeAsync(storedToken.Id, now, cancellationToken).ConfigureAwait(false);
+            await _tokenManager.RevokeRefreshTokenAsync(storedToken.Id, now, cancellationToken).ConfigureAwait(false);
         }
 
         // RFC 7009: The server MUST return 200 OK whether the token was active or invalid.

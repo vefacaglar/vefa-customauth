@@ -1,23 +1,23 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
+using Vefa.CustomAuth.Core.Managers;
 using Vefa.CustomAuth.Core.Models;
 using Vefa.CustomAuth.Core.Options;
-using Vefa.CustomAuth.Core.Stores;
 
 namespace Vefa.CustomAuth.AspNetCore.Endpoints;
 
 internal sealed class SessionCookieService
 {
-    private readonly ICustomAuthSessionStore _sessionStore;
+    private readonly ICustomAuthSessionManager _sessionManager;
     private readonly IOptionsMonitor<CustomAuthOptions> _options;
     private readonly TimeProvider _timeProvider;
 
     public SessionCookieService(
-        ICustomAuthSessionStore sessionStore,
+        ICustomAuthSessionManager sessionManager,
         IOptionsMonitor<CustomAuthOptions> options,
         TimeProvider timeProvider)
     {
-        _sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
+        _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
@@ -33,7 +33,7 @@ internal sealed class SessionCookieService
             return null;
         }
 
-        var session = await _sessionStore.FindAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        var session = await _sessionManager.FindAsync(sessionId, cancellationToken).ConfigureAwait(false);
         var now = _timeProvider.GetUtcNow();
         if (session is null || session.RevokedAt is not null || session.ExpiresAt <= now)
         {

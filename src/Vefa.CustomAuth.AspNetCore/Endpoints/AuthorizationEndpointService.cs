@@ -1,30 +1,30 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
+using Vefa.CustomAuth.Core.Managers;
 using Vefa.CustomAuth.Core.Models;
 using Vefa.CustomAuth.Core.Options;
-using Vefa.CustomAuth.Core.Stores;
 using Vefa.CustomAuth.Tokens;
 
 namespace Vefa.CustomAuth.AspNetCore.Endpoints;
 
 internal sealed class AuthorizationEndpointService
 {
-    private readonly ICustomAuthClientStore _clientStore;
-    private readonly ICustomAuthAuthorizationCodeStore _codeStore;
+    private readonly ICustomAuthClientManager _clientManager;
+    private readonly ICustomAuthTokenManager _tokenManager;
     private readonly SessionCookieService _sessionCookieService;
     private readonly IOptionsMonitor<CustomAuthOptions> _options;
     private readonly TimeProvider _timeProvider;
 
     public AuthorizationEndpointService(
-        ICustomAuthClientStore clientStore,
-        ICustomAuthAuthorizationCodeStore codeStore,
+        ICustomAuthClientManager clientManager,
+        ICustomAuthTokenManager tokenManager,
         SessionCookieService sessionCookieService,
         IOptionsMonitor<CustomAuthOptions> options,
         TimeProvider timeProvider)
     {
-        _clientStore = clientStore ?? throw new ArgumentNullException(nameof(clientStore));
-        _codeStore = codeStore ?? throw new ArgumentNullException(nameof(codeStore));
+        _clientManager = clientManager ?? throw new ArgumentNullException(nameof(clientManager));
+        _tokenManager = tokenManager ?? throw new ArgumentNullException(nameof(tokenManager));
         _sessionCookieService = sessionCookieService ?? throw new ArgumentNullException(nameof(sessionCookieService));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
@@ -48,7 +48,7 @@ internal sealed class AuthorizationEndpointService
             return EndpointResults.OAuthError("invalid_request", "client_id is required.");
         }
 
-        var client = await _clientStore.FindByClientIdAsync(clientId, cancellationToken).ConfigureAwait(false);
+        var client = await _clientManager.FindByClientIdAsync(clientId, cancellationToken).ConfigureAwait(false);
         if (client is null)
         {
             return EndpointResults.OAuthError("unauthorized_client", "The client is not registered.");
@@ -68,7 +68,7 @@ internal sealed class AuthorizationEndpointService
 
         var rawCode = TokenHasher.CreateOpaqueToken();
         var now = _timeProvider.GetUtcNow();
-        await _codeStore.StoreAsync(
+        await _tokenManager.StoreAuthorizationCodeAsync(
             new CustomAuthAuthorizationCode
             {
                 Id = Guid.NewGuid(),

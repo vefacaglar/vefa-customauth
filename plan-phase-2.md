@@ -679,6 +679,8 @@ The same test suite should be reusable across EF Core, MongoDB, and custom provi
 
 ### v0.5 — Manager Layer and Store Contracts
 
+Status: completed
+
 ```text
 Finalize provider-neutral store interfaces
 Introduce manager layer
@@ -688,6 +690,8 @@ Add audit log contracts
 ```
 
 ### v0.6 — EF Core Provider
+
+Status: completed
 
 ```text
 Implement EF Core stores
@@ -701,6 +705,8 @@ Add cleanup service implementation
 ```
 
 ### v0.7 — Embedded Admin UI v1
+
+Status: completed
 
 ```text
 Add optional Admin UI package

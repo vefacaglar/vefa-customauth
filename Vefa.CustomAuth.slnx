@@ -1,10 +1,12 @@
 <Solution>
   <Folder Name="/samples/">
+    <Project Path="samples/Vefa.CustomAuth.Sample.Admin/Vefa.CustomAuth.Sample.Admin.csproj" />
     <Project Path="samples/Vefa.CustomAuth.Sample.Api/Vefa.CustomAuth.Sample.Api.csproj" />
     <Project Path="samples/Vefa.CustomAuth.Sample.AuthServer/Vefa.CustomAuth.Sample.AuthServer.csproj" />
     <Project Path="samples/Vefa.CustomAuth.Sample.WebApp/Vefa.CustomAuth.Sample.WebApp.csproj" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/Vefa.CustomAuth.AdminUI/Vefa.CustomAuth.AdminUI.csproj" />
     <Project Path="src/Vefa.CustomAuth.AspNetCore/Vefa.CustomAuth.AspNetCore.csproj" />
     <Project Path="src/Vefa.CustomAuth.Core/Vefa.CustomAuth.Core.csproj" />
     <Project Path="src/Vefa.CustomAuth.EntityFrameworkCore/Vefa.CustomAuth.EntityFrameworkCore.csproj" />

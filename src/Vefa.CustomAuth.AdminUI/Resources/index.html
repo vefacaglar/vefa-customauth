@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vefa.CustomAuth Admin Center</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+    <script src="js/admin.js" defer></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <link rel="stylesheet" href="css/admin.css">
+</head>
+<body class="bg-[#07090c] text-slate-100 font-sans min-h-screen relative overflow-x-hidden selection:bg-indigo-500/30 selection:text-indigo-200" x-data="adminApp()">
+    
+    <!-- Glowing background elements -->
+    <div class="absolute top-[-200px] right-[-100px] w-[500px] h-[500px] bg-gradient-to-br from-indigo-500/10 to-purple-500/5 rounded-full blur-[100px] pointer-events-none z-0"></div>
+    <div class="absolute bottom-[-100px] left-[-200px] w-[600px] h-[600px] bg-gradient-to-tr from-blue-500/5 to-pink-500/5 rounded-full blur-[120px] pointer-events-none z-0"></div>
+
+    <header class="sticky top-0 z-40 flex items-center justify-between px-8 py-4 bg-[#07090c]/70 backdrop-blur-xl border-b border-white/[0.05]">
+        <div class="flex items-center gap-3">
+            <span class="text-2xl filter drop-shadow-[0_0_8px_rgba(99,102,241,0.5)]">🛡️</span>
+            <div>
+                <h1 class="text-lg font-bold tracking-tight flex items-center gap-2">
+                    Vefa.CustomAuth
+                    <span class="text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-sm shadow-indigo-500/20">Admin Center</span>
+                </h1>
+                <p class="text-[11px] text-slate-500">SSO & Identity Provider Management</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-4">
+            <a href="/.well-known/openid-configuration" target="_blank" class="text-xs text-indigo-400 hover:text-indigo-300 font-medium transition-colors flex items-center gap-1">
+                <span>Discovery Doc</span> 
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+            </a>
+            <button @click="openCreateModal()" class="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer">
+                <span>+</span> Register Client
+            </button>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-8 py-8 relative z-10 grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <!-- Left 2 Columns: Client Management -->
+        <div class="lg:col-span-2 space-y-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-2xl font-bold tracking-tight">Registered Clients</h2>
+                    <p class="text-xs text-slate-400 mt-1">Manage applications authorized to authenticate through your SSO portal.</p>
+                </div>
+                
+                <!-- Quick Stats -->
+                <div class="flex gap-4">
+                    <div class="bg-white/[0.02] border border-white/[0.05] rounded-xl px-4 py-2 text-right">
+                        <span class="block text-[10px] uppercase font-semibold text-slate-500 tracking-wider">Total Clients</span>
+                        <span class="text-lg font-bold text-indigo-400" x-text="clients.length">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search & Filters -->
+            <div class="flex items-center gap-4 bg-white/[0.02] border border-white/[0.05] p-3 rounded-2xl">
+                <div class="relative flex-1">
+                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500 text-sm">🔍</span>
+                    <input type="text" x-model="searchQuery" placeholder="Search clients by ID or display name..." class="w-full bg-[#030406]/50 border border-white/[0.05] text-slate-200 pl-10 pr-4 py-2.5 rounded-xl text-xs placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all">
+                </div>
+            </div>
+
+            <!-- Loading Spinner -->
+            <div x-show="loading" class="flex flex-col items-center justify-center py-20 gap-3">
+                <div class="w-10 h-10 border-2 border-white/[0.05] border-t-indigo-500 rounded-full animate-spin"></div>
+                <p class="text-xs text-slate-500">Retrieving clients configurations...</p>
+            </div>
+
+            <!-- Empty State -->
+            <div x-show="!loading && filteredClients().length === 0" class="text-center py-16 bg-white/[0.01] border border-dashed border-white/[0.05] rounded-3xl max-w-xl mx-auto space-y-4">
+                <div class="text-4xl">📂</div>
+                <div>
+                    <h3 class="text-base font-semibold">No Clients Found</h3>
+                    <p class="text-xs text-slate-500 mt-1" x-text="searchQuery ? 'No client matches your search filter.' : 'Get started by registering your first application client.'"></p>
+                </div>
+                <button x-show="!searchQuery" @click="openCreateModal()" class="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 rounded-xl hover:bg-indigo-500 transition-all cursor-pointer">+ Register Client</button>
+            </div>
+
+            <!-- Clients Grid -->
+            <div x-show="!loading && filteredClients().length > 0" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <template x-for="client in filteredClients()" :key="client.clientId">
+                    <div @click="selectedClientId = client.clientId"
+                         :class="selectedClientId === client.clientId ? 'border-indigo-500 bg-indigo-500/[0.02] ring-1 ring-indigo-500/30' : 'border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.04] hover:border-indigo-500/20'"
+                         class="rounded-2xl p-5 backdrop-blur-md hover:shadow-xl hover:shadow-indigo-950/10 hover:-translate-y-1 transition-all flex flex-col justify-between group cursor-pointer">
+                        
+                        <div>
+                            <div class="flex justify-between items-start mb-4">
+                                <div class="space-y-0.5">
+                                    <h3 class="font-bold text-sm text-slate-100 group-hover:text-white transition-colors flex items-center gap-1.5">
+                                        <span x-text="client.displayName || 'Unnamed Client'"></span>
+                                        <span x-show="selectedClientId === client.clientId" class="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-md">
+                                            <span class="w-1 h-1 rounded-full bg-emerald-400 animate-pulse"></span> Selected
+                                        </span>
+                                    </h3>
+                                    <span class="inline-block font-mono text-[10px] text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded" x-text="client.clientId"></span>
+                                </div>
+                                <span class="text-xs" x-text="client.requirePkce ? '🔒 PKCE' : '🔓 Public'"></span>
+                            </div>
+
+                            <div class="space-y-3 text-[11px] text-slate-400 mb-6">
+                                <div class="space-y-1">
+                                    <span class="block text-[9px] uppercase font-bold text-slate-600 tracking-wider">Redirect URIs</span>
+                                    <div class="space-y-0.5 font-mono text-[10px] break-all max-h-[60px] overflow-y-auto">
+                                        <template x-for="uri in client.redirectUris" :key="uri">
+                                            <div class="text-slate-300" x-text="uri"></div>
+                                        </template>
+                                    </div>
+                                </div>
+                                <div class="space-y-1">
+                                    <span class="block text-[9px] uppercase font-bold text-slate-600 tracking-wider">Allowed Scopes</span>
+                                    <div class="flex flex-wrap gap-1 mt-1">
+                                        <template x-for="scope in client.allowedScopes" :key="scope">
+                                            <span class="px-1.5 py-0.5 rounded-full bg-white/[0.03] border border-white/[0.05] text-[9px]" x-text="scope"></span>
+                                        </template>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2 pt-2 border-t border-white/[0.03]">
+                                    <div>
+                                        <span class="block text-[8px] uppercase font-bold text-slate-600 tracking-wider">Access Token</span>
+                                        <span class="text-slate-300 font-medium" x-text="formatLifetime(client.accessTokenLifetimeSeconds)"></span>
+                                    </div>
+                                    <div>
+                                        <span class="block text-[8px] uppercase font-bold text-slate-600 tracking-wider">Refresh Token</span>
+                                        <span class="text-slate-300 font-medium" x-text="client.allowRefreshTokens ? formatLifetime(client.refreshTokenLifetimeSeconds) : 'Disabled'"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end gap-2 pt-4 border-t border-white/[0.03]">
+                            <button @click.stop="openEditModal(client)" class="px-3 py-1.5 text-[10px] font-semibold text-slate-300 bg-white/[0.03] border border-white/[0.05] rounded-lg hover:bg-white/[0.07] transition-all cursor-pointer">Edit</button>
+                            <button @click.stop="deleteClient(client.clientId)" class="px-3 py-1.5 text-[10px] font-semibold text-red-400 bg-red-500/5 border border-red-500/10 rounded-lg hover:bg-red-500/10 hover:border-red-500/20 transition-all cursor-pointer">Delete</button>
+                        </div>
+                        
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Right 1 Column: Live Integration Guide -->
+        <div class="lg:col-span-1 space-y-6">
+            <div>
+                <h2 class="text-lg font-bold tracking-tight">Integration Helper</h2>
+                <p class="text-xs text-slate-400 mt-1">Real-time C# and JSON configuration generation for your host applications.</p>
+            </div>
+
+            <!-- Code block widget -->
+            <div class="bg-slate-950 border border-white/[0.05] rounded-2xl overflow-hidden shadow-2xl relative">
+                <div class="flex items-center justify-between px-4 py-2.5 bg-white/[0.02] border-b border-white/[0.05]">
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-2.5 h-2.5 rounded-full bg-red-500/60"></span>
+                        <span class="w-2.5 h-2.5 rounded-full bg-yellow-500/60"></span>
+                        <span class="w-2.5 h-2.5 rounded-full bg-green-500/60"></span>
+                    </div>
+                    <div class="flex gap-2">
+                        <button @click="configFormat = 'json'" :class="configFormat === 'json' ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-500'" class="px-2 py-0.5 rounded text-[10px] font-bold tracking-wide uppercase transition-all cursor-pointer">appsettings.json</button>
+                        <button @click="configFormat = 'csharp'" :class="configFormat === 'csharp' ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-500'" class="px-2 py-0.5 rounded text-[10px] font-bold tracking-wide uppercase transition-all cursor-pointer">Program.cs</button>
+                    </div>
+                </div>
+                
+                <div class="p-5 font-mono text-[10px] text-indigo-200 overflow-x-auto min-h-[300px] max-h-[500px] overflow-y-auto leading-relaxed scrollbar">
+                    <!-- Dynamic JSON config -->
+                    <pre x-show="configFormat === 'json'" x-text="generateJsonPreview()"></pre>
+                    <!-- Dynamic C# config -->
+                    <pre x-show="configFormat === 'csharp'" x-text="generateCsharpPreview()"></pre>
+                </div>
+
+                <div class="absolute bottom-3 right-3">
+                    <button @click="copyConfig()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-[10px] font-bold text-white rounded-lg transition-all shadow-md active:translate-y-0.5 cursor-pointer">Copy Code</button>
+                </div>
+            </div>
+
+            <!-- Helpful Quick Guide -->
+            <div class="bg-indigo-500/5 border border-indigo-500/10 rounded-2xl p-5 space-y-3">
+                <h4 class="text-xs font-bold text-indigo-400 uppercase tracking-wide">💡 Client Integration Tip</h4>
+                <p class="text-[11px] text-slate-400 leading-relaxed">Ensure the redirect URIs in your OIDC clients exactly match the registered parameters. Vefa.CustomAuth enforces **strict exact matching** (no wildcards or subdomains allowed) to prevent authorization code hijacking vulnerabilities.</p>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Create/Edit Client Modal -->
+    <div x-show="modalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto" style="display: none;">
+        <div class="fixed inset-0 bg-black/75 backdrop-blur-sm" @click="closeModal()"></div>
+        
+        <div x-show="modalOpen" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" class="bg-[#0b0e13] border border-white/[0.08] rounded-3xl w-full max-w-lg shadow-2xl relative z-10 flex flex-col overflow-hidden max-h-[90vh]">
+            
+            <div class="flex justify-between items-center px-6 py-4 border-b border-white/[0.05]">
+                <h3 class="text-sm font-bold text-slate-100" x-text="form.isEdit ? 'Edit Client Configuration' : 'Register Client Application'"></h3>
+                <button @click="closeModal()" class="text-slate-500 hover:text-white text-lg font-medium cursor-pointer">&times;</button>
+            </div>
+
+            <form @submit.prevent="submitForm()" class="overflow-y-auto p-6 space-y-4 scrollbar">
+                
+                <div class="space-y-1">
+                    <label class="text-[11px] font-semibold text-slate-400" for="clientId">Client ID <span class="text-red-500">*</span></label>
+                    <input type="text" id="clientId" x-model="form.clientId" :disabled="form.isEdit" placeholder="e.g. sample-webapp" required class="w-full bg-[#030406]/50 border border-white/[0.05] text-slate-200 px-3.5 py-2.5 rounded-xl text-xs focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                    <span class="text-[9px] text-slate-500 block">System unique key of the client. Cannot be updated later.</span>
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-[11px] font-semibold text-slate-400" for="displayName">Display Name <span class="text-red-500">*</span></label>
+                    <input type="text" id="displayName" x-model="form.displayName" placeholder="e.g. Sample Web App" required class="w-full bg-[#030406]/50 border border-white/[0.05] text-slate-200 px-3.5 py-2.5 rounded-xl text-xs focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all">
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-[11px] font-semibold text-slate-400" for="redirectUris">Redirect URIs <span class="text-red-500">*</span></label>
+                    <textarea id="redirectUris" x-model="form.redirectUrisRaw" placeholder="http://localhost:5043/signin-oidc&#10;https://myapp.com/callback" required class="w-full bg-[#030406]/50 border border-white/[0.05] text-slate-200 px-3.5 py-2.5 rounded-xl text-xs focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all min-h-[70px] resize-y font-mono"></textarea>
+                    <span class="text-[9px] text-slate-500 block">Strict exact match authorization callback targets. One per line.</span>
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-[11px] font-semibold text-slate-400" for="postLogoutRedirectUris">Post-Logout Redirect URIs</label>
+                    <textarea id="postLogoutRedirectUris" x-model="form.postLogoutRedirectUrisRaw" placeholder="http://localhost:5043/&#10;https://myapp.com/" class="w-full bg-[#030406]/50 border border-white/[0.05] text-slate-200 px-3.5 py-2.5 rounded-xl text-xs focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all min-h-[60px] resize-y font-mono"></textarea>
+                    <span class="text-[9px] text-slate-500 block">Allowed destinations after secure logout. One per line.</span>
+                </div>
+
+                <!-- Interactive Scope Picker Grid -->
+                <div class="space-y-2">
+                    <label class="text-[11px] font-semibold text-slate-400">Allowed Scopes <span class="text-red-500">*</span></label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <template x-for="scope in availableScopes" :key="scope.name">
+                            <button type="button" @click="toggleScope(scope.name)" :class="isScopeSelected(scope.name) ? 'border-indigo-500/40 bg-indigo-500/10 text-indigo-300' : 'border-white/[0.05] bg-white/[0.01] text-slate-400 hover:bg-white/[0.03]'" class="flex items-center justify-between p-3 rounded-xl border text-left transition-all cursor-pointer">
+                                <div>
+                                    <div class="text-[11px] font-bold" x-text="scope.name"></div>
+                                    <div class="text-[9px] text-slate-500 mt-0.5" x-text="scope.description"></div>
+                                </div>
+                                <span class="text-xs" x-show="isScopeSelected(scope.name)">✓</span>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="space-y-1">
+                        <label class="text-[11px] font-semibold text-slate-400" for="accessTokenLifetime">Access Token Lifetime (sec)</label>
+                        <input type="number" id="accessTokenLifetime" x-model.number="form.accessTokenLifetimeSeconds" min="60" required class="w-full bg-[#030406]/50 border border-white/[0.05] text-slate-200 px-3.5 py-2.5 rounded-xl text-xs focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all">
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-[11px] font-semibold text-slate-400" for="refreshTokenLifetime">Refresh Token Lifetime (sec)</label>
+                        <input type="number" id="refreshTokenLifetime" x-model.number="form.refreshTokenLifetimeSeconds" min="60" required class="w-full bg-[#030406]/50 border border-white/[0.05] text-slate-200 px-3.5 py-2.5 rounded-xl text-xs focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all">
+                    </div>
+                </div>
+
+                <div class="flex gap-6 pt-2">
+                    <label class="checkbox-container">
+                        <input type="checkbox" x-model="form.requirePkce">
+                        <span class="checkmark"></span>
+                        <span class="checkbox-label text-xs ml-6">Require PKCE</span>
+                    </label>
+                    <label class="checkbox-container">
+                        <input type="checkbox" x-model="form.allowRefreshTokens">
+                        <span class="checkmark"></span>
+                        <span class="checkbox-label text-xs ml-6">Allow Refresh Tokens</span>
+                    </label>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-6 border-t border-white/[0.05]">
+                    <button type="button" @click="closeModal()" class="px-4 py-2 text-xs font-semibold text-slate-400 bg-white/[0.02] border border-white/[0.05] rounded-xl hover:bg-white/[0.05] transition-all cursor-pointer">Cancel</button>
+                    <button type="submit" class="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 rounded-xl hover:bg-indigo-500 shadow-md shadow-indigo-600/20 transition-all cursor-pointer">Save Client</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div x-show="toast.show" x-transition class="fixed bottom-6 right-6 px-5 py-3 bg-slate-900 border border-white/[0.08] border-l-4 text-xs font-medium rounded-xl shadow-2xl z-50 flex items-center gap-2 max-w-sm" :class="toast.type === 'danger' ? 'border-l-red-500' : 'border-l-indigo-500'" style="display: none;">
+        <span x-text="toast.type === 'danger' ? '❌' : '⚡'"></span>
+        <span x-text="toast.message"></span>
+    </div>
+
+</body>
+</html>
