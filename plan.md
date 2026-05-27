@@ -89,7 +89,7 @@ Client applications should be able to connect to the auth server using a normal 
 
 ## 3. Supported Endpoints
 
-Status: partial — v0.1 routes are mapped via `MapVefaCustomAuthEndpoints` but the handlers return placeholder responses; real authorize/token/login/discovery/JWKS logic is pending.
+Status: partial — v0.1 routes now have real discovery, JWKS, authorize, token, and login handlers; v0.2+ logout, userinfo, revoke, and later endpoints remain pending.
 
 ### v0.1
 
@@ -199,7 +199,7 @@ The client configuration should enforce exact redirect URI matching. Partial or 
 
 ## 7. Authorization Code Requirements
 
-Status: partial — `CustomAuthAuthorizationCode` model and `TokenHasher` exist; issuance, single-use enforcement, and PKCE binding logic in the authorize/token endpoints are not implemented yet.
+Status: completed
 
 Authorization codes must be:
 
@@ -243,7 +243,7 @@ The raw authorization code should not be stored in the database. Only a hash of 
 
 ## 8. Token Requirements
 
-Status: partial — `JwtTokenIssuer` issues JWT access + id tokens with the required claims and an opaque refresh token; consumption-side flow (token endpoint exchanging codes for tokens) is not wired up yet.
+Status: completed
 
 The system should issue the following tokens:
 
@@ -290,7 +290,7 @@ email
 
 ## 9. Refresh Token Requirements
 
-Status: partial — `CustomAuthRefreshToken` model and opaque token / hash helpers are in place; rotation and reuse-detection flow at the token endpoint is not implemented yet.
+Status: partial — `CustomAuthRefreshToken` model, opaque token / hash helpers, and basic rotation at the token endpoint are implemented; reuse detection remains a later hardening step.
 
 Refresh tokens must be:
 
@@ -366,7 +366,7 @@ The EF Core package should provide default implementations of these interfaces.
 
 ## 12. ASP.NET Core Package
 
-Status: partial — DI extensions (`AddVefaCustomAuth`, `AddJwtTokenSigning`) and the endpoint mapping scaffold (`MapVefaCustomAuthEndpoints`) exist; real endpoint handlers (Authorize, Token, Login, Discovery, Jwks, UserInfo, Logout) are not implemented yet.
+Status: partial — DI extensions (`AddVefaCustomAuth`, `AddJwtTokenSigning`) and v0.1 endpoint handlers (Authorize, Token, Login, Discovery, Jwks) are implemented; UserInfo and Logout remain future endpoints.
 
 `Vefa.CustomAuth.AspNetCore` should provide the ASP.NET Core integration layer.
 

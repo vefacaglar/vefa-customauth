@@ -1,4 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Vefa.CustomAuth.AspNetCore.Endpoints;
 using Vefa.CustomAuth.Core.Options;
 
 namespace Vefa.CustomAuth.AspNetCore.Extensions;
@@ -11,6 +13,11 @@ public static class CustomAuthServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(configure);
 
         services.Configure(configure);
+        services.TryAddSingleton(TimeProvider.System);
+        services.TryAddScoped<AuthorizationEndpointService>();
+        services.TryAddScoped<LoginEndpointService>();
+        services.TryAddScoped<TokenEndpointService>();
+        services.TryAddSingleton<SessionCookieService>();
 
         return new CustomAuthBuilder(services);
     }
