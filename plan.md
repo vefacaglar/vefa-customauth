@@ -1,21 +1,27 @@
-# Vefa.CustomAuth Gereksinim Planı
+# Vefa.CustomAuth Requirements Plan
 
-Amaç: ASP.NET Core projelerine eklenebilen, basit ama düzgün tasarlanmış bir **OAuth2 / OpenID Connect tabanlı custom SSO kütüphanesi** oluşturmak.
+## Purpose
 
-Ana hedef full IdentityServer yazmak değil. İlk hedef:
+`Vefa.CustomAuth` is intended to be a lightweight OAuth2 / OpenID Connect based custom SSO library for ASP.NET Core applications.
+
+The goal is not to build a full IdentityServer replacement in the first version. The initial goal is to support a clean, maintainable, and package-friendly implementation of the most common SSO flow:
 
 ```text
-Authorization Code + PKCE
+Authorization Code Flow + PKCE
 SSO session cookie
 JWT access token
 ID token
 Refresh token
-JWKS
+JWKS endpoint
 ASP.NET Core endpoint mapping
 EF Core persistence
 ```
 
-## 1. Solution Yapısı
+The project should first be built as a complete working reference implementation. After the core flow is stable, the reusable parts can be split into NuGet packages.
+
+---
+
+## 1. Solution Structure
 
 ```text
 Vefa.CustomAuth.sln
@@ -37,9 +43,9 @@ tests/
   Vefa.CustomAuth.AspNetCore.Tests
 ```
 
-İlk etapta `Tokens` ayrı paket olmayabilir. Karmaşıklaşırsa ayırmak daha doğru olur.
+`Vefa.CustomAuth.Tokens` may not be required as a separate package in the first version. Token-related code can initially live inside `Core` or `AspNetCore` and be extracted later if it grows.
 
-Minimum NuGet hedefi:
+Minimum NuGet package targets:
 
 ```text
 Vefa.CustomAuth.Core
@@ -47,9 +53,11 @@ Vefa.CustomAuth.AspNetCore
 Vefa.CustomAuth.EntityFrameworkCore
 ```
 
-## 2. Temel Kullanım Hedefi
+---
 
-Kütüphaneyi kullanan kişi kendi ASP.NET Core projesinde şuna yakın bir yapı kurabilmeli:
+## 2. Intended Usage
+
+A developer should be able to add the library to an ASP.NET Core project like this:
 
 ```csharp
 builder.Services
@@ -63,7 +71,7 @@ builder.Services
 app.MapVefaCustomAuthEndpoints();
 ```
 
-API tarafında:
+A protected API should be able to validate access tokens using the standard JWT bearer authentication flow:
 
 ```csharp
 builder.Services
@@ -71,11 +79,13 @@ builder.Services
     .AddJwtBearer(...);
 ```
 
-Client uygulama tarafında ise normal OIDC client gibi bağlanabilmeli.
+Client applications should be able to connect to the auth server using a normal OIDC client configuration.
 
-## 3. Desteklenecek Endpointler
+---
 
-v0.1 için:
+## 3. Supported Endpoints
+
+### v0.1
 
 ```text
 GET  /connect/authorize
@@ -86,7 +96,7 @@ GET  /login
 POST /login
 ```
 
-v0.2 için:
+### v0.2
 
 ```text
 POST /connect/logout
@@ -94,7 +104,7 @@ GET  /connect/userinfo
 POST /connect/revoke
 ```
 
-v0.3+ için:
+### v0.3+
 
 ```text
 POST /connect/introspect
@@ -102,17 +112,19 @@ GET  /consent
 POST /consent
 ```
 
-Consent ilk etapta şart değil. Kendi uygulamaların arası SSO için gereksiz karmaşıklık.
+A consent screen is not required in the first version. For SSO between your own applications, it adds unnecessary complexity at the beginning.
 
-## 4. Desteklenecek OAuth/OIDC Akışları
+---
 
-İlk versiyon sadece:
+## 4. Supported OAuth2 / OIDC Flows
+
+The first version should support only:
 
 ```text
 Authorization Code Flow + PKCE
 ```
 
-Desteklenmeyecekler:
+The following flows should not be supported initially:
 
 ```text
 Implicit Flow
@@ -122,11 +134,13 @@ Client Credentials
 Hybrid Flow
 ```
 
-Client Credentials sonradan eklenebilir ama SSO için ilk ihtiyaç değil.
+`Client Credentials` can be added later, but it is not required for the first SSO use case.
 
-## 5. Domain Modelleri
+---
 
-Minimum modeller:
+## 5. Domain Models
+
+Minimum required models:
 
 ```csharp
 CustomAuthClient
@@ -136,19 +150,19 @@ CustomAuthSession
 CustomAuthSigningKey
 ```
 
-User modeli pakete gömülmemeli.
+The user model should not be hardcoded into the package.
 
-Bunun yerine:
+Instead, the package should expose a user abstraction:
 
 ```csharp
 ICustomAuthUserStore
 ```
 
-olmalı.
+A sample user model can exist in the sample project, but the main package should not force consumers to use a specific user table or identity model.
 
-Örnek user modeli sample projede olabilir ama ana pakette zorunlu olmamalı.
+---
 
-## 6. Client Modeli
+## 6. Client Model
 
 ```csharp
 public sealed class CustomAuthClient
@@ -169,49 +183,55 @@ public sealed class CustomAuthClient
 }
 ```
 
-## 7. Authorization Code Gereksinimleri
+The client configuration should enforce exact redirect URI matching. Partial or wildcard redirect URI matching should be avoided in the first version.
 
-Authorization code:
+---
 
-```text
-tek kullanımlık olmalı
-kısa ömürlü olmalı
-PKCE code_challenge ile bağlı olmalı
-client_id ile bağlı olmalı
-redirect_uri ile bağlı olmalı
-user_id ile bağlı olmalı
-```
+## 7. Authorization Code Requirements
 
-Öneri:
+Authorization codes must be:
 
 ```text
-authorization code lifetime: 60-120 saniye
+single-use
+short-lived
+bound to the PKCE code_challenge
+bound to the client_id
+bound to the redirect_uri
+bound to the user_id
 ```
 
-Model:
+Recommended lifetime:
+
+```text
+60-120 seconds
+```
+
+Suggested model:
 
 ```csharp
-CustomAuthAuthorizationCode
+public sealed class CustomAuthAuthorizationCode
 {
-    Id
-    CodeHash
-    ClientId
-    UserId
-    RedirectUri
-    CodeChallenge
-    CodeChallengeMethod
-    Scope
-    ExpiresAt
-    ConsumedAt
-    CreatedAt
+    public Guid Id { get; set; }
+    public string CodeHash { get; set; }
+    public string ClientId { get; set; }
+    public string UserId { get; set; }
+    public string RedirectUri { get; set; }
+    public string CodeChallenge { get; set; }
+    public string CodeChallengeMethod { get; set; }
+    public string Scope { get; set; }
+    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset? ConsumedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
 }
 ```
 
-Code raw olarak DB’ye yazılmamalı. Hash yazılması daha doğru.
+The raw authorization code should not be stored in the database. Only a hash of the code should be stored.
 
-## 8. Token Gereksinimleri
+---
 
-Üretilecek tokenlar:
+## 8. Token Requirements
+
+The system should issue the following tokens:
 
 ```text
 access_token
@@ -219,13 +239,13 @@ id_token
 refresh_token
 ```
 
-Access token JWT olabilir.
+The access token can be a JWT.
 
-ID token OIDC tarafı için JWT olmalı.
+The ID token should be a JWT because it belongs to the OpenID Connect layer.
 
-Refresh token opaque random string olmalı, JWT yapmaya gerek yok.
+The refresh token should be an opaque random value. It does not need to be a JWT.
 
-Access token claims:
+### Access Token Claims
 
 ```text
 sub
@@ -237,7 +257,7 @@ jti
 scope
 ```
 
-ID token claims:
+### ID Token Claims
 
 ```text
 sub
@@ -250,59 +270,68 @@ name
 email
 ```
 
-`name` ve `email` zorunlu olmamalı. User store ne sağlıyorsa o.
+`name` and `email` should not be required. The user store should provide whatever profile data is available.
 
-## 9. Refresh Token Gereksinimleri
+---
 
-Refresh token:
+## 9. Refresh Token Requirements
+
+Refresh tokens must be:
 
 ```text
-DB’de hash olarak tutulmalı
-rotate edilmeli
-reuse detection yapılmalı
-client_id ile bağlı olmalı
-user_id ile bağlı olmalı
-session_id ile bağlı olabilir
+stored as hashes
+rotated after use
+bound to client_id
+bound to user_id
+optionally bound to session_id
 ```
 
-Model:
+Reuse detection should be added after the basic rotation flow is working.
+
+Suggested model:
 
 ```csharp
-CustomAuthRefreshToken
+public sealed class CustomAuthRefreshToken
 {
-    Id
-    TokenHash
-    ClientId
-    UserId
-    SessionId
-    Scope
-    ExpiresAt
-    ConsumedAt
-    RevokedAt
-    CreatedAt
+    public Guid Id { get; set; }
+    public string TokenHash { get; set; }
+    public string ClientId { get; set; }
+    public string UserId { get; set; }
+    public string? SessionId { get; set; }
+    public string Scope { get; set; }
+    public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset? ConsumedAt { get; set; }
+    public DateTimeOffset? RevokedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
 }
 ```
 
-İlk versiyonda rotation yeterli. Reuse detection v0.2’ye kalabilir.
+For the first version, refresh token rotation is enough. Reuse detection can be added in v0.2 or later.
+
+---
 
 ## 10. Session / SSO Cookie
 
-Auth server kendi cookie’sini basmalı.
+The auth server should issue its own session cookie.
+
+Suggested defaults:
 
 ```text
-cookie name: .Vefa.CustomAuth.Session
+Cookie name: .Vefa.CustomAuth.Session
 HttpOnly: true
 Secure: true
 SameSite: Lax
 ```
 
-SSO mantığı bu cookie üzerinden çalışır.
+This cookie is the core mechanism behind SSO.
 
-User App A’da login olduysa, App B `/connect/authorize` çağırınca Auth Server cookie’yi görür ve tekrar login istemeden code üretir.
+If the user logs in through App A, the auth server stores the session cookie. Later, when App B redirects the user to `/connect/authorize`, the auth server can detect the existing session and issue a new authorization code without asking the user to log in again.
 
-## 11. Store Interface’leri
+---
 
-Core pakette sadece abstraction olmalı:
+## 11. Store Interfaces
+
+The `Core` package should contain abstractions only.
 
 ```csharp
 ICustomAuthClientStore
@@ -313,18 +342,22 @@ ICustomAuthSigningKeyStore
 ICustomAuthUserStore
 ```
 
-EF Core paketi bunların default implementasyonunu sağlar.
+The EF Core package should provide default implementations of these interfaces.
 
-## 12. ASP.NET Core Paketi
+---
 
-`Vefa.CustomAuth.AspNetCore` şunları sağlamalı:
+## 12. ASP.NET Core Package
+
+`Vefa.CustomAuth.AspNetCore` should provide the ASP.NET Core integration layer.
+
+Main extension methods:
 
 ```csharp
 AddVefaCustomAuth(...)
 MapVefaCustomAuthEndpoints()
 ```
 
-Endpoint handler’lar burada olur.
+Endpoint handlers should live here:
 
 ```text
 AuthorizeEndpoint
@@ -336,11 +369,15 @@ JwksEndpoint
 UserInfoEndpoint
 ```
 
-Controller yerine minimal API endpoint mapping daha paket dostu olur.
+Minimal API endpoint mapping is preferable to controllers because it is more package-friendly and easier to plug into host applications.
 
-## 13. EF Core Paketi
+---
 
-`Vefa.CustomAuth.EntityFrameworkCore` şunları sağlar:
+## 13. EF Core Package
+
+`Vefa.CustomAuth.EntityFrameworkCore` should provide persistence support.
+
+Expected components:
 
 ```csharp
 CustomAuthDbContext
@@ -352,7 +389,7 @@ EfCustomAuthSessionStore
 EfCustomAuthSigningKeyStore
 ```
 
-Kullanım:
+Possible usage:
 
 ```csharp
 builder.Services.AddVefaCustomAuthEntityFrameworkCore(options =>
@@ -361,36 +398,41 @@ builder.Services.AddVefaCustomAuthEntityFrameworkCore(options =>
 });
 ```
 
-veya daha esnek:
+A more flexible option:
 
 ```csharp
 builder.Services.AddVefaCustomAuthStores<AppDbContext>();
 ```
 
-Bence ikinci yaklaşım daha iyi. Kullanıcı kendi DbContext’ine tabloları ekleyebilir.
+The second approach is probably better in the long term because it lets the consumer keep the auth tables inside their own application DbContext.
 
-## 14. Güvenlik Gereksinimleri
+---
 
-Minimum güvenlik kuralları:
+## 14. Security Requirements
+
+Minimum security rules:
 
 ```text
-PKCE zorunlu
-redirect_uri exact match
-state client tarafından doğrulanmalı
-authorization code tek kullanımlık
-token signing key private kalmalı
-refresh token hash tutulmalı
-client input validation yapılmalı
-open redirect engellenmeli
-issuer/audience doğru set edilmeli
-HTTPS prod ortamda zorunlu olmalı
+PKCE should be required
+redirect_uri must use exact matching
+state should be validated by the client
+authorization codes must be single-use
+authorization codes must expire quickly
+raw authorization codes must not be stored
+refresh tokens must be stored as hashes
+token signing private keys must stay private
+open redirects must be prevented
+issuer and audience must be validated correctly
+HTTPS should be required in production
 ```
 
-İlk versiyonda client secret desteği koymayabiliriz. Public client + PKCE yeterli olur.
+Client secret support is not required in the first version. Public clients with PKCE are enough for the initial SSO scenario.
 
-## 15. Config Gereksinimleri
+---
 
-Options modeli:
+## 15. Configuration Requirements
+
+Suggested options model:
 
 ```csharp
 public sealed class CustomAuthOptions
@@ -410,9 +452,13 @@ public sealed class CustomAuthOptions
 }
 ```
 
-## 16. Sample Senaryolar
+Options validation should be added before publishing the package.
 
-En az iki sample olmalı:
+---
+
+## 16. Sample Scenarios
+
+At least three sample projects should exist:
 
 ```text
 Auth Server
@@ -420,73 +466,103 @@ Web App Client
 Protected API
 ```
 
-Akış:
+Expected flow:
 
 ```text
-Web App login ister
-Auth Server’a redirect eder
-Auth Server login yapar
-Web App callback alır
-Token alır
-API’ye access_token ile istek atar
+The Web App requires login
+The Web App redirects to the Auth Server
+The Auth Server authenticates the user
+The Auth Server redirects back with an authorization code
+The Web App exchanges the code for tokens
+The Web App calls the Protected API with the access token
+The API validates the access token
 ```
 
-Bu sample NuGet öncesi en önemli doğrulama alanı olur.
+The sample projects are important because they verify the package design before publishing NuGet packages.
 
-## 17. Test Gereksinimleri
+---
 
-Öncelikli testler:
+## 17. Test Requirements
+
+Priority test cases:
 
 ```text
-invalid redirect_uri reddedilmeli
-PKCE yanlışsa token verilmemeli
-authorization code ikinci kez kullanılamamalı
-expired code reddedilmeli
-refresh token rotation çalışmalı
-revoked refresh token reddedilmeli
-JWKS public key dönmeli
-JWT signature doğrulanabilmeli
+invalid redirect_uri should be rejected
+wrong PKCE verifier should be rejected
+authorization code should not be usable twice
+expired authorization code should be rejected
+refresh token rotation should work
+revoked refresh token should be rejected
+JWKS endpoint should return the public signing key
+JWT signature should be verifiable
+issuer and audience validation should work
 ```
+
+Security-related behavior should be covered with integration tests, not only unit tests.
+
+---
 
 ## 18. Roadmap
 
+### v0.1
+
 ```text
-v0.1
 Authorization Code + PKCE
 Login cookie
 JWT access token
 ID token
-JWKS
+JWKS endpoint
 Discovery endpoint
 In-memory stores
+```
 
-v0.2
+### v0.2
+
+```text
 EF Core stores
 Refresh token
-Logout
+Logout endpoint
 UserInfo endpoint
+```
 
-v0.3
-Sample Auth Server + Web Client + API
+### v0.3
+
+```text
+Sample Auth Server
+Sample Web Client
+Sample Protected API
 Options validation
 Basic tests
+```
 
-v0.4
+### v0.4
+
+```text
 NuGet package split
 README
 XML docs
 CI package build
+```
 
-v1.0
+### v1.0
+
+```text
 Security hardening
 Stable public API
 Migration strategy
+Package versioning policy
 ```
 
-İlk hedef:
+---
+
+## Recommended First Milestone
+
+The first milestone should be:
 
 ```text
-v0.1: in-memory store ile çalışan Authorization Code + PKCE akışı
+v0.1: a working Authorization Code + PKCE flow using in-memory stores
 ```
 
-EF Core’a hemen girmek yerine önce akışı çalıştırmak daha doğru. Protokol tasarımı oturduktan sonra persistence tarafı değiştirilebilir hale getirilebilir.
+EF Core should not be implemented too early. The protocol flow should work first. After the flow is stable, persistence can be introduced behind store interfaces.
+
+This prevents the project from getting stuck in database design before the core authentication flow is proven.
