@@ -1,10 +1,17 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Vefa.CustomAuth.Core.Models;
+using Vefa.CustomAuth.Core.Services;
 using Vefa.CustomAuth.Core.Stores;
 using Vefa.CustomAuth.EntityFrameworkCore;
 using Vefa.CustomAuth.EntityFrameworkCore.Extensions;
 using Vefa.CustomAuth.Tokens;
+using Xunit;
 
 namespace Vefa.CustomAuth.Tests;
 
@@ -16,6 +23,7 @@ public sealed class EfCustomAuthStoreTests
         var services = new ServiceCollection();
         var databaseName = Guid.NewGuid().ToString("N");
         services.AddVefaCustomAuthEntityFrameworkCore(options => options.UseInMemoryDatabase(databaseName));
+        services.AddSingleton(TimeProvider.System);
 
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
@@ -25,6 +33,9 @@ public sealed class EfCustomAuthStoreTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ICustomAuthRefreshTokenStore>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ICustomAuthSessionStore>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<ICustomAuthSigningKeyStore>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ICustomAuthScopeStore>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ICustomAuthAuditLogStore>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ICustomAuthCleanupService>());
     }
 
     [Fact]
@@ -202,11 +213,230 @@ public sealed class EfCustomAuthStoreTests
         }
     }
 
+    [Fact]
+    public async Task ScopeStorePersistsFindsAndDeletesScope()
+    {
+        await using var provider = CreateProvider();
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<ICustomAuthScopeStore>();
+            await store.StoreAsync(new CustomAuthScope
+            {
+                Name = "test-scope",
+                DisplayName = "Test Scope",
+                Description = "My test scope description",
+                Required = true
+            });
+        }
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<ICustomAuthScopeStore>();
+            var storedScope = await store.FindByNameAsync("test-scope");
+            Assert.NotNull(storedScope);
+            Assert.Equal("Test Scope", storedScope!.DisplayName);
+            Assert.True(storedScope.Required);
+
+            var all = await store.GetAllAsync();
+            Assert.Contains(all, s => s.Name == "test-scope");
+
+            await store.DeleteAsync("test-scope");
+        }
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<ICustomAuthScopeStore>();
+            var storedScope = await store.FindByNameAsync("test-scope");
+            Assert.Null(storedScope);
+        }
+    }
+
+    [Fact]
+    public async Task AuditLogStorePersistsAndPagesLogs()
+    {
+        await using var provider = CreateProvider();
+        var now = DateTimeOffset.UtcNow;
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<ICustomAuthAuditLogStore>();
+            for (int i = 1; i <= 15; i++)
+            {
+                await store.StoreAsync(new CustomAuthAuditLog
+                {
+                    Id = Guid.NewGuid(),
+                    Action = $"Action-{i}",
+                    ActorUserId = "admin",
+                    TargetType = "Client",
+                    TargetId = "client-1",
+                    Timestamp = now.AddMinutes(i)
+                });
+            }
+        }
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<ICustomAuthAuditLogStore>();
+            
+            // Fetch first page
+            var result = await store.GetPagedAsync(new CustomAuthPagedRequest
+            {
+                Page = 1,
+                PageSize = 10
+            });
+
+            Assert.Equal(15, result.TotalCount);
+            Assert.Equal(10, result.Items.Count);
+            // Verify ordering (newest first)
+            Assert.Equal("Action-15", result.Items[0].Action);
+
+            // Fetch with search
+            var searchResult = await store.GetPagedAsync(new CustomAuthPagedRequest
+            {
+                Page = 1,
+                PageSize = 5,
+                Search = "Action-1" // matches Action-1, Action-10..15
+            });
+
+            Assert.True(searchResult.TotalCount >= 7);
+        }
+    }
+
+    [Fact]
+    public async Task CleanupServiceClearsExpiredRecords()
+    {
+        await using var provider = CreateProvider();
+        var timeProvider = new FakeTimeProvider();
+        var now = timeProvider.GetUtcNow();
+
+        // Seed some expired and valid data
+        await SeedAsync(provider, context =>
+        {
+            // Expired code
+            context.AuthorizationCodes.Add(new CustomAuthAuthorizationCode
+            {
+                Id = Guid.NewGuid(),
+                CodeHash = "expired-code-hash",
+                ClientId = "client",
+                UserId = "user",
+                RedirectUri = "https://localhost",
+                CodeChallenge = "challenge",
+                CodeChallengeMethod = "plain",
+                Scope = "openid",
+                CreatedAt = now.AddMinutes(-5),
+                ExpiresAt = now.AddMinutes(-3) // Expired
+            });
+
+            // Consumed code
+            context.AuthorizationCodes.Add(new CustomAuthAuthorizationCode
+            {
+                Id = Guid.NewGuid(),
+                CodeHash = "consumed-code-hash",
+                ClientId = "client",
+                UserId = "user",
+                RedirectUri = "https://localhost",
+                CodeChallenge = "challenge",
+                CodeChallengeMethod = "plain",
+                Scope = "openid",
+                CreatedAt = now.AddMinutes(-5),
+                ExpiresAt = now.AddMinutes(5),
+                ConsumedAt = now.AddMinutes(-4) // Consumed
+            });
+
+            // Valid code
+            context.AuthorizationCodes.Add(new CustomAuthAuthorizationCode
+            {
+                Id = Guid.NewGuid(),
+                CodeHash = "valid-code-hash",
+                ClientId = "client",
+                UserId = "user",
+                RedirectUri = "https://localhost",
+                CodeChallenge = "challenge",
+                CodeChallengeMethod = "plain",
+                Scope = "openid",
+                CreatedAt = now.AddMinutes(-1),
+                ExpiresAt = now.AddMinutes(1) // Valid
+            });
+
+            // Expired refresh token
+            context.RefreshTokens.Add(new CustomAuthRefreshToken
+            {
+                Id = Guid.NewGuid(),
+                TokenHash = "expired-token-hash",
+                ClientId = "client",
+                UserId = "user",
+                Scope = "openid",
+                CreatedAt = now.AddDays(-40),
+                ExpiresAt = now.AddDays(-10) // Expired
+            });
+
+            // Valid refresh token
+            context.RefreshTokens.Add(new CustomAuthRefreshToken
+            {
+                Id = Guid.NewGuid(),
+                TokenHash = "valid-token-hash",
+                ClientId = "client",
+                UserId = "user",
+                Scope = "openid",
+                CreatedAt = now.AddDays(-1),
+                ExpiresAt = now.AddDays(29) // Valid
+            });
+
+            // Revoked session
+            context.Sessions.Add(new CustomAuthSession
+            {
+                Id = Guid.NewGuid(),
+                UserId = "user",
+                CreatedAt = now.AddDays(-5),
+                ExpiresAt = now.AddDays(5),
+                RevokedAt = now.AddDays(-1) // Revoked
+            });
+
+            // Valid session
+            context.Sessions.Add(new CustomAuthSession
+            {
+                Id = Guid.NewGuid(),
+                UserId = "user",
+                CreatedAt = now.AddDays(-1),
+                ExpiresAt = now.AddDays(9) // Valid
+            });
+        });
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var cleanupService = new EntityFrameworkCore.Services.EfCustomAuthCleanupService<CustomAuthDbContext>(
+                scope.ServiceProvider.GetRequiredService<CustomAuthDbContext>(),
+                timeProvider);
+
+            await cleanupService.CleanupAsync();
+        }
+
+        // Verify databases cleared expired items
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<CustomAuthDbContext>();
+
+            var codes = await db.AuthorizationCodes.ToListAsync();
+            Assert.Single(codes);
+            Assert.Equal("valid-code-hash", codes[0].CodeHash);
+
+            var tokens = await db.RefreshTokens.ToListAsync();
+            Assert.Single(tokens);
+            Assert.Equal("valid-token-hash", tokens[0].TokenHash);
+
+            var sessions = await db.Sessions.ToListAsync();
+            Assert.Single(sessions);
+            Assert.Null(sessions[0].RevokedAt);
+        }
+    }
+
     private static ServiceProvider CreateProvider()
     {
         var services = new ServiceCollection();
         var databaseName = Guid.NewGuid().ToString("N");
         services.AddVefaCustomAuthEntityFrameworkCore(options => options.UseInMemoryDatabase(databaseName));
+        services.AddSingleton<TimeProvider>(TimeProvider.System);
         return services.BuildServiceProvider();
     }
 
@@ -216,5 +446,11 @@ public sealed class EfCustomAuthStoreTests
         var context = scope.ServiceProvider.GetRequiredService<CustomAuthDbContext>();
         seed(context);
         await context.SaveChangesAsync();
+    }
+
+    private sealed class FakeTimeProvider : TimeProvider
+    {
+        private readonly DateTimeOffset _now = DateTimeOffset.UtcNow;
+        public override DateTimeOffset GetUtcNow() => _now;
     }
 }

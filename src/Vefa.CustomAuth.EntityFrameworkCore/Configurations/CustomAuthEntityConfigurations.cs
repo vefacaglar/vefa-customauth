@@ -81,3 +81,35 @@ internal sealed class CustomAuthSigningKeyConfiguration : IEntityTypeConfigurati
         builder.Property(x => x.Algorithm).HasMaxLength(50);
     }
 }
+
+internal sealed class CustomAuthScopeConfiguration : IEntityTypeConfiguration<CustomAuthScope>
+{
+    public void Configure(EntityTypeBuilder<CustomAuthScope> builder)
+    {
+        builder.ToTable("CustomAuthScopes");
+        builder.HasKey(x => x.Name);
+        builder.Property(x => x.Name).HasMaxLength(200);
+        builder.Property(x => x.DisplayName).HasMaxLength(200);
+        builder.Property(x => x.Description).HasMaxLength(1000);
+    }
+}
+
+internal sealed class CustomAuthAuditLogConfiguration : IEntityTypeConfiguration<CustomAuthAuditLog>
+{
+    public void Configure(EntityTypeBuilder<CustomAuthAuditLog> builder)
+    {
+        builder.ToTable("CustomAuthAuditLogs");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Action).HasMaxLength(100);
+        builder.Property(x => x.ActorUserId).HasMaxLength(200);
+        builder.Property(x => x.TargetType).HasMaxLength(100);
+        builder.Property(x => x.TargetId).HasMaxLength(200);
+        builder.Property(x => x.IpAddress).HasMaxLength(50);
+        builder.Property(x => x.UserAgent).HasMaxLength(1000);
+        builder.Property(x => x.Metadata).HasMaxLength(4000);
+
+        builder.HasIndex(x => x.Timestamp);
+        builder.HasIndex(x => x.ActorUserId);
+        builder.HasIndex(x => x.TargetType);
+    }
+}

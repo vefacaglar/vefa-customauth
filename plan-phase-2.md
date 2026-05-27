@@ -691,6 +691,8 @@ Add audit log contracts
 
 ### v0.6 — EF Core Provider
 
+Status: completed
+
 ```text
 Implement EF Core stores
 Support PostgreSQL through EF Core

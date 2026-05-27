@@ -39,6 +39,9 @@ public static class CustomAuthEntityFrameworkCoreExtensions
         services.TryAddScoped<ICustomAuthRefreshTokenStore, EfCustomAuthRefreshTokenStore<TContext>>();
         services.TryAddScoped<ICustomAuthSessionStore, EfCustomAuthSessionStore<TContext>>();
         services.TryAddScoped<ICustomAuthSigningKeyStore, EfCustomAuthSigningKeyStore<TContext>>();
+        services.TryAddScoped<ICustomAuthScopeStore, EfCustomAuthScopeStore<TContext>>();
+        services.TryAddScoped<ICustomAuthAuditLogStore, EfCustomAuthAuditLogStore<TContext>>();
+        services.TryAddScoped<Core.Services.ICustomAuthCleanupService, Services.EfCustomAuthCleanupService<TContext>>();
 
         return services;
     }

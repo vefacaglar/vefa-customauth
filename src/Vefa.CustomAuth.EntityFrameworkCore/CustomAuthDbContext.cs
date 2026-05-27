@@ -14,6 +14,8 @@ public class CustomAuthDbContext : DbContext
     public DbSet<CustomAuthRefreshToken> RefreshTokens => Set<CustomAuthRefreshToken>();
     public DbSet<CustomAuthSession> Sessions => Set<CustomAuthSession>();
     public DbSet<CustomAuthSigningKey> SigningKeys => Set<CustomAuthSigningKey>();
+    public DbSet<CustomAuthScope> Scopes => Set<CustomAuthScope>();
+    public DbSet<CustomAuthAuditLog> AuditLogs => Set<CustomAuthAuditLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
