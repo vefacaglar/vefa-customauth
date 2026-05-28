@@ -57,6 +57,7 @@ Use this checklist before publishing or deploying a Vefa.CustomAuth server outsi
 - Register only exact redirect URIs.
 - Avoid wildcard, prefix, or user-controlled redirect matching.
 - Review post-logout redirect URIs with the same strictness as login redirect URIs.
+- Enable refresh tokens only for clients that are allowed to request `offline_access`.
 - Keep PKCE required unless there is a documented confidential-client reason to change it.
 - Remove unused clients and scopes.
 

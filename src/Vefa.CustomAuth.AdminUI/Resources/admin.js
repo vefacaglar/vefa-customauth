@@ -147,14 +147,22 @@ window.adminApp = function() {
             if (idx > -1) {
                 // Remove if not required OIDC scope
                 if (scopeName === 'openid') return;
+                if (scopeName === 'offline_access') this.form.allowRefreshTokens = false;
                 this.form.allowedScopes.splice(idx, 1);
             } else {
                 this.form.allowedScopes.push(scopeName);
+                if (scopeName === 'offline_access') this.form.allowRefreshTokens = true;
             }
         },
 
         isScopeSelected(scopeName) {
             return this.form.allowedScopes.includes(scopeName);
+        },
+
+        toggleRefreshTokens() {
+            if (this.form.allowRefreshTokens && !this.form.allowedScopes.includes('offline_access')) {
+                this.form.allowedScopes.push('offline_access');
+            }
         },
 
         // Submit Form

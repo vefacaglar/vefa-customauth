@@ -24,7 +24,8 @@ public class CustomAuthManagerTests
         {
             ClientId = "test-client",
             DisplayName = "Test Client",
-            RedirectUris = { "https://localhost/callback" }
+            RedirectUris = { "https://localhost/callback" },
+            AllowedScopes = { "openid", "offline_access" }
         };
 
         // Act

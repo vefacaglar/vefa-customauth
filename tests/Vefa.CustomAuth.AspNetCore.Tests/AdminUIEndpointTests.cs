@@ -68,7 +68,8 @@ public sealed class AdminUIEndpointTests
             ClientId = "new-app",
             DisplayName = "New Application",
             RedirectUris = new List<string> { "https://localhost/callback" },
-            AllowedScopes = new List<string> { "openid" }
+            AllowedScopes = new List<string> { "openid" },
+            AllowRefreshTokens = false
         };
         var createResponse = await client.PostAsJsonAsync("/customauth/api/clients", newClient);
         Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);

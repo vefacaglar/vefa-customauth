@@ -481,9 +481,9 @@
                         <span class="checkbox-label text-xs ml-6">Require PKCE</span>
                     </label>
                     <label class="checkbox-container">
-                        <input type="checkbox" x-model="form.allowRefreshTokens">
+                        <input type="checkbox" x-model="form.allowRefreshTokens" @change="toggleRefreshTokens()">
                         <span class="checkmark"></span>
-                        <span class="checkbox-label text-xs ml-6">Allow Refresh Tokens</span>
+                        <span class="checkbox-label text-xs ml-6">Allow Refresh Tokens (requires offline_access)</span>
                     </label>
                 </div>
 

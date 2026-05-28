@@ -51,11 +51,7 @@ public sealed class CustomAuthClientManager : ICustomAuthClientManager
         ArgumentNullException.ThrowIfNull(client);
         ArgumentException.ThrowIfNullOrEmpty(client.ClientId);
 
-        // Perform basic validations
-        if (client.RedirectUris == null || client.RedirectUris.Count == 0)
-        {
-            throw new ArgumentException("At least one redirect URI is required.", nameof(client));
-        }
+        ValidateClient(client);
 
         await _clientStore.StoreAsync(client, cancellationToken).ConfigureAwait(false);
 
@@ -77,10 +73,7 @@ public sealed class CustomAuthClientManager : ICustomAuthClientManager
         ArgumentNullException.ThrowIfNull(client);
         ArgumentException.ThrowIfNullOrEmpty(client.ClientId);
 
-        if (client.RedirectUris == null || client.RedirectUris.Count == 0)
-        {
-            throw new ArgumentException("At least one redirect URI is required.", nameof(client));
-        }
+        ValidateClient(client);
 
         await _clientStore.StoreAsync(client, cancellationToken).ConfigureAwait(false);
 
@@ -112,5 +105,19 @@ public sealed class CustomAuthClientManager : ICustomAuthClientManager
             TargetId = clientId,
             Timestamp = _timeProvider.GetUtcNow()
         }, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static void ValidateClient(CustomAuthClient client)
+    {
+        if (client.RedirectUris == null || client.RedirectUris.Count == 0)
+        {
+            throw new ArgumentException("At least one redirect URI is required.", nameof(client));
+        }
+
+        if (client.AllowRefreshTokens
+            && (client.AllowedScopes == null || !client.AllowedScopes.Contains("offline_access", StringComparer.Ordinal)))
+        {
+            throw new ArgumentException("Clients that allow refresh tokens must include the offline_access scope.", nameof(client));
+        }
     }
 }

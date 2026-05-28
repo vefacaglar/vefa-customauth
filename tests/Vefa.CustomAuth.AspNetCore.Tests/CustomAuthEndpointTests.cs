@@ -16,6 +16,7 @@ using Vefa.CustomAuth.Tokens;
 using Vefa.CustomAuth.AspNetCore.Extensions;
 using Vefa.CustomAuth.AspNetCore.Stores.InMemory;
 using Vefa.CustomAuth.Core.Models;
+using Vefa.CustomAuth.Core.Managers;
 using Vefa.CustomAuth.Core.Options;
 
 namespace Vefa.CustomAuth.AspNetCore.Tests;
@@ -107,6 +108,40 @@ public sealed class CustomAuthEndpointTests
         var reuseResponse = await ExchangeRefreshTokenAsync(client, firstRefreshToken);
         Assert.Equal(HttpStatusCode.BadRequest, reuseResponse.StatusCode);
         Assert.Equal("invalid_grant", await ReadJsonPropertyAsync(reuseResponse, "error"));
+    }
+
+    [Fact]
+    public async Task AuthorizationCodeExchangeDoesNotIssueRefreshTokenWithoutOfflineAccessScope()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        var verifier = CreateVerifier();
+        var code = await IssueAuthorizationCodeAsync(client, verifier, scope: "openid profile email test-api");
+        var tokenResponse = await ExchangeCodeAsync(client, code, verifier);
+
+        Assert.Equal(HttpStatusCode.OK, tokenResponse.StatusCode);
+        using var document = await JsonDocument.ParseAsync(await tokenResponse.Content.ReadAsStreamAsync());
+        Assert.False(document.RootElement.TryGetProperty("refresh_token", out _));
+    }
+
+    [Fact]
+    public async Task ClientThatAllowsRefreshTokensMustAllowOfflineAccessScope()
+    {
+        await using var app = await CreateAppAsync();
+        var clientManager = app.Services.GetRequiredService<ICustomAuthClientManager>();
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(() =>
+            clientManager.CreateAsync(new CustomAuthClient
+            {
+                ClientId = "bad-refresh-client",
+                DisplayName = "Bad Refresh Client",
+                RedirectUris = { RedirectUri },
+                AllowedScopes = { "openid", "profile" },
+                AllowRefreshTokens = true
+            }));
+
+        Assert.Contains("offline_access", exception.Message);
     }
 
     [Fact]
@@ -320,9 +355,9 @@ public sealed class CustomAuthEndpointTests
         return app;
     }
 
-    private static async Task<string> IssueAuthorizationCodeAsync(HttpClient client, string verifier)
+    private static async Task<string> IssueAuthorizationCodeAsync(HttpClient client, string verifier, string scope = Scope)
     {
-        var authorizeUrl = BuildAuthorizeUrl(verifier);
+        var authorizeUrl = BuildAuthorizeUrl(verifier, scope: scope);
         var loginResponse = await client.PostAsync(
             "/login",
             new FormUrlEncodedContent(new Dictionary<string, string>
@@ -404,13 +439,13 @@ public sealed class CustomAuthEndpointTests
             });
     }
 
-    private static string BuildAuthorizeUrl(string verifier, string redirectUri = RedirectUri)
+    private static string BuildAuthorizeUrl(string verifier, string redirectUri = RedirectUri, string scope = Scope)
     {
         var challenge = Base64UrlEncoder.Encode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
         return "/connect/authorize?client_id=" + Uri.EscapeDataString(ClientId)
             + "&redirect_uri=" + Uri.EscapeDataString(redirectUri)
             + "&response_type=code"
-            + "&scope=" + Uri.EscapeDataString(Scope)
+            + "&scope=" + Uri.EscapeDataString(scope)
             + "&code_challenge=" + Uri.EscapeDataString(challenge)
             + "&code_challenge_method=S256"
             + "&state=test-state";

@@ -104,6 +104,7 @@ internal sealed class TokenEndpointService
             cancellationToken).ConfigureAwait(false);
 
         var absoluteExpiresAt = now.Add(GetRefreshTokenAbsoluteLifetime(client));
+        var includeRefreshToken = CanIssueRefreshToken(client, code.Scope);
         await StoreRefreshTokenAsync(
             issued.RefreshToken,
             client,
@@ -116,7 +117,7 @@ internal sealed class TokenEndpointService
             cancellationToken).ConfigureAwait(false);
         await _tokenManager.MarkAuthorizationCodeConsumedAsync(code.Id, now, cancellationToken).ConfigureAwait(false);
 
-        return Results.Json(CreateTokenResponse(issued, code.Scope, client.AllowRefreshTokens));
+        return Results.Json(CreateTokenResponse(issued, code.Scope, includeRefreshToken));
     }
 
     private async Task<IResult> ExchangeRefreshTokenAsync(IFormCollection form, CancellationToken cancellationToken)
@@ -147,6 +148,11 @@ internal sealed class TokenEndpointService
             || refreshToken.AbsoluteExpiresAt <= now
             || refreshToken.RevokedAt is not null
             || !string.Equals(refreshToken.ClientId, clientId, StringComparison.Ordinal))
+        {
+            return EndpointResults.OAuthError("invalid_grant", "The refresh token is invalid.");
+        }
+
+        if (!HasOfflineAccess(refreshToken.Scope))
         {
             return EndpointResults.OAuthError("invalid_grant", "The refresh token is invalid.");
         }
@@ -203,7 +209,7 @@ internal sealed class TokenEndpointService
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        if (!client.AllowRefreshTokens)
+        if (!CanIssueRefreshToken(client, scope))
         {
             return;
         }
@@ -244,6 +250,13 @@ internal sealed class TokenEndpointService
             : _options.CurrentValue.RefreshTokenAbsoluteLifetime;
         return configuredLifetime >= slidingLifetime ? configuredLifetime : slidingLifetime;
     }
+
+    private static bool CanIssueRefreshToken(CustomAuthClient client, string scope)
+        => client.AllowRefreshTokens && HasOfflineAccess(scope);
+
+    private static bool HasOfflineAccess(string scope)
+        => scope.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Contains("offline_access", StringComparer.Ordinal);
 
     private static IReadOnlyDictionary<string, string>? GetAdditionalClaims(CustomAuthUserInfo user)
     {
