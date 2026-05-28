@@ -53,6 +53,12 @@ public sealed class CustomAuthAuthorizationCode
     public string Scope { get; set; } = default!;
 
     /// <summary>
+    /// Gets or sets the OpenID Connect <c>nonce</c> supplied by the relying party in the authorization request.
+    /// Echoed back as the <c>nonce</c> claim of the ID token to bind it to the originating authentication request.
+    /// </summary>
+    public string? Nonce { get; set; }
+
+    /// <summary>
     /// Gets or sets the exact date and time when the authorization code will expire.
     /// </summary>
     public DateTimeOffset ExpiresAt { get; set; }

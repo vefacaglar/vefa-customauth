@@ -40,18 +40,15 @@ public sealed class EfCustomAuthAuthorizationCodeStore<TContext> : ICustomAuthAu
     }
 
     /// <inheritdoc />
-    public async Task MarkConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default)
+    public async Task<bool> MarkConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default)
     {
-        var code = await _context.Set<CustomAuthAuthorizationCode>()
-            .SingleOrDefaultAsync(item => item.Id == id, cancellationToken)
+        var affected = await _context.Set<CustomAuthAuthorizationCode>()
+            .Where(item => item.Id == id && item.ConsumedAt == null)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(item => item.ConsumedAt, consumedAt),
+                cancellationToken)
             .ConfigureAwait(false);
 
-        if (code is null)
-        {
-            return;
-        }
-
-        code.ConsumedAt = consumedAt;
-        await _context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return affected == 1;
     }
 }

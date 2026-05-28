@@ -26,6 +26,12 @@ public sealed class TokenIssueRequest
     public DateTimeOffset? AuthTime { get; set; }
 
     /// <summary>
+    /// Gets or sets the OpenID Connect <c>nonce</c> from the originating authorization request.
+    /// When set, the issuer copies it verbatim into the ID token's <c>nonce</c> claim.
+    /// </summary>
+    public string? Nonce { get; set; }
+
+    /// <summary>
     /// Gets or sets optional additional claims to include in user-facing tokens.
     /// </summary>
     public IReadOnlyDictionary<string, string>? AdditionalClaims { get; set; }

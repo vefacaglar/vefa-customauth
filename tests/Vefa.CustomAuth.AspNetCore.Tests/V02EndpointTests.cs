@@ -37,14 +37,19 @@ public sealed class V02EndpointTests
         // 1. Sign in to obtain session cookie
         var verifier = CreateVerifier();
         var authorizeUrl = BuildAuthorizeUrl(verifier);
-        var loginResponse = await client.PostAsync(
-            "/login",
-            new FormUrlEncodedContent(new Dictionary<string, string>
+        var antiforgery = await GetAntiforgeryAsync(client);
+        using var loginRequest = new HttpRequestMessage(HttpMethod.Post, "/login")
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 ["userName"] = UserName,
                 ["password"] = Password,
                 ["returnUrl"] = authorizeUrl,
-            }));
+                [antiforgery.FormFieldName] = antiforgery.RequestToken,
+            }),
+        };
+        loginRequest.Headers.Add("Cookie", antiforgery.Cookie);
+        var loginResponse = await client.SendAsync(loginRequest);
 
         Assert.Equal(HttpStatusCode.Redirect, loginResponse.StatusCode);
         var cookie = GetCookie(loginResponse, ".Vefa.CustomAuth.Session");
@@ -252,15 +257,21 @@ public sealed class V02EndpointTests
     private static async Task<string> IssueAuthorizationCodeAsync(HttpClient client, string verifier)
     {
         var authorizeUrl = BuildAuthorizeUrl(verifier);
-        var loginResponse = await client.PostAsync(
-            "/login",
-            new FormUrlEncodedContent(new Dictionary<string, string>
+        var antiforgery = await GetAntiforgeryAsync(client);
+
+        using var loginRequest = new HttpRequestMessage(HttpMethod.Post, "/login")
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 ["userName"] = UserName,
                 ["password"] = Password,
                 ["returnUrl"] = authorizeUrl,
-            }));
+                [antiforgery.FormFieldName] = antiforgery.RequestToken,
+            }),
+        };
+        loginRequest.Headers.Add("Cookie", antiforgery.Cookie);
 
+        var loginResponse = await client.SendAsync(loginRequest);
         Assert.Equal(HttpStatusCode.Redirect, loginResponse.StatusCode);
         var cookie = GetCookie(loginResponse, ".Vefa.CustomAuth.Session");
 
@@ -288,6 +299,9 @@ public sealed class V02EndpointTests
                 ["code"] = code,
                 ["code_verifier"] = verifier,
             }));
+
+    private static Task<AntiforgeryTokens> GetAntiforgeryAsync(HttpClient client)
+        => AntiforgeryTestHelpers.GetAntiforgeryAsync(client);
 
     private static async Task<string> IssueAccessTokenAsync(HttpClient client)
     {

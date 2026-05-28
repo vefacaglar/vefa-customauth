@@ -93,6 +93,11 @@ public sealed class JwtTokenIssuer : ITokenIssuer
             claims["auth_time"] = authTime.ToUnixTimeSeconds();
         }
 
+        if (!string.IsNullOrEmpty(request.Nonce))
+        {
+            claims["nonce"] = request.Nonce;
+        }
+
         if (request.AdditionalClaims is not null)
         {
             foreach (var (key, value) in request.AdditionalClaims)

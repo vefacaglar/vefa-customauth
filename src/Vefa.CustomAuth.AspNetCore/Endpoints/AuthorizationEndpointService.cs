@@ -42,6 +42,7 @@ internal sealed class AuthorizationEndpointService
         var state = request.Query["state"].ToString();
         var codeChallenge = request.Query["code_challenge"].ToString();
         var codeChallengeMethod = request.Query["code_challenge_method"].ToString();
+        var nonce = request.Query["nonce"].ToString();
 
         if (string.IsNullOrWhiteSpace(clientId))
         {
@@ -54,7 +55,12 @@ internal sealed class AuthorizationEndpointService
             return EndpointResults.OAuthError("unauthorized_client", "The client is not registered.");
         }
 
-        var validationError = ValidateRequest(client, redirectUri, responseType, scope, codeChallenge, codeChallengeMethod);
+        if (string.IsNullOrWhiteSpace(redirectUri) || !client.RedirectUris.Contains(redirectUri, StringComparer.Ordinal))
+        {
+            return EndpointResults.OAuthError("invalid_request", "redirect_uri must exactly match a registered redirect URI.");
+        }
+
+        var validationError = ValidatePostRedirectUri(client, redirectUri, responseType, scope, codeChallenge, codeChallengeMethod, state);
         if (validationError is not null)
         {
             return validationError;
@@ -80,6 +86,7 @@ internal sealed class AuthorizationEndpointService
                 CodeChallenge = codeChallenge,
                 CodeChallengeMethod = codeChallengeMethod,
                 Scope = scope,
+                Nonce = string.IsNullOrEmpty(nonce) ? null : nonce,
                 CreatedAt = now,
                 ExpiresAt = now.Add(_options.CurrentValue.AuthorizationCodeLifetime),
             },
@@ -98,38 +105,50 @@ internal sealed class AuthorizationEndpointService
         return Results.Redirect(QueryHelpers.AddQueryString(redirectUri, redirectValues));
     }
 
-    private IResult? ValidateRequest(
+    private IResult? ValidatePostRedirectUri(
         CustomAuthClient client,
         string redirectUri,
         string responseType,
         string scope,
         string codeChallenge,
-        string codeChallengeMethod)
+        string codeChallengeMethod,
+        string? state)
     {
         if (!string.Equals(responseType, "code", StringComparison.Ordinal))
         {
-            return EndpointResults.OAuthError("unsupported_response_type", "Only response_type=code is supported.");
-        }
-
-        if (string.IsNullOrWhiteSpace(redirectUri) || !client.RedirectUris.Contains(redirectUri, StringComparer.Ordinal))
-        {
-            return EndpointResults.OAuthError("invalid_request", "redirect_uri must exactly match a registered redirect URI.");
+            return EndpointResults.OAuthAuthorizeRedirectError(
+                redirectUri,
+                "unsupported_response_type",
+                "Only response_type=code is supported.",
+                state);
         }
 
         if (!IsScopeAllowed(client, scope))
         {
-            return EndpointResults.OAuthError("invalid_scope", "Requested scope is not allowed for this client.");
+            return EndpointResults.OAuthAuthorizeRedirectError(
+                redirectUri,
+                "invalid_scope",
+                "Requested scope is not allowed for this client.",
+                state);
         }
 
         if ((_options.CurrentValue.RequirePkce || client.RequirePkce)
             && (string.IsNullOrWhiteSpace(codeChallenge) || string.IsNullOrWhiteSpace(codeChallengeMethod)))
         {
-            return EndpointResults.OAuthError("invalid_request", "PKCE code_challenge and code_challenge_method are required.");
+            return EndpointResults.OAuthAuthorizeRedirectError(
+                redirectUri,
+                "invalid_request",
+                "PKCE code_challenge and code_challenge_method are required.",
+                state);
         }
 
         if (!string.IsNullOrWhiteSpace(codeChallengeMethod) && !PkceVerifier.IsSupportedMethod(codeChallengeMethod))
         {
-            return EndpointResults.OAuthError("invalid_request", "Only S256 and plain PKCE methods are supported.");
+            return EndpointResults.OAuthAuthorizeRedirectError(
+                redirectUri,
+                "invalid_request",
+                "Only S256 and plain PKCE methods are supported.",
+                state);
         }
 
         return null;

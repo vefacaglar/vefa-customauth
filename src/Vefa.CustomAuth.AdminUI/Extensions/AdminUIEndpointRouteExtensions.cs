@@ -23,8 +23,13 @@ public static class AdminUIEndpointRouteExtensions
     /// </summary>
     /// <param name="endpoints">The endpoint route builder.</param>
     /// <param name="pathPrefix">The URL path prefix where the Admin UI will be hosted. Defaults to "/customauth".</param>
-    /// <returns>An endpoint convention builder to chain authentication/authorization policies.</returns>
-    public static IEndpointConventionBuilder MapVefaCustomAuthAdminUI(
+    /// <returns>A <see cref="RouteGroupBuilder"/> covering every Admin UI route, so callers can chain additional conventions.</returns>
+    /// <remarks>
+    /// By default, all Admin UI routes (dashboard, static assets, admin APIs) require an authenticated request
+    /// that satisfies the application's default authorization policy. Opt out via
+    /// <see cref="CustomAuthAdminUIOptions.AllowAnonymous"/> only for local development or trusted networks.
+    /// </remarks>
+    public static RouteGroupBuilder MapVefaCustomAuthAdminUI(
         this IEndpointRouteBuilder endpoints,
         string pathPrefix = "/customauth")
         => endpoints.MapVefaCustomAuthAdminUI(options => options.PathPrefix = pathPrefix);
@@ -34,8 +39,13 @@ public static class AdminUIEndpointRouteExtensions
     /// </summary>
     /// <param name="endpoints">The endpoint route builder.</param>
     /// <param name="configure">The Admin UI options configuration callback.</param>
-    /// <returns>An endpoint convention builder to chain authentication/authorization policies.</returns>
-    public static IEndpointConventionBuilder MapVefaCustomAuthAdminUI(
+    /// <returns>A <see cref="RouteGroupBuilder"/> covering every Admin UI route, so callers can chain additional conventions.</returns>
+    /// <remarks>
+    /// By default, all Admin UI routes (dashboard, static assets, admin APIs) require an authenticated request
+    /// that satisfies the application's default authorization policy. Opt out via
+    /// <see cref="CustomAuthAdminUIOptions.AllowAnonymous"/> only for local development or trusted networks.
+    /// </remarks>
+    public static RouteGroupBuilder MapVefaCustomAuthAdminUI(
         this IEndpointRouteBuilder endpoints,
         Action<CustomAuthAdminUIOptions> configure)
     {
@@ -49,8 +59,10 @@ public static class AdminUIEndpointRouteExtensions
         var normalizedPrefix = "/" + options.PathPrefix.Trim('/');
         var assembly = typeof(AdminUIEndpointRouteExtensions).Assembly;
 
+        var group = endpoints.MapGroup(normalizedPrefix);
+
         // 1. Serve embedded static SPA resources
-        var indexRoute = endpoints.MapGet(normalizedPrefix, async (HttpContext context) =>
+        group.MapGet("", async (HttpContext context) =>
         {
             if (!context.Request.Path.Value!.EndsWith("/", StringComparison.Ordinal))
             {
@@ -68,7 +80,7 @@ public static class AdminUIEndpointRouteExtensions
             return Results.Content(html, "text/html", Encoding.UTF8);
         });
 
-        endpoints.MapGet($"{normalizedPrefix}/css/admin.css", async () =>
+        group.MapGet("/css/admin.css", async () =>
         {
             using var stream = assembly.GetManifestResourceStream("Vefa.CustomAuth.AdminUI.Resources.admin.css");
             if (stream == null)
@@ -81,7 +93,7 @@ public static class AdminUIEndpointRouteExtensions
             return Results.Content(css, "text/css", Encoding.UTF8);
         });
 
-        endpoints.MapGet($"{normalizedPrefix}/js/admin.js", async () =>
+        group.MapGet("/js/admin.js", async () =>
         {
             using var stream = assembly.GetManifestResourceStream("Vefa.CustomAuth.AdminUI.Resources.admin.js");
             if (stream == null)
@@ -95,7 +107,7 @@ public static class AdminUIEndpointRouteExtensions
         });
 
         // 2. Map Administrative Minimal API endpoints calling Core Managers
-        endpoints.MapGet($"{normalizedPrefix}/api/clients", async (
+        group.MapGet("/api/clients", async (
             [FromQuery] int page,
             [FromQuery] int pageSize,
             [FromQuery] string? search,
@@ -108,7 +120,7 @@ public static class AdminUIEndpointRouteExtensions
             return Results.Ok(result);
         });
 
-        endpoints.MapPost($"{normalizedPrefix}/api/clients", async (
+        group.MapPost("/api/clients", async (
             [FromBody] CustomAuthClient client,
             ICustomAuthClientManager clientManager,
             CancellationToken cancellationToken) =>
@@ -124,7 +136,7 @@ public static class AdminUIEndpointRouteExtensions
             }
         });
 
-        endpoints.MapPut($"{normalizedPrefix}/api/clients/{{clientId}}", async (
+        group.MapPut("/api/clients/{clientId}", async (
             [FromRoute] string clientId,
             [FromBody] CustomAuthClient client,
             ICustomAuthClientManager clientManager,
@@ -146,7 +158,7 @@ public static class AdminUIEndpointRouteExtensions
             }
         });
 
-        endpoints.MapDelete($"{normalizedPrefix}/api/clients/{{clientId}}", async (
+        group.MapDelete("/api/clients/{clientId}", async (
             [FromRoute] string clientId,
             ICustomAuthClientManager clientManager,
             CancellationToken cancellationToken) =>
@@ -163,7 +175,7 @@ public static class AdminUIEndpointRouteExtensions
         });
 
         // Scope management endpoints
-        endpoints.MapGet($"{normalizedPrefix}/api/scopes", async (
+        group.MapGet("/api/scopes", async (
             ICustomAuthScopeManager scopeManager,
             CancellationToken cancellationToken) =>
         {
@@ -171,7 +183,7 @@ public static class AdminUIEndpointRouteExtensions
             return Results.Ok(result);
         });
 
-        endpoints.MapPost($"{normalizedPrefix}/api/scopes", async (
+        group.MapPost("/api/scopes", async (
             [FromBody] CustomAuthScope scope,
             ICustomAuthScopeManager scopeManager,
             CancellationToken cancellationToken) =>
@@ -187,7 +199,7 @@ public static class AdminUIEndpointRouteExtensions
             }
         });
 
-        endpoints.MapPut($"{normalizedPrefix}/api/scopes/{{name}}", async (
+        group.MapPut("/api/scopes/{name}", async (
             [FromRoute] string name,
             [FromBody] CustomAuthScope scope,
             ICustomAuthScopeManager scopeManager,
@@ -209,7 +221,7 @@ public static class AdminUIEndpointRouteExtensions
             }
         });
 
-        endpoints.MapDelete($"{normalizedPrefix}/api/scopes/{{name}}", async (
+        group.MapDelete("/api/scopes/{name}", async (
             [FromRoute] string name,
             ICustomAuthScopeManager scopeManager,
             CancellationToken cancellationToken) =>
@@ -226,7 +238,7 @@ public static class AdminUIEndpointRouteExtensions
         });
 
         // Session viewer endpoints
-        endpoints.MapGet($"{normalizedPrefix}/api/sessions", async (
+        group.MapGet("/api/sessions", async (
             [FromQuery] int page,
             [FromQuery] int pageSize,
             [FromQuery] string? search,
@@ -239,7 +251,7 @@ public static class AdminUIEndpointRouteExtensions
             return Results.Ok(result);
         });
 
-        endpoints.MapPost($"{normalizedPrefix}/api/sessions/{{sessionId}}/revoke", async (
+        group.MapPost("/api/sessions/{sessionId}/revoke", async (
             [FromRoute] Guid sessionId,
             ICustomAuthSessionManager sessionManager,
             CancellationToken cancellationToken) =>
@@ -256,7 +268,7 @@ public static class AdminUIEndpointRouteExtensions
         });
 
         // Refresh token viewer endpoints
-        endpoints.MapGet($"{normalizedPrefix}/api/refresh-tokens", async (
+        group.MapGet("/api/refresh-tokens", async (
             [FromQuery] int page,
             [FromQuery] int pageSize,
             [FromQuery] string? search,
@@ -269,7 +281,7 @@ public static class AdminUIEndpointRouteExtensions
             return Results.Ok(result);
         });
 
-        endpoints.MapPost($"{normalizedPrefix}/api/refresh-tokens/{{tokenId}}/revoke", async (
+        group.MapPost("/api/refresh-tokens/{tokenId}/revoke", async (
             [FromRoute] Guid tokenId,
             ICustomAuthTokenManager tokenManager,
             TimeProvider timeProvider,
@@ -287,7 +299,7 @@ public static class AdminUIEndpointRouteExtensions
         });
 
         // Signing key viewer endpoints
-        endpoints.MapGet($"{normalizedPrefix}/api/signing-keys", async (
+        group.MapGet("/api/signing-keys", async (
             ICustomAuthSigningKeyManager signingKeyManager,
             CancellationToken cancellationToken) =>
         {
@@ -305,7 +317,7 @@ public static class AdminUIEndpointRouteExtensions
         });
 
         // Audit log viewer endpoints
-        endpoints.MapGet($"{normalizedPrefix}/api/audit-logs", async (
+        group.MapGet("/api/audit-logs", async (
             [FromQuery] int page,
             [FromQuery] int pageSize,
             [FromQuery] string? search,
@@ -318,7 +330,20 @@ public static class AdminUIEndpointRouteExtensions
             return Results.Ok(result);
         });
 
-        return indexRoute;
+        if (options.AllowAnonymous)
+        {
+            group.AllowAnonymous();
+        }
+        else if (!string.IsNullOrWhiteSpace(options.AuthorizationPolicyName))
+        {
+            group.RequireAuthorization(options.AuthorizationPolicyName);
+        }
+        else
+        {
+            group.RequireAuthorization();
+        }
+
+        return group;
     }
 
     private static CustomAuthPagedRequest CreatePagedRequest(

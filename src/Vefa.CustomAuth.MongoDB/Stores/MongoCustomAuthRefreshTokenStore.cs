@@ -73,11 +73,13 @@ public sealed class MongoCustomAuthRefreshTokenStore : ICustomAuthRefreshTokenSt
     }
 
     /// <inheritdoc/>
-    public async Task MarkConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default)
+    public async Task<bool> MarkConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default)
     {
-        var filter = Builders<CustomAuthRefreshToken>.Filter.Eq(t => t.Id, id);
+        var filter = Builders<CustomAuthRefreshToken>.Filter.Eq(t => t.Id, id)
+            & Builders<CustomAuthRefreshToken>.Filter.Eq(t => t.ConsumedAt, null);
         var update = Builders<CustomAuthRefreshToken>.Update.Set(t => t.ConsumedAt, consumedAt);
-        await _collection.UpdateOneAsync(filter, update, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var result = await _collection.UpdateOneAsync(filter, update, cancellationToken: cancellationToken).ConfigureAwait(false);
+        return result.IsAcknowledged && result.ModifiedCount == 1;
     }
 
     /// <inheritdoc/>

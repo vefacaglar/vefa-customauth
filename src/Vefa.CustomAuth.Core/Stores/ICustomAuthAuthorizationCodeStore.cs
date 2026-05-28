@@ -24,11 +24,13 @@ public interface ICustomAuthAuthorizationCodeStore
     Task<CustomAuthAuthorizationCode?> FindByHashAsync(string codeHash, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Marks an authorization code as consumed.
+    /// Atomically marks an authorization code as consumed, but only when it has not been
+    /// consumed yet. Implementations must perform a conditional update so that concurrent
+    /// token exchanges cannot both succeed for the same code.
     /// </summary>
     /// <param name="id">The authorization code identifier.</param>
     /// <param name="consumedAt">The timestamp when the code was consumed.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    Task MarkConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default);
+    /// <returns><c>true</c> when this call transitioned the code from unconsumed to consumed; <c>false</c> when the code was already consumed, did not exist, or was claimed by another concurrent request.</returns>
+    Task<bool> MarkConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default);
 }

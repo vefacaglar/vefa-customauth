@@ -65,7 +65,7 @@ public static class CustomAuthEndpointRouteExtensions
             TokenEndpointService service,
             CancellationToken cancellationToken) => service.HandleAsync(request, cancellationToken));
 
-        endpoints.MapGet("/login", (HttpRequest request, LoginEndpointService service) => service.Render(request));
+        endpoints.MapGet("/login", (HttpContext context, LoginEndpointService service) => service.Render(context));
 
         endpoints.MapPost("/login", (
             HttpContext context,

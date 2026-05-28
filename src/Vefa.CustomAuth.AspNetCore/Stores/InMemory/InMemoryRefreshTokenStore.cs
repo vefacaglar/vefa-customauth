@@ -52,14 +52,23 @@ public sealed class InMemoryRefreshTokenStore : ICustomAuthRefreshTokenStore
         return Task.FromResult(new CustomAuthPagedResult<CustomAuthRefreshToken> { Items = items, TotalCount = totalCount });
     }
 
-    public Task MarkConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default)
+    public Task<bool> MarkConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default)
     {
-        if (_tokensById.TryGetValue(id, out var token))
+        if (!_tokensById.TryGetValue(id, out var token))
         {
-            token.ConsumedAt = consumedAt;
+            return Task.FromResult(false);
         }
 
-        return Task.CompletedTask;
+        lock (token)
+        {
+            if (token.ConsumedAt is not null)
+            {
+                return Task.FromResult(false);
+            }
+
+            token.ConsumedAt = consumedAt;
+            return Task.FromResult(true);
+        }
     }
 
     public Task RevokeAsync(Guid id, DateTimeOffset revokedAt, CancellationToken cancellationToken = default)

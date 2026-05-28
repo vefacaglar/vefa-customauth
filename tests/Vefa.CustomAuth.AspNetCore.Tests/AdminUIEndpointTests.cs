@@ -173,6 +173,39 @@ public sealed class AdminUIEndpointTests
     }
 
     [Fact]
+    public async Task AdminApiRoutesRejectAnonymousRequestsByDefault()
+    {
+        await using var app = await CreateSecuredAppAsync();
+        using var client = app.GetTestClient();
+
+        var paths = new[]
+        {
+            "/customauth/",
+            "/customauth/api/clients?page=1&pageSize=10",
+            "/customauth/api/scopes",
+            "/customauth/api/sessions?page=1&pageSize=10",
+            "/customauth/api/refresh-tokens?page=1&pageSize=10",
+            "/customauth/api/signing-keys",
+            "/customauth/api/audit-logs?page=1&pageSize=10",
+        };
+
+        foreach (var path in paths)
+        {
+            var response = await client.GetAsync(path);
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
+
+        var post = await client.PostAsJsonAsync("/customauth/api/clients", new CustomAuthClient
+        {
+            ClientId = "anon-attempt",
+            RedirectUris = new List<string> { "https://localhost/cb" },
+            AllowedScopes = new List<string> { "openid" },
+            AllowRefreshTokens = false,
+        });
+        Assert.Equal(HttpStatusCode.Unauthorized, post.StatusCode);
+    }
+
+    [Fact]
     public async Task AdminAuditLogEndpointsWorkCorrectly()
     {
         await using var app = await CreateAppAsync();
@@ -209,9 +242,60 @@ public sealed class AdminUIEndpointTests
 
         var app = builder.Build();
         app.MapVefaCustomAuthEndpoints();
-        app.MapVefaCustomAuthAdminUI();
-        
+        app.MapVefaCustomAuthAdminUI(options => options.AllowAnonymous = true);
+
         await app.StartAsync();
         return app;
+    }
+
+    private static async Task<WebApplication> CreateSecuredAppAsync()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services
+            .AddVefaCustomAuth(options =>
+            {
+                options.Issuer = "http://localhost";
+                options.RequireHttps = false;
+            })
+            .AddJwtTokenSigning()
+            .AddInMemoryStores(stores =>
+            {
+                stores.Clients.Add(new CustomAuthClient
+                {
+                    ClientId = ClientId,
+                    DisplayName = "Test Admin Client",
+                    RedirectUris = { "https://localhost/signin-oidc" },
+                    AllowedScopes = { "openid", "profile" },
+                });
+            });
+
+        builder.Services
+            .AddAuthentication("Test")
+            .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, NoOpAuthenticationHandler>("Test", _ => { });
+        builder.Services.AddAuthorization();
+
+        var app = builder.Build();
+        app.UseAuthentication();
+        app.UseAuthorization();
+        app.MapVefaCustomAuthEndpoints();
+        app.MapVefaCustomAuthAdminUI();
+
+        await app.StartAsync();
+        return app;
+    }
+
+    private sealed class NoOpAuthenticationHandler : Microsoft.AspNetCore.Authentication.AuthenticationHandler<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions>
+    {
+        public NoOpAuthenticationHandler(
+            Microsoft.Extensions.Options.IOptionsMonitor<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions> options,
+            Microsoft.Extensions.Logging.ILoggerFactory logger,
+            System.Text.Encodings.Web.UrlEncoder encoder)
+            : base(options, logger, encoder)
+        {
+        }
+
+        protected override Task<Microsoft.AspNetCore.Authentication.AuthenticateResult> HandleAuthenticateAsync()
+            => Task.FromResult(Microsoft.AspNetCore.Authentication.AuthenticateResult.NoResult());
     }
 }

@@ -27,13 +27,14 @@ public interface ICustomAuthTokenManager
     Task<CustomAuthAuthorizationCode?> FindAuthorizationCodeByHashAsync(string codeHash, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Marks an authorization code as consumed (e.g. used to exchange tokens).
+    /// Atomically marks an authorization code as consumed. The underlying store performs a
+    /// conditional update so two concurrent token exchanges cannot both succeed for the same code.
     /// </summary>
     /// <param name="id">The unique identifier of the authorization code.</param>
     /// <param name="consumedAt">The timestamp when it was consumed.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    Task MarkAuthorizationCodeConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default);
+    /// <returns><c>true</c> when this call transitioned the code from unconsumed to consumed; <c>false</c> if the code was already consumed or missing.</returns>
+    Task<bool> MarkAuthorizationCodeConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Validates and stores a newly issued refresh token.
@@ -60,13 +61,14 @@ public interface ICustomAuthTokenManager
     Task<CustomAuthPagedResult<CustomAuthRefreshToken>> GetRefreshTokensPagedAsync(CustomAuthPagedRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Marks a refresh token as consumed (rotated/exchanged).
+    /// Atomically marks a refresh token as consumed during rotation. The underlying store
+    /// performs a conditional update so two concurrent rotations cannot both succeed for the same token.
     /// </summary>
     /// <param name="id">The unique identifier of the refresh token.</param>
     /// <param name="consumedAt">The timestamp when it was consumed.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    Task MarkRefreshTokenConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default);
+    /// <returns><c>true</c> when this call transitioned the token from unconsumed to consumed; <c>false</c> if the token was already consumed or missing.</returns>
+    Task<bool> MarkRefreshTokenConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Revokes a refresh token immediately.

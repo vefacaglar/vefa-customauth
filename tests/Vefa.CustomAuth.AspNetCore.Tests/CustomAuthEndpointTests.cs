@@ -43,6 +43,46 @@ public sealed class CustomAuthEndpointTests
     }
 
     [Fact]
+    public async Task AuthorizeRedirectsInvalidScopeBackToClient()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        var verifier = CreateVerifier();
+        var response = await client.GetAsync(BuildAuthorizeUrl(verifier, scope: "openid bogus"));
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var location = response.Headers.Location;
+        Assert.NotNull(location);
+        Assert.Equal(RedirectUri, location!.GetLeftPart(UriPartial.Path));
+        var query = QueryHelpers.ParseQuery(location.Query);
+        Assert.Equal("invalid_scope", query["error"].ToString());
+        Assert.Equal("test-state", query["state"].ToString());
+    }
+
+    [Fact]
+    public async Task AuthorizeRedirectsMissingPkceBackToClient()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        var url = "/connect/authorize?client_id=" + Uri.EscapeDataString(ClientId)
+            + "&redirect_uri=" + Uri.EscapeDataString(RedirectUri)
+            + "&response_type=code"
+            + "&scope=" + Uri.EscapeDataString(Scope)
+            + "&state=test-state";
+        var response = await client.GetAsync(url);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var location = response.Headers.Location;
+        Assert.NotNull(location);
+        Assert.Equal(RedirectUri, location!.GetLeftPart(UriPartial.Path));
+        var query = QueryHelpers.ParseQuery(location.Query);
+        Assert.Equal("invalid_request", query["error"].ToString());
+        Assert.Equal("test-state", query["state"].ToString());
+    }
+
+    [Fact]
     public async Task TokenRejectsWrongPkceVerifier()
     {
         await using var app = await CreateAppAsync();
@@ -108,6 +148,95 @@ public sealed class CustomAuthEndpointTests
         var reuseResponse = await ExchangeRefreshTokenAsync(client, firstRefreshToken);
         Assert.Equal(HttpStatusCode.BadRequest, reuseResponse.StatusCode);
         Assert.Equal("invalid_grant", await ReadJsonPropertyAsync(reuseResponse, "error"));
+    }
+
+    [Fact]
+    public async Task TokenResponseSetsNoStoreCacheHeaders()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        var verifier = CreateVerifier();
+        var code = await IssueAuthorizationCodeAsync(client, verifier);
+        var response = await ExchangeCodeAsync(client, code, verifier);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("no-store", response.Headers.CacheControl?.ToString() ?? string.Empty);
+        Assert.Contains(response.Headers.Pragma, p => string.Equals(p.Name, "no-cache", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task LoginPostWithoutAntiforgeryTokenIsRejected()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        var response = await client.PostAsync(
+            "/login",
+            new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["userName"] = UserName,
+                ["password"] = Password,
+                ["returnUrl"] = "/",
+            }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ConcurrentCodeRedemptionLetsOnlyOneRequestSucceed()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        var verifier = CreateVerifier();
+        var code = await IssueAuthorizationCodeAsync(client, verifier);
+
+        var responses = await Task.WhenAll(
+            ExchangeCodeAsync(client, code, verifier),
+            ExchangeCodeAsync(client, code, verifier),
+            ExchangeCodeAsync(client, code, verifier),
+            ExchangeCodeAsync(client, code, verifier),
+            ExchangeCodeAsync(client, code, verifier));
+
+        Assert.Equal(1, responses.Count(r => r.StatusCode == HttpStatusCode.OK));
+        Assert.Equal(4, responses.Count(r => r.StatusCode == HttpStatusCode.BadRequest));
+    }
+
+    [Fact]
+    public async Task IdTokenEchoesNonceFromAuthorizationRequest()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        const string expectedNonce = "n-0S6_WzA2Mj";
+        var verifier = CreateVerifier();
+        var code = await IssueAuthorizationCodeAsync(client, verifier, nonce: expectedNonce);
+        var tokenResponse = await ExchangeCodeAsync(client, code, verifier);
+
+        Assert.Equal(HttpStatusCode.OK, tokenResponse.StatusCode);
+        var idToken = await ReadJsonPropertyAsync(tokenResponse, "id_token");
+
+        var handler = new JsonWebTokenHandler();
+        var jwt = handler.ReadJsonWebToken(idToken);
+        Assert.True(jwt.TryGetPayloadValue<string>("nonce", out var actualNonce));
+        Assert.Equal(expectedNonce, actualNonce);
+    }
+
+    [Fact]
+    public async Task IdTokenOmitsNonceClaimWhenNoNonceProvided()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        var verifier = CreateVerifier();
+        var code = await IssueAuthorizationCodeAsync(client, verifier);
+        var tokenResponse = await ExchangeCodeAsync(client, code, verifier);
+        var idToken = await ReadJsonPropertyAsync(tokenResponse, "id_token");
+
+        var handler = new JsonWebTokenHandler();
+        var jwt = handler.ReadJsonWebToken(idToken);
+        Assert.False(jwt.TryGetPayloadValue<string>("nonce", out _));
     }
 
     [Fact]
@@ -355,18 +484,24 @@ public sealed class CustomAuthEndpointTests
         return app;
     }
 
-    private static async Task<string> IssueAuthorizationCodeAsync(HttpClient client, string verifier, string scope = Scope)
+    private static async Task<string> IssueAuthorizationCodeAsync(HttpClient client, string verifier, string scope = Scope, string? nonce = null)
     {
-        var authorizeUrl = BuildAuthorizeUrl(verifier, scope: scope);
-        var loginResponse = await client.PostAsync(
-            "/login",
-            new FormUrlEncodedContent(new Dictionary<string, string>
+        var authorizeUrl = BuildAuthorizeUrl(verifier, scope: scope, nonce: nonce);
+        var antiforgery = await GetAntiforgeryAsync(client);
+
+        using var loginRequest = new HttpRequestMessage(HttpMethod.Post, "/login")
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 ["userName"] = UserName,
                 ["password"] = Password,
                 ["returnUrl"] = authorizeUrl,
-            }));
+                [antiforgery.FormFieldName] = antiforgery.RequestToken,
+            }),
+        };
+        loginRequest.Headers.Add("Cookie", antiforgery.Cookie);
 
+        var loginResponse = await client.SendAsync(loginRequest);
         Assert.Equal(HttpStatusCode.Redirect, loginResponse.StatusCode);
         var cookie = GetCookie(loginResponse, ".Vefa.CustomAuth.Session");
 
@@ -439,16 +574,22 @@ public sealed class CustomAuthEndpointTests
             });
     }
 
-    private static string BuildAuthorizeUrl(string verifier, string redirectUri = RedirectUri, string scope = Scope)
+    private static string BuildAuthorizeUrl(string verifier, string redirectUri = RedirectUri, string scope = Scope, string? nonce = null)
     {
         var challenge = Base64UrlEncoder.Encode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
-        return "/connect/authorize?client_id=" + Uri.EscapeDataString(ClientId)
+        var url = "/connect/authorize?client_id=" + Uri.EscapeDataString(ClientId)
             + "&redirect_uri=" + Uri.EscapeDataString(redirectUri)
             + "&response_type=code"
             + "&scope=" + Uri.EscapeDataString(scope)
             + "&code_challenge=" + Uri.EscapeDataString(challenge)
             + "&code_challenge_method=S256"
             + "&state=test-state";
+        if (!string.IsNullOrEmpty(nonce))
+        {
+            url += "&nonce=" + Uri.EscapeDataString(nonce);
+        }
+
+        return url;
     }
 
     private static string CreateVerifier()
@@ -457,6 +598,9 @@ public sealed class CustomAuthEndpointTests
         RandomNumberGenerator.Fill(bytes);
         return Base64UrlEncoder.Encode(bytes.ToArray());
     }
+
+    private static Task<AntiforgeryTokens> GetAntiforgeryAsync(HttpClient client)
+        => AntiforgeryTestHelpers.GetAntiforgeryAsync(client);
 
     private static string GetCookie(HttpResponseMessage response, string cookieName)
     {

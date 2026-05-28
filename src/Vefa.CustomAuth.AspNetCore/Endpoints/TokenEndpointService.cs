@@ -92,6 +92,12 @@ internal sealed class TokenEndpointService
             return EndpointResults.OAuthError("invalid_grant", "The authorization code is invalid.");
         }
 
+        var consumed = await _tokenManager.MarkAuthorizationCodeConsumedAsync(code.Id, now, cancellationToken).ConfigureAwait(false);
+        if (!consumed)
+        {
+            return EndpointResults.OAuthError("invalid_grant", "The authorization code is invalid.");
+        }
+
         var issued = await _tokenIssuer.IssueAsync(
             new TokenIssueRequest
             {
@@ -99,6 +105,7 @@ internal sealed class TokenEndpointService
                 ClientId = clientId,
                 Scope = code.Scope,
                 AuthTime = code.CreatedAt,
+                Nonce = code.Nonce,
                 AdditionalClaims = GetAdditionalClaims(user),
             },
             cancellationToken).ConfigureAwait(false);
@@ -115,9 +122,8 @@ internal sealed class TokenEndpointService
             absoluteExpiresAt,
             now,
             cancellationToken).ConfigureAwait(false);
-        await _tokenManager.MarkAuthorizationCodeConsumedAsync(code.Id, now, cancellationToken).ConfigureAwait(false);
 
-        return Results.Json(CreateTokenResponse(issued, code.Scope, includeRefreshToken));
+        return EndpointResults.NoStoreJson(CreateTokenResponse(issued, code.Scope, includeRefreshToken));
     }
 
     private async Task<IResult> ExchangeRefreshTokenAsync(IFormCollection form, CancellationToken cancellationToken)
@@ -173,6 +179,19 @@ internal sealed class TokenEndpointService
             return EndpointResults.OAuthError("invalid_grant", "The refresh token is invalid.");
         }
 
+        var consumed = await _tokenManager.MarkRefreshTokenConsumedAsync(refreshToken.Id, now, cancellationToken).ConfigureAwait(false);
+        if (!consumed)
+        {
+            // Lost the atomic check-and-set. Another caller already consumed this token between our
+            // lookup and our update — treat it as reuse and revoke the chain.
+            if (_options.CurrentValue.DetectRefreshTokenReuse)
+            {
+                await _tokenManager.HandleRefreshTokenReuseAsync(refreshToken, now, cancellationToken).ConfigureAwait(false);
+            }
+
+            return EndpointResults.OAuthError("invalid_grant", "The refresh token is invalid.");
+        }
+
         var issued = await _tokenIssuer.IssueAsync(
             new TokenIssueRequest
             {
@@ -193,9 +212,8 @@ internal sealed class TokenEndpointService
             refreshToken.AbsoluteExpiresAt,
             now,
             cancellationToken).ConfigureAwait(false);
-        await _tokenManager.MarkRefreshTokenConsumedAsync(refreshToken.Id, now, cancellationToken).ConfigureAwait(false);
 
-        return Results.Json(CreateTokenResponse(issued, refreshToken.Scope, includeRefreshToken: true));
+        return EndpointResults.NoStoreJson(CreateTokenResponse(issued, refreshToken.Scope, includeRefreshToken: true));
     }
 
     private async Task StoreRefreshTokenAsync(

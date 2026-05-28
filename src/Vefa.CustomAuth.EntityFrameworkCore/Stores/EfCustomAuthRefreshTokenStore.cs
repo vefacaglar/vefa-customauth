@@ -63,19 +63,16 @@ public sealed class EfCustomAuthRefreshTokenStore<TContext> : ICustomAuthRefresh
     }
 
     /// <inheritdoc />
-    public async Task MarkConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default)
+    public async Task<bool> MarkConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default)
     {
-        var token = await _context.Set<CustomAuthRefreshToken>()
-            .SingleOrDefaultAsync(item => item.Id == id, cancellationToken)
+        var affected = await _context.Set<CustomAuthRefreshToken>()
+            .Where(item => item.Id == id && item.ConsumedAt == null)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(item => item.ConsumedAt, consumedAt),
+                cancellationToken)
             .ConfigureAwait(false);
 
-        if (token is null)
-        {
-            return;
-        }
-
-        token.ConsumedAt = consumedAt;
-        await _context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return affected == 1;
     }
 
     /// <inheritdoc />

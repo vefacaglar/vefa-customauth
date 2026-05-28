@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Vefa.CustomAuth.Core.Models;
@@ -62,7 +63,7 @@ public sealed class EfCustomAuthStoreTests
     [Fact]
     public async Task AuthorizationCodeStorePersistsFindsAndConsumesCode()
     {
-        await using var provider = CreateProvider();
+        await using var provider = CreateSqliteProvider();
         var codeHash = TokenHasher.Hash(TokenHasher.CreateOpaqueToken());
         var codeId = Guid.NewGuid();
         var now = new DateTimeOffset(2026, 5, 28, 0, 0, 0, TimeSpan.Zero);
@@ -104,9 +105,69 @@ public sealed class EfCustomAuthStoreTests
     }
 
     [Fact]
+    public async Task AuthorizationCodeStoreConsumesCodeOnlyOnce()
+    {
+        await using var provider = CreateSqliteProvider();
+        var codeId = Guid.NewGuid();
+        var now = new DateTimeOffset(2026, 5, 28, 0, 0, 0, TimeSpan.Zero);
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<ICustomAuthAuthorizationCodeStore>();
+            await store.StoreAsync(new CustomAuthAuthorizationCode
+            {
+                Id = codeId,
+                CodeHash = TokenHasher.Hash(TokenHasher.CreateOpaqueToken()),
+                ClientId = "client-1",
+                UserId = "user-1",
+                RedirectUri = "https://client.example.com/callback",
+                CodeChallenge = "c",
+                CodeChallengeMethod = "plain",
+                Scope = "openid",
+                CreatedAt = now,
+                ExpiresAt = now.AddMinutes(2),
+            });
+        }
+
+        await using var consumeScope = provider.CreateAsyncScope();
+        var consumeStore = consumeScope.ServiceProvider.GetRequiredService<ICustomAuthAuthorizationCodeStore>();
+        Assert.True(await consumeStore.MarkConsumedAsync(codeId, now.AddSeconds(10)));
+        Assert.False(await consumeStore.MarkConsumedAsync(codeId, now.AddSeconds(20)));
+    }
+
+    [Fact]
+    public async Task RefreshTokenStoreConsumesTokenOnlyOnce()
+    {
+        await using var provider = CreateSqliteProvider();
+        var tokenId = Guid.NewGuid();
+        var now = new DateTimeOffset(2026, 5, 28, 0, 0, 0, TimeSpan.Zero);
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<ICustomAuthRefreshTokenStore>();
+            await store.StoreAsync(new CustomAuthRefreshToken
+            {
+                Id = tokenId,
+                TokenHash = TokenHasher.Hash(TokenHasher.CreateOpaqueToken()),
+                ClientId = "client-1",
+                UserId = "user-1",
+                Scope = "openid offline_access",
+                CreatedAt = now,
+                ExpiresAt = now.AddDays(30),
+                AbsoluteExpiresAt = now.AddDays(30),
+            });
+        }
+
+        await using var consumeScope = provider.CreateAsyncScope();
+        var consumeStore = consumeScope.ServiceProvider.GetRequiredService<ICustomAuthRefreshTokenStore>();
+        Assert.True(await consumeStore.MarkConsumedAsync(tokenId, now.AddSeconds(10)));
+        Assert.False(await consumeStore.MarkConsumedAsync(tokenId, now.AddSeconds(20)));
+    }
+
+    [Fact]
     public async Task RefreshTokenStorePersistsConsumesAndRevokesToken()
     {
-        await using var provider = CreateProvider();
+        await using var provider = CreateSqliteProvider();
         var tokenHash = TokenHasher.Hash(TokenHasher.CreateOpaqueToken());
         var tokenId = Guid.NewGuid();
         var now = new DateTimeOffset(2026, 5, 28, 0, 0, 0, TimeSpan.Zero);
@@ -438,6 +499,28 @@ public sealed class EfCustomAuthStoreTests
         services.AddVefaCustomAuthEntityFrameworkCore(options => options.UseInMemoryDatabase(databaseName));
         services.AddSingleton<TimeProvider>(TimeProvider.System);
         return services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    /// SQLite-backed provider for tests that depend on relational features such as
+    /// <c>ExecuteUpdateAsync</c> (used by atomic <c>MarkConsumedAsync</c>) which are
+    /// unsupported by the EF Core InMemory provider.
+    /// </summary>
+    private static ServiceProvider CreateSqliteProvider()
+    {
+        var services = new ServiceCollection();
+        var connection = new SqliteConnection("DataSource=:memory:");
+        connection.Open();
+        services.AddSingleton(connection);
+        services.AddVefaCustomAuthEntityFrameworkCore(options => options.UseSqlite(connection));
+        services.AddSingleton<TimeProvider>(TimeProvider.System);
+        var provider = services.BuildServiceProvider();
+        using (var scope = provider.CreateScope())
+        {
+            var ctx = scope.ServiceProvider.GetRequiredService<CustomAuthDbContext>();
+            ctx.Database.EnsureCreated();
+        }
+        return provider;
     }
 
     private static async Task SeedAsync(ServiceProvider provider, Action<CustomAuthDbContext> seed)

@@ -32,13 +32,15 @@ public interface ICustomAuthRefreshTokenStore
     Task<CustomAuthPagedResult<CustomAuthRefreshToken>> GetPagedAsync(CustomAuthPagedRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Marks a refresh token as consumed after rotation.
+    /// Atomically marks a refresh token as consumed after rotation, but only when it has
+    /// not been consumed yet. Implementations must perform a conditional update so that
+    /// concurrent rotation attempts cannot both succeed for the same token.
     /// </summary>
     /// <param name="id">The refresh token identifier.</param>
     /// <param name="consumedAt">The timestamp when the token was consumed.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A task representing the asynchronous operation.</returns>
-    Task MarkConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default);
+    /// <returns><c>true</c> when this call transitioned the token from unconsumed to consumed; <c>false</c> when the token was already consumed, did not exist, or was claimed by another concurrent request.</returns>
+    Task<bool> MarkConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Revokes a refresh token.

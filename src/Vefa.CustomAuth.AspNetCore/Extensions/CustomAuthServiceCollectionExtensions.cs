@@ -27,6 +27,7 @@ public static class CustomAuthServiceCollectionExtensions
             .Configure(configure)
             .ValidateOnStart();
 
+        services.AddAntiforgery();
         services.TryAddSingleton<IValidateOptions<CustomAuthOptions>, CustomAuthOptionsValidator>();
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddScoped<AuthorizationEndpointService>();
