@@ -16,6 +16,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="8.0.10" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Vefa.CustomAuth.Core\Vefa.CustomAuth.Core.csproj" />
     <ProjectReference Include="..\Vefa.CustomAuth.Tokens\Vefa.CustomAuth.Tokens.csproj" />
   </ItemGroup>
