@@ -25,6 +25,16 @@ builder.Services.AddCustomAuthEntityFrameworkCore(options =>
     options.UseSqlite("Data Source=customauth-sample.db");
 });
 
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
 builder.Services.AddRazorPages();
 
 builder.Services
@@ -39,6 +49,8 @@ builder.Services
     .AddJwtTokenSigning();
 
 var app = builder.Build();
+
+app.UseCors();
 
 await EnsureDatabaseSeededAsync(app.Services);
 
@@ -55,20 +67,38 @@ static async Task EnsureDatabaseSeededAsync(IServiceProvider services)
 
     await context.Database.EnsureCreatedAsync();
 
-    if (await context.Clients.AnyAsync(client => client.ClientId == "sample-webapp"))
+    bool changed = false;
+
+    if (!await context.Clients.AnyAsync(client => client.ClientId == "sample-webapp"))
     {
-        return;
+        context.Clients.Add(new CustomAuthClient
+        {
+            ClientId = "sample-webapp",
+            DisplayName = "Sample Web App",
+            RedirectUris = { "http://localhost:5043/signin-oidc" },
+            PostLogoutRedirectUris = { "http://localhost:5043/" },
+            AllowedScopes = { "openid", "profile", "email", "offline_access", "sample-api" },
+            AllowRefreshTokens = true,
+        });
+        changed = true;
     }
 
-    context.Clients.Add(new CustomAuthClient
+    if (!await context.Clients.AnyAsync(client => client.ClientId == "swagger-ui"))
     {
-        ClientId = "sample-webapp",
-        DisplayName = "Sample Web App",
-        RedirectUris = { "http://localhost:5043/signin-oidc" },
-        PostLogoutRedirectUris = { "http://localhost:5043/" },
-        AllowedScopes = { "openid", "profile", "email", "offline_access", "sample-api" },
-        AllowRefreshTokens = true,
-    });
+        context.Clients.Add(new CustomAuthClient
+        {
+            ClientId = "swagger-ui",
+            DisplayName = "Sample Swagger UI",
+            RedirectUris = { "http://localhost:5098/swagger/oauth2-redirect.html" },
+            PostLogoutRedirectUris = { "http://localhost:5098/swagger/" },
+            AllowedScopes = { "openid", "profile", "email", "offline_access", "sample-api" },
+            AllowRefreshTokens = true,
+        });
+        changed = true;
+    }
 
-    await context.SaveChangesAsync();
+    if (changed)
+    {
+        await context.SaveChangesAsync();
+    }
 }
