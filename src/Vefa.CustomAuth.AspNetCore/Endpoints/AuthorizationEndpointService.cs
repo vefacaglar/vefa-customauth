@@ -66,9 +66,51 @@ internal sealed class AuthorizationEndpointService
             return validationError;
         }
 
+        var prompt = request.Query["prompt"].ToString();
+        var maxAgeStr = request.Query["max_age"].ToString();
+
+        var prompts = (prompt ?? string.Empty)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToHashSet(StringComparer.Ordinal);
+
+        if (prompts.Contains("none") && prompts.Count > 1)
+        {
+            return EndpointResults.OAuthAuthorizeRedirectError(
+                redirectUri,
+                "invalid_request",
+                "prompt=none cannot be combined with other prompt values.",
+                state);
+        }
+
         var session = await _sessionCookieService.GetCurrentSessionAsync(context, cancellationToken).ConfigureAwait(false);
+
+        // Enforce max_age re-authentication
+        if (session is not null && int.TryParse(maxAgeStr, out var maxAge) && maxAge > 0)
+        {
+            var nowUtc = _timeProvider.GetUtcNow();
+            if (session.CreatedAt.AddSeconds(maxAge) < nowUtc)
+            {
+                session = null; // Force re-authentication by ignoring current session
+            }
+        }
+
+        // Enforce prompt=login re-authentication
+        if (prompts.Contains("login"))
+        {
+            session = null; // Always ignore session to force login screen
+        }
+
         if (session is null)
         {
+            if (prompts.Contains("none"))
+            {
+                return EndpointResults.OAuthAuthorizeRedirectError(
+                    redirectUri,
+                    "login_required",
+                    "The user is not authenticated and prompt=none was requested.",
+                    state);
+            }
+
             return Results.Redirect(GetLoginUrl(context));
         }
 
@@ -167,7 +209,31 @@ internal sealed class AuthorizationEndpointService
 
     private string GetLoginUrl(HttpContext context)
     {
-        var returnUrl = context.Request.PathBase + context.Request.Path + context.Request.QueryString;
+        var request = context.Request;
+        var queryParams = QueryHelpers.ParseQuery(request.QueryString.ToString());
+        var newQueryParams = new Dictionary<string, string?>();
+
+        foreach (var param in queryParams)
+        {
+            if (string.Equals(param.Key, "prompt", StringComparison.OrdinalIgnoreCase))
+            {
+                var promptValues = param.Value.ToString()
+                    .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Where(v => !string.Equals(v, "login", StringComparison.OrdinalIgnoreCase));
+
+                var newPrompt = string.Join(' ', promptValues);
+                if (!string.IsNullOrEmpty(newPrompt))
+                {
+                    newQueryParams["prompt"] = newPrompt;
+                }
+            }
+            else
+            {
+                newQueryParams[param.Key] = param.Value.ToString();
+            }
+        }
+
+        var returnUrl = QueryHelpers.AddQueryString(request.PathBase + request.Path, newQueryParams);
         return QueryHelpers.AddQueryString(_options.CurrentValue.LoginPath, "returnUrl", returnUrl);
     }
 }

@@ -30,21 +30,32 @@ internal sealed class UserInfoEndpointService
         ArgumentNullException.ThrowIfNull(context);
 
         var request = context.Request;
+        string? accessToken = null;
 
-        // 1. Extract Bearer token from Authorization header
-        if (!request.Headers.TryGetValue("Authorization", out var authHeaderValue)
-            || !AuthenticationHeaderValue.TryParse(authHeaderValue, out var header)
-            || !string.Equals(header.Scheme, "Bearer", StringComparison.OrdinalIgnoreCase)
-            || string.IsNullOrWhiteSpace(header.Parameter))
+        // 1. Extract Bearer token from Authorization header or POST form body
+        if (request.Headers.TryGetValue("Authorization", out var authHeaderValue)
+            && AuthenticationHeaderValue.TryParse(authHeaderValue, out var header)
+            && string.Equals(header.Scheme, "Bearer", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(header.Parameter))
         {
-            context.Response.Headers.Append("WWW-Authenticate", "Bearer error=\"invalid_token\", error_description=\"Missing or malformed Authorization header.\"");
+            accessToken = header.Parameter;
+        }
+        else if (string.Equals(request.Method, HttpMethods.Post, StringComparison.OrdinalIgnoreCase)
+                 && request.HasFormContentType)
+        {
+            var form = await request.ReadFormAsync(cancellationToken).ConfigureAwait(false);
+            accessToken = form["access_token"].ToString();
+        }
+
+        if (string.IsNullOrWhiteSpace(accessToken))
+        {
+            context.Response.Headers.Append("WWW-Authenticate", "Bearer error=\"invalid_token\", error_description=\"Missing or malformed access token.\"");
             return Results.Unauthorized();
         }
 
-        var accessToken = header.Parameter;
-
         // 2. Validate token signature and lifetime
         string? userId = null;
+        string? scopeClaim = null;
         try
         {
             var jwks = await _signingCredentialsProvider.GetJsonWebKeySetAsync(cancellationToken).ConfigureAwait(false);
@@ -55,7 +66,7 @@ internal sealed class UserInfoEndpointService
                 {
                     ValidateIssuer = true,
                     ValidIssuer = _options.CurrentValue.Issuer,
-                    ValidateAudience = false, // audience validation is skipped or checked if strict
+                    ValidateAudience = false, // audience validation is skipped in UserInfo per spec defaults
                     ValidateIssuerSigningKey = true,
                     IssuerSigningKeys = jwks,
                     ValidateLifetime = true,
@@ -70,6 +81,7 @@ internal sealed class UserInfoEndpointService
             }
 
             userId = validationResult.ClaimsIdentity.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+            scopeClaim = validationResult.ClaimsIdentity.FindFirst("scope")?.Value;
         }
         catch (Exception ex)
         {
@@ -91,29 +103,96 @@ internal sealed class UserInfoEndpointService
             return Results.Unauthorized();
         }
 
-        // 4. Build standard OIDC UserInfo response claims
+        // 4. Build standard OIDC UserInfo response claims filtered by scope
+        var scopes = (scopeClaim ?? string.Empty)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         var responseClaims = new Dictionary<string, object>
         {
             ["sub"] = user.UserId,
         };
 
-        if (!string.IsNullOrWhiteSpace(user.UserName))
+        if (scopes.Contains("profile"))
         {
-            responseClaims["name"] = user.UserName;
-            responseClaims["preferred_username"] = user.UserName;
+            if (!string.IsNullOrWhiteSpace(user.UserName))
+            {
+                responseClaims["name"] = user.UserName;
+                responseClaims["preferred_username"] = user.UserName;
+            }
         }
 
-        if (!string.IsNullOrWhiteSpace(user.Email))
+        if (scopes.Contains("email"))
         {
-            responseClaims["email"] = user.Email;
+            if (!string.IsNullOrWhiteSpace(user.Email))
+            {
+                responseClaims["email"] = user.Email;
+            }
         }
+
+        // Standard OIDC claim names mapping to scopes
+        var profileClaims = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "name", "given_name", "family_name", "middle_name", "nickname", 
+            "preferred_username", "profile", "picture", "website", "gender", 
+            "birthdate", "zoneinfo", "locale", "updated_at"
+        };
+
+        var emailClaims = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "email", "email_verified"
+        };
+
+        var phoneClaims = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "phone_number", "phone_number_verified"
+        };
+
+        var addressClaims = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "address"
+        };
 
         if (user.AdditionalClaims is not null)
         {
             foreach (var (key, value) in user.AdditionalClaims)
             {
-                if (!responseClaims.ContainsKey(key))
+                if (responseClaims.ContainsKey(key))
                 {
+                    continue;
+                }
+
+                if (profileClaims.Contains(key))
+                {
+                    if (scopes.Contains("profile"))
+                    {
+                        responseClaims[key] = value;
+                    }
+                }
+                else if (emailClaims.Contains(key))
+                {
+                    if (scopes.Contains("email"))
+                    {
+                        responseClaims[key] = value;
+                    }
+                }
+                else if (phoneClaims.Contains(key))
+                {
+                    if (scopes.Contains("phone"))
+                    {
+                        responseClaims[key] = value;
+                    }
+                }
+                else if (addressClaims.Contains(key))
+                {
+                    if (scopes.Contains("address"))
+                    {
+                        responseClaims[key] = value;
+                    }
+                }
+                else
+                {
+                    // Non-standard custom claims are returned by default
                     responseClaims[key] = value;
                 }
             }

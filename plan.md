@@ -577,7 +577,7 @@ CI package build
 
 ### v1.0
 
-Status: partial — public API stabilization is mostly complete; the security audit's P0 protocol hardening items are shipped (see §19). P1 (at_hash, prompt/max_age, UserInfo scope filtering, rate limiting, constant-time compare, revocation hardening) and P2 hardening are still pending.
+Status: partial — public API stabilization is complete; the security audit's P0 and P1 protocol hardening items are shipped (see §19). P2 hardening is still pending.
 
 ```text
 Security hardening
@@ -609,12 +609,12 @@ Test count after P0 work: **77** (26 store/manager + 51 AspNetCore). Build remai
 
 ### P1 — should fix before 1.1 release
 
-Status: partial — P1-7 (at_hash), P1-10 (login rate limit / lockout tracker), P1-11 (constant-time PKCE verifier compare), and P1-12 (revocation client binding & chain revocation) are completed. P1-8 (prompt=none/login) and P1-9 (UserInfo POST and scope filtering) are pending.
+Status: completed (2026-05-28) — All P1 security audit items are fully implemented and verified with comprehensive integration tests.
 
 ```text
 [x] P1-7   Add at_hash to ID token (OIDC Core §3.1.3.6)
-[ ] P1-8   Implement prompt=none / prompt=login (and ideally max_age)
-[ ] P1-9   UserInfo: support POST + filter claims by scope (OIDC Core §5.3, §5.4)
+[x] P1-8   Implement prompt=none / prompt=login (and ideally max_age)
+[x] P1-9   UserInfo: support POST + filter claims by scope (OIDC Core §5.3, §5.4)
 [x] P1-10  Rate limiting / lockout extension point on /login
 [x] P1-11  Constant-time hash compare in PkceVerifier (CryptographicOperations.FixedTimeEquals)
 [x] P1-12  Revocation hardening: client binding, token_type_hint, chain revocation

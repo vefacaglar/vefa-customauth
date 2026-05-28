@@ -397,6 +397,356 @@ public sealed class V02EndpointTests
         Assert.Contains("This account is temporarily locked due to too many failed login attempts.", content);
     }
 
+    [Fact]
+    public async Task PromptNoneWithoutSessionReturnsLoginRequired()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        var verifier = CreateVerifier();
+        var challenge = Base64UrlEncoder.Encode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
+        var authorizeUrl = "/connect/authorize?client_id=" + Uri.EscapeDataString(ClientId)
+            + "&redirect_uri=" + Uri.EscapeDataString(RedirectUri)
+            + "&response_type=code"
+            + "&scope=" + Uri.EscapeDataString(Scope)
+            + "&code_challenge=" + Uri.EscapeDataString(challenge)
+            + "&code_challenge_method=S256"
+            + "&prompt=none"
+            + "&state=test-state";
+
+        var response = await client.GetAsync(authorizeUrl);
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var location = response.Headers.Location;
+        Assert.NotNull(location);
+        Assert.Equal(RedirectUri, location!.GetLeftPart(UriPartial.Path));
+        var query = QueryHelpers.ParseQuery(location.Query);
+        Assert.Equal("login_required", query["error"].ToString());
+        Assert.Equal("test-state", query["state"].ToString());
+    }
+
+    [Fact]
+    public async Task PromptNoneCombinedWithLoginReturnsInvalidRequest()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        var verifier = CreateVerifier();
+        var challenge = Base64UrlEncoder.Encode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
+        var authorizeUrl = "/connect/authorize?client_id=" + Uri.EscapeDataString(ClientId)
+            + "&redirect_uri=" + Uri.EscapeDataString(RedirectUri)
+            + "&response_type=code"
+            + "&scope=" + Uri.EscapeDataString(Scope)
+            + "&code_challenge=" + Uri.EscapeDataString(challenge)
+            + "&code_challenge_method=S256"
+            + "&prompt=none%20login"
+            + "&state=test-state";
+
+        var response = await client.GetAsync(authorizeUrl);
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var location = response.Headers.Location;
+        Assert.NotNull(location);
+        Assert.Equal(RedirectUri, location!.GetLeftPart(UriPartial.Path));
+        var query = QueryHelpers.ParseQuery(location.Query);
+        Assert.Equal("invalid_request", query["error"].ToString());
+    }
+
+    [Fact]
+    public async Task PromptNoneWithSessionSucceeds()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        // 1. Sign in to get session cookie
+        var verifier = CreateVerifier();
+        var cookie = await GetSessionCookieAsync(client, verifier);
+
+        // 2. Call authorize with prompt=none
+        var challenge = Base64UrlEncoder.Encode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
+        var authorizeUrl = "/connect/authorize?client_id=" + Uri.EscapeDataString(ClientId)
+            + "&redirect_uri=" + Uri.EscapeDataString(RedirectUri)
+            + "&response_type=code"
+            + "&scope=" + Uri.EscapeDataString(Scope)
+            + "&code_challenge=" + Uri.EscapeDataString(challenge)
+            + "&code_challenge_method=S256"
+            + "&prompt=none"
+            + "&state=test-state";
+
+        using var authorizeRequest = new HttpRequestMessage(HttpMethod.Get, authorizeUrl);
+        authorizeRequest.Headers.Add("Cookie", cookie);
+        var response = await client.SendAsync(authorizeRequest);
+        
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var location = response.Headers.Location;
+        Assert.NotNull(location);
+        
+        var path = location!.IsAbsoluteUri ? location.GetLeftPart(UriPartial.Path) : location.OriginalString.Split('?')[0];
+        Assert.Equal(RedirectUri, path);
+        
+        var query = QueryHelpers.ParseQuery(location.Query);
+        Assert.False(string.IsNullOrWhiteSpace(query["code"].ToString()));
+        Assert.Equal("test-state", query["state"].ToString());
+    }
+
+    [Fact]
+    public async Task PromptLoginForcesReauth()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        // 1. Sign in to establish active session
+        var verifier = CreateVerifier();
+        var cookie = await GetSessionCookieAsync(client, verifier);
+
+        // 2. Send authorize with prompt=login
+        var challenge = Base64UrlEncoder.Encode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
+        var authorizeUrl = "/connect/authorize?client_id=" + Uri.EscapeDataString(ClientId)
+            + "&redirect_uri=" + Uri.EscapeDataString(RedirectUri)
+            + "&response_type=code"
+            + "&scope=" + Uri.EscapeDataString(Scope)
+            + "&code_challenge=" + Uri.EscapeDataString(challenge)
+            + "&code_challenge_method=S256"
+            + "&prompt=login"
+            + "&state=test-state";
+
+        using var authorizeRequest = new HttpRequestMessage(HttpMethod.Get, authorizeUrl);
+        authorizeRequest.Headers.Add("Cookie", cookie);
+        var response = await client.SendAsync(authorizeRequest);
+        
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var location = response.Headers.Location;
+        Assert.NotNull(location);
+        
+        var path = location!.IsAbsoluteUri ? location.GetLeftPart(UriPartial.Path) : location.OriginalString.Split('?')[0];
+        Assert.Equal("/login", path);
+        
+        var queryString = location.IsAbsoluteUri ? location.Query : (location.OriginalString.Contains('?') ? location.OriginalString.Substring(location.OriginalString.IndexOf('?')) : string.Empty);
+        var query = QueryHelpers.ParseQuery(queryString);
+        var returnUrl = query["returnUrl"].ToString();
+        Assert.Contains("/connect/authorize", returnUrl);
+        Assert.DoesNotContain("prompt=login", returnUrl);
+    }
+
+    [Fact]
+    public async Task MaxAgeForcesReauth()
+    {
+        var timeProvider = new TestTimeProvider();
+        await using var app = await CreateAppAsync(services =>
+        {
+            services.Replace(ServiceDescriptor.Singleton<TimeProvider>(timeProvider));
+        });
+        using var client = app.GetTestClient();
+
+        var verifier = CreateVerifier();
+        var cookie = await GetSessionCookieAsync(client, verifier);
+
+        // Fast-forward time past max_age of 10 seconds
+        timeProvider.Advance(TimeSpan.FromSeconds(15));
+
+        var challenge = Base64UrlEncoder.Encode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
+        var authorizeUrl = "/connect/authorize?client_id=" + Uri.EscapeDataString(ClientId)
+            + "&redirect_uri=" + Uri.EscapeDataString(RedirectUri)
+            + "&response_type=code"
+            + "&scope=" + Uri.EscapeDataString(Scope)
+            + "&code_challenge=" + Uri.EscapeDataString(challenge)
+            + "&code_challenge_method=S256"
+            + "&max_age=10"
+            + "&state=test-state";
+
+        using var authorizeRequest = new HttpRequestMessage(HttpMethod.Get, authorizeUrl);
+        authorizeRequest.Headers.Add("Cookie", cookie);
+        var response = await client.SendAsync(authorizeRequest);
+        
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var location = response.Headers.Location;
+        Assert.NotNull(location);
+        
+        var path = location!.IsAbsoluteUri ? location.GetLeftPart(UriPartial.Path) : location.OriginalString.Split('?')[0];
+        Assert.Equal("/login", path);
+    }
+
+    [Fact]
+    public async Task MaxAgeWithinLimitSucceeds()
+    {
+        var timeProvider = new TestTimeProvider();
+        await using var app = await CreateAppAsync(services =>
+        {
+            services.Replace(ServiceDescriptor.Singleton<TimeProvider>(timeProvider));
+        });
+        using var client = app.GetTestClient();
+
+        var verifier = CreateVerifier();
+        var cookie = await GetSessionCookieAsync(client, verifier);
+
+        // Advance time slightly, well within max_age limit of 10s
+        timeProvider.Advance(TimeSpan.FromSeconds(2));
+
+        var challenge = Base64UrlEncoder.Encode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
+        var authorizeUrl = "/connect/authorize?client_id=" + Uri.EscapeDataString(ClientId)
+            + "&redirect_uri=" + Uri.EscapeDataString(RedirectUri)
+            + "&response_type=code"
+            + "&scope=" + Uri.EscapeDataString(Scope)
+            + "&code_challenge=" + Uri.EscapeDataString(challenge)
+            + "&code_challenge_method=S256"
+            + "&max_age=10"
+            + "&state=test-state";
+
+        using var authorizeRequest = new HttpRequestMessage(HttpMethod.Get, authorizeUrl);
+        authorizeRequest.Headers.Add("Cookie", cookie);
+        var response = await client.SendAsync(authorizeRequest);
+        
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var location = response.Headers.Location;
+        Assert.NotNull(location);
+        
+        var path = location!.IsAbsoluteUri ? location.GetLeftPart(UriPartial.Path) : location.OriginalString.Split('?')[0];
+        Assert.Equal(RedirectUri, path);
+        
+        var query = QueryHelpers.ParseQuery(location.Query);
+        Assert.False(string.IsNullOrWhiteSpace(query["code"].ToString()));
+    }
+
+    [Fact]
+    public async Task UserInfoPostWithHeaderSucceeds()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        var accessToken = await IssueAccessTokenAsync(client);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/connect/userinfo");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var profile = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        Assert.Equal("user-1", profile.RootElement.GetProperty("sub").GetString());
+    }
+
+    [Fact]
+    public async Task UserInfoPostWithBodySucceeds()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        var accessToken = await IssueAccessTokenAsync(client);
+
+        var response = await client.PostAsync(
+            "/connect/userinfo",
+            new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["access_token"] = accessToken
+            }));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var profile = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        Assert.Equal("user-1", profile.RootElement.GetProperty("sub").GetString());
+    }
+
+    [Fact]
+    public async Task UserInfoFiltersClaimsByScope()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        // 1. Token with openid scope only -> expect sub only
+        var verifier1 = CreateVerifier();
+        var challenge1 = Base64UrlEncoder.Encode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier1)));
+        var authorizeUrl1 = "/connect/authorize?client_id=" + Uri.EscapeDataString(ClientId)
+            + "&redirect_uri=" + Uri.EscapeDataString(RedirectUri)
+            + "&response_type=code"
+            + "&scope=openid"
+            + "&code_challenge=" + Uri.EscapeDataString(challenge1)
+            + "&code_challenge_method=S256"
+            + "&state=test-state";
+
+        var antiforgery = await GetAntiforgeryAsync(client);
+        using (var loginRequest = new HttpRequestMessage(HttpMethod.Post, "/login")
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["userName"] = UserName,
+                ["password"] = Password,
+                ["returnUrl"] = authorizeUrl1,
+                [antiforgery.FormFieldName] = antiforgery.RequestToken,
+            }),
+        })
+        {
+            loginRequest.Headers.Add("Cookie", antiforgery.Cookie);
+            var loginResponse = await client.SendAsync(loginRequest);
+            var cookie = GetCookie(loginResponse, ".Vefa.CustomAuth.Session");
+
+            using var authorizeRequest = new HttpRequestMessage(HttpMethod.Get, authorizeUrl1);
+            authorizeRequest.Headers.Add("Cookie", cookie);
+            var authorizeResponse = await client.SendAsync(authorizeRequest);
+            var location = authorizeResponse.Headers.Location;
+            var code1 = QueryHelpers.ParseQuery(location!.Query)["code"].ToString();
+
+            var tokenResponse1 = await ExchangeCodeAsync(client, code1, verifier1);
+            using var doc1 = await JsonDocument.ParseAsync(await tokenResponse1.Content.ReadAsStreamAsync());
+            var token1 = doc1.RootElement.GetProperty("access_token").GetString();
+
+            using var req1 = new HttpRequestMessage(HttpMethod.Get, "/connect/userinfo");
+            req1.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token1);
+            var res1 = await client.SendAsync(req1);
+            Assert.Equal(HttpStatusCode.OK, res1.StatusCode);
+            
+            using var docInfo1 = await JsonDocument.ParseAsync(await res1.Content.ReadAsStreamAsync());
+            var elem1 = docInfo1.RootElement;
+            Assert.True(elem1.TryGetProperty("sub", out _));
+            Assert.False(elem1.TryGetProperty("name", out _));
+            Assert.False(elem1.TryGetProperty("email", out _));
+        }
+
+        // 2. Token with openid and email -> expect sub and email
+        var verifier2 = CreateVerifier();
+        var challenge2 = Base64UrlEncoder.Encode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier2)));
+        var authorizeUrl2 = "/connect/authorize?client_id=" + Uri.EscapeDataString(ClientId)
+            + "&redirect_uri=" + Uri.EscapeDataString(RedirectUri)
+            + "&response_type=code"
+            + "&scope=openid%20email"
+            + "&code_challenge=" + Uri.EscapeDataString(challenge2)
+            + "&code_challenge_method=S256"
+            + "&state=test-state";
+
+        var antiforgery2 = await GetAntiforgeryAsync(client);
+        using (var loginRequest2 = new HttpRequestMessage(HttpMethod.Post, "/login")
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["userName"] = UserName,
+                ["password"] = Password,
+                ["returnUrl"] = authorizeUrl2,
+                [antiforgery2.FormFieldName] = antiforgery2.RequestToken,
+            }),
+        })
+        {
+            loginRequest2.Headers.Add("Cookie", antiforgery2.Cookie);
+            var loginResponse2 = await client.SendAsync(loginRequest2);
+            var cookie2 = GetCookie(loginResponse2, ".Vefa.CustomAuth.Session");
+
+            using var authorizeRequest2 = new HttpRequestMessage(HttpMethod.Get, authorizeUrl2);
+            authorizeRequest2.Headers.Add("Cookie", cookie2);
+            var authorizeResponse2 = await client.SendAsync(authorizeRequest2);
+            var location2 = authorizeResponse2.Headers.Location;
+            var code2 = QueryHelpers.ParseQuery(location2!.Query)["code"].ToString();
+
+            var tokenResponse2 = await ExchangeCodeAsync(client, code2, verifier2);
+            using var doc2 = await JsonDocument.ParseAsync(await tokenResponse2.Content.ReadAsStreamAsync());
+            var token2 = doc2.RootElement.GetProperty("access_token").GetString();
+
+            using var req2 = new HttpRequestMessage(HttpMethod.Get, "/connect/userinfo");
+            req2.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token2);
+            var res2 = await client.SendAsync(req2);
+            Assert.Equal(HttpStatusCode.OK, res2.StatusCode);
+            
+            using var docInfo2 = await JsonDocument.ParseAsync(await res2.Content.ReadAsStreamAsync());
+            var elem2 = docInfo2.RootElement;
+            Assert.True(elem2.TryGetProperty("sub", out _));
+            Assert.False(elem2.TryGetProperty("name", out _));
+            Assert.True(elem2.TryGetProperty("email", out _));
+        }
+    }
+
     private static async Task<WebApplication> CreateAppAsync(
         Action<IServiceCollection>? configureServices = null, 
         Action<CustomAuthOptions>? configureOptions = null,
@@ -446,7 +796,7 @@ public sealed class V02EndpointTests
         return app;
     }
 
-    private static async Task<string> IssueAuthorizationCodeAsync(HttpClient client, string verifier)
+    private static async Task<string> GetSessionCookieAsync(HttpClient client, string verifier)
     {
         var authorizeUrl = BuildAuthorizeUrl(verifier);
         var antiforgery = await GetAntiforgeryAsync(client);
@@ -465,7 +815,13 @@ public sealed class V02EndpointTests
 
         var loginResponse = await client.SendAsync(loginRequest);
         Assert.Equal(HttpStatusCode.Redirect, loginResponse.StatusCode);
-        var cookie = GetCookie(loginResponse, ".Vefa.CustomAuth.Session");
+        return GetCookie(loginResponse, ".Vefa.CustomAuth.Session");
+    }
+
+    private static async Task<string> IssueAuthorizationCodeAsync(HttpClient client, string verifier)
+    {
+        var cookie = await GetSessionCookieAsync(client, verifier);
+        var authorizeUrl = BuildAuthorizeUrl(verifier);
 
         using var authorizeRequest = new HttpRequestMessage(HttpMethod.Get, authorizeUrl);
         authorizeRequest.Headers.Add("Cookie", cookie);
@@ -474,7 +830,10 @@ public sealed class V02EndpointTests
         Assert.Equal(HttpStatusCode.Redirect, authorizeResponse.StatusCode);
         var location = authorizeResponse.Headers.Location;
         Assert.NotNull(location);
-        Assert.Equal(RedirectUri, location!.GetLeftPart(UriPartial.Path));
+        
+        var path = location!.IsAbsoluteUri ? location.GetLeftPart(UriPartial.Path) : location.OriginalString.Split('?')[0];
+        Assert.Equal(RedirectUri, path);
+        
         var code = QueryHelpers.ParseQuery(location.Query)["code"].ToString();
         Assert.False(string.IsNullOrWhiteSpace(code));
         return code;
@@ -534,5 +893,17 @@ public sealed class V02EndpointTests
         var value = document.RootElement.GetProperty(propertyName).GetString();
         Assert.NotNull(value);
         return value!;
+    }
+
+    private sealed class TestTimeProvider : TimeProvider
+    {
+        private DateTimeOffset _now = DateTimeOffset.UtcNow;
+
+        public override DateTimeOffset GetUtcNow() => _now;
+
+        public void Advance(TimeSpan amount)
+        {
+            _now = _now.Add(amount);
+        }
     }
 }

@@ -98,6 +98,11 @@ public static class CustomAuthEndpointRouteExtensions
             UserInfoEndpointService service,
             CancellationToken cancellationToken) => service.HandleAsync(context, cancellationToken));
 
+        endpoints.MapPost("/connect/userinfo", (
+            HttpContext context,
+            UserInfoEndpointService service,
+            CancellationToken cancellationToken) => service.HandleAsync(context, cancellationToken));
+
         endpoints.MapPost("/connect/revoke", (
             HttpRequest request,
             RevocationEndpointService service,
