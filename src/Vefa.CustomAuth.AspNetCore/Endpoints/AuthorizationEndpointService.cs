@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Vefa.CustomAuth.Core.Managers;
 using Vefa.CustomAuth.Core.Models;
@@ -8,26 +9,29 @@ using Vefa.CustomAuth.Tokens;
 
 namespace Vefa.CustomAuth.AspNetCore.Endpoints;
 
-internal sealed class AuthorizationEndpointService
+internal sealed partial class AuthorizationEndpointService
 {
     private readonly ICustomAuthClientManager _clientManager;
     private readonly ICustomAuthTokenManager _tokenManager;
     private readonly SessionCookieService _sessionCookieService;
     private readonly IOptionsMonitor<CustomAuthOptions> _options;
     private readonly TimeProvider _timeProvider;
+    private readonly ILogger<AuthorizationEndpointService> _logger;
 
     public AuthorizationEndpointService(
         ICustomAuthClientManager clientManager,
         ICustomAuthTokenManager tokenManager,
         SessionCookieService sessionCookieService,
         IOptionsMonitor<CustomAuthOptions> options,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        ILogger<AuthorizationEndpointService> logger)
     {
         _clientManager = clientManager ?? throw new ArgumentNullException(nameof(clientManager));
         _tokenManager = tokenManager ?? throw new ArgumentNullException(nameof(tokenManager));
         _sessionCookieService = sessionCookieService ?? throw new ArgumentNullException(nameof(sessionCookieService));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<IResult> HandleAsync(HttpContext context, CancellationToken cancellationToken = default)
@@ -46,17 +50,23 @@ internal sealed class AuthorizationEndpointService
 
         if (string.IsNullOrWhiteSpace(clientId))
         {
+            LogMissingClientId();
             return EndpointResults.OAuthError("invalid_request", "client_id is required.");
         }
 
         var client = await _clientManager.FindByClientIdAsync(clientId, cancellationToken).ConfigureAwait(false);
         if (client is null)
         {
+            LogUnknownClient(clientId);
             return EndpointResults.OAuthError("unauthorized_client", "The client is not registered.");
         }
 
         if (string.IsNullOrWhiteSpace(redirectUri) || !client.RedirectUris.Contains(redirectUri, StringComparer.Ordinal))
         {
+            LogRedirectUriMismatch(
+                clientId,
+                string.IsNullOrWhiteSpace(redirectUri) ? "(none)" : redirectUri,
+                string.Join(", ", client.RedirectUris));
             return EndpointResults.OAuthError("invalid_request", "redirect_uri must exactly match a registered redirect URI.");
         }
 
@@ -75,6 +85,7 @@ internal sealed class AuthorizationEndpointService
 
         if (prompts.Contains("none") && prompts.Count > 1)
         {
+            LogInvalidPromptCombination(clientId, prompt ?? string.Empty);
             return EndpointResults.OAuthAuthorizeRedirectError(
                 redirectUri,
                 "invalid_request",
@@ -104,6 +115,7 @@ internal sealed class AuthorizationEndpointService
         {
             if (prompts.Contains("none"))
             {
+                LogLoginRequired(clientId);
                 return EndpointResults.OAuthAuthorizeRedirectError(
                     redirectUri,
                     "login_required",
@@ -111,6 +123,7 @@ internal sealed class AuthorizationEndpointService
                     state);
             }
 
+            LogRedirectingToLogin(clientId);
             return Results.Redirect(GetLoginUrl(context));
         }
 
@@ -144,6 +157,7 @@ internal sealed class AuthorizationEndpointService
             redirectValues["state"] = state;
         }
 
+        LogAuthorizationCodeIssued(client.ClientId, scope);
         return Results.Redirect(QueryHelpers.AddQueryString(redirectUri, redirectValues));
     }
 
@@ -158,6 +172,7 @@ internal sealed class AuthorizationEndpointService
     {
         if (!string.Equals(responseType, "code", StringComparison.Ordinal))
         {
+            LogUnsupportedResponseType(client.ClientId, string.IsNullOrEmpty(responseType) ? "(none)" : responseType);
             return EndpointResults.OAuthAuthorizeRedirectError(
                 redirectUri,
                 "unsupported_response_type",
@@ -167,6 +182,7 @@ internal sealed class AuthorizationEndpointService
 
         if (!IsScopeAllowed(client, scope))
         {
+            LogInvalidScope(client.ClientId, scope, string.Join(", ", client.AllowedScopes));
             return EndpointResults.OAuthAuthorizeRedirectError(
                 redirectUri,
                 "invalid_scope",
@@ -177,6 +193,7 @@ internal sealed class AuthorizationEndpointService
         if ((_options.CurrentValue.RequirePkce || client.RequirePkce)
             && (string.IsNullOrWhiteSpace(codeChallenge) || string.IsNullOrWhiteSpace(codeChallengeMethod)))
         {
+            LogPkceRequired(client.ClientId);
             return EndpointResults.OAuthAuthorizeRedirectError(
                 redirectUri,
                 "invalid_request",
@@ -186,6 +203,7 @@ internal sealed class AuthorizationEndpointService
 
         if (!string.IsNullOrWhiteSpace(codeChallengeMethod) && !PkceVerifier.IsSupportedMethod(codeChallengeMethod))
         {
+            LogUnsupportedPkceMethod(client.ClientId, codeChallengeMethod);
             return EndpointResults.OAuthAuthorizeRedirectError(
                 redirectUri,
                 "invalid_request",
@@ -236,4 +254,51 @@ internal sealed class AuthorizationEndpointService
         var returnUrl = QueryHelpers.AddQueryString(request.PathBase + request.Path, newQueryParams);
         return QueryHelpers.AddQueryString(_options.CurrentValue.LoginPath, "returnUrl", returnUrl);
     }
+
+    // Authorization endpoint diagnostics. Event IDs 2100-2199. Only non-secret request metadata is
+    // logged (client_id, redirect_uri, scope, prompt, response_type); never codes or tokens.
+
+    [LoggerMessage(EventId = 2100, Level = LogLevel.Warning,
+        Message = "Authorize request rejected (invalid_request): client_id is missing.")]
+    private partial void LogMissingClientId();
+
+    [LoggerMessage(EventId = 2101, Level = LogLevel.Warning,
+        Message = "Authorize request rejected (unauthorized_client): client '{ClientId}' is not registered.")]
+    private partial void LogUnknownClient(string clientId);
+
+    [LoggerMessage(EventId = 2102, Level = LogLevel.Warning,
+        Message = "Authorize request rejected (invalid_request): redirect_uri '{RequestRedirectUri}' does not exactly match any registered redirect URI for client '{ClientId}'. Registered: [{RegisteredRedirectUris}]. Matching is case-sensitive and exact (scheme, host, port, path, trailing slash all count).")]
+    private partial void LogRedirectUriMismatch(string clientId, string requestRedirectUri, string registeredRedirectUris);
+
+    [LoggerMessage(EventId = 2103, Level = LogLevel.Warning,
+        Message = "Authorize request rejected (unsupported_response_type): response_type '{ResponseType}' is not supported; only 'code' is allowed (client: {ClientId}).")]
+    private partial void LogUnsupportedResponseType(string clientId, string responseType);
+
+    [LoggerMessage(EventId = 2104, Level = LogLevel.Warning,
+        Message = "Authorize request rejected (invalid_scope): requested scope '{RequestedScope}' contains values not allowed for client '{ClientId}'. Allowed: [{AllowedScopes}].")]
+    private partial void LogInvalidScope(string clientId, string requestedScope, string allowedScopes);
+
+    [LoggerMessage(EventId = 2105, Level = LogLevel.Warning,
+        Message = "Authorize request rejected (invalid_request): PKCE is required but code_challenge/code_challenge_method were not supplied (client: {ClientId}).")]
+    private partial void LogPkceRequired(string clientId);
+
+    [LoggerMessage(EventId = 2106, Level = LogLevel.Warning,
+        Message = "Authorize request rejected (invalid_request): unsupported PKCE method '{Method}'; only 'S256' is allowed (client: {ClientId}).")]
+    private partial void LogUnsupportedPkceMethod(string clientId, string method);
+
+    [LoggerMessage(EventId = 2107, Level = LogLevel.Warning,
+        Message = "Authorize request rejected (invalid_request): prompt='{Prompt}' combines 'none' with other values (client: {ClientId}).")]
+    private partial void LogInvalidPromptCombination(string clientId, string prompt);
+
+    [LoggerMessage(EventId = 2108, Level = LogLevel.Information,
+        Message = "Authorize request returned login_required: no active session and prompt=none was requested (client: {ClientId}).")]
+    private partial void LogLoginRequired(string clientId);
+
+    [LoggerMessage(EventId = 2109, Level = LogLevel.Information,
+        Message = "Authorize request has no active session; redirecting to the login page (client: {ClientId}).")]
+    private partial void LogRedirectingToLogin(string clientId);
+
+    [LoggerMessage(EventId = 2110, Level = LogLevel.Information,
+        Message = "Authorization code issued (client: {ClientId}, scope: '{Scope}').")]
+    private partial void LogAuthorizationCodeIssued(string clientId, string scope);
 }
