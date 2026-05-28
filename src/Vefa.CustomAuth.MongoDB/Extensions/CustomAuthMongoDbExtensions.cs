@@ -33,6 +33,7 @@ public static class CustomAuthMongoDbExtensions
 
         var mongoOptions = new CustomAuthMongoDbOptions();
         configure(mongoOptions);
+        ValidateOptions(mongoOptions);
 
         MongoCustomAuthClassMap.Register();
 
@@ -50,5 +51,18 @@ public static class CustomAuthMongoDbExtensions
         services.TryAddScoped<ICustomAuthCleanupService, MongoCustomAuthCleanupService>();
 
         return services;
+    }
+
+    private static void ValidateOptions(CustomAuthMongoDbOptions options)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(options.ConnectionString);
+        ArgumentException.ThrowIfNullOrEmpty(options.DatabaseName);
+        ArgumentException.ThrowIfNullOrEmpty(options.ClientsCollectionName);
+        ArgumentException.ThrowIfNullOrEmpty(options.AuthorizationCodesCollectionName);
+        ArgumentException.ThrowIfNullOrEmpty(options.RefreshTokensCollectionName);
+        ArgumentException.ThrowIfNullOrEmpty(options.SessionsCollectionName);
+        ArgumentException.ThrowIfNullOrEmpty(options.SigningKeysCollectionName);
+        ArgumentException.ThrowIfNullOrEmpty(options.ScopesCollectionName);
+        ArgumentException.ThrowIfNullOrEmpty(options.AuditLogsCollectionName);
     }
 }

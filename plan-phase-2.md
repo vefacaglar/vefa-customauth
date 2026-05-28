@@ -745,6 +745,8 @@ Test authorization flow screen
 
 ### v1.0 — Stable Provider API
 
+Status: partial — public API stabilization and production hardening documentation are in progress.
+
 ```text
 Stabilize public store interfaces
 Stabilize manager contracts

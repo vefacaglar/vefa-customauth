@@ -59,7 +59,7 @@ Vefa.CustomAuth.EntityFrameworkCore
 
 ## 2. Intended Usage
 
-Status: partial — `AddVefaCustomAuth`, `MapVefaCustomAuthEndpoints`, `AddJwtTokenSigning`, and `AddInMemoryStores` extension methods exist; `AddEntityFrameworkStores<AppDbContext>` builder API is not implemented yet.
+Status: completed
 
 A developer should be able to add the library to an ASP.NET Core project like this:
 
@@ -69,8 +69,9 @@ builder.Services
     {
         options.Issuer = "https://auth.local";
     })
-    .AddEntityFrameworkStores<AppDbContext>()
     .AddJwtTokenSigning();
+
+builder.Services.AddVefaCustomAuthStores<AppDbContext>();
 
 app.MapVefaCustomAuthEndpoints();
 ```
@@ -89,7 +90,7 @@ Client applications should be able to connect to the auth server using a normal 
 
 ## 3. Supported Endpoints
 
-Status: partial — v0.1 and v0.2 routes (discovery, JWKS, authorize, token, login, logout, userinfo, revoke) are fully completed; v0.3+ (introspect, consent) remain pending.
+Status: partial — v0.1 and v0.2 routes (discovery, JWKS, authorize, token, login, logout, userinfo, revoke) are fully completed; introspection and consent are deferred beyond the current SSO-focused scope unless explicitly prioritized.
 
 ### v0.1
 
@@ -573,6 +574,8 @@ CI package build
 ```
 
 ### v1.0
+
+Status: partial — public API stabilization, documentation, and production hardening checklist are in progress.
 
 ```text
 Security hardening

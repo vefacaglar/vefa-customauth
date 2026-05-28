@@ -10,6 +10,11 @@ namespace Vefa.CustomAuth.Tokens;
 /// </summary>
 public static class TokenHasher
 {
+    /// <summary>
+    /// Hashes an opaque token using SHA-256 and base64url encoding.
+    /// </summary>
+    /// <param name="token">The raw token value.</param>
+    /// <returns>The token hash.</returns>
     public static string Hash(string token)
     {
         ArgumentException.ThrowIfNullOrEmpty(token);
@@ -17,6 +22,11 @@ public static class TokenHasher
         return Base64UrlEncoder.Encode(bytes);
     }
 
+    /// <summary>
+    /// Creates a cryptographically random opaque token.
+    /// </summary>
+    /// <param name="byteLength">The random byte length. Must be at least 16 bytes.</param>
+    /// <returns>The base64url-encoded opaque token.</returns>
     public static string CreateOpaqueToken(int byteLength = 32)
     {
         if (byteLength < 16)

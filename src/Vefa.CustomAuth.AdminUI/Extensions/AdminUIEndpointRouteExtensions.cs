@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
+using Vefa.CustomAuth.AdminUI.Options;
 using Vefa.CustomAuth.Core.Managers;
 using Vefa.CustomAuth.Core.Models;
 
@@ -26,11 +27,26 @@ public static class AdminUIEndpointRouteExtensions
     public static IEndpointConventionBuilder MapVefaCustomAuthAdminUI(
         this IEndpointRouteBuilder endpoints,
         string pathPrefix = "/customauth")
+        => endpoints.MapVefaCustomAuthAdminUI(options => options.PathPrefix = pathPrefix);
+
+    /// <summary>
+    /// Maps the embedded Vefa.CustomAuth Admin UI dashboard and administrative CRUD API endpoints.
+    /// </summary>
+    /// <param name="endpoints">The endpoint route builder.</param>
+    /// <param name="configure">The Admin UI options configuration callback.</param>
+    /// <returns>An endpoint convention builder to chain authentication/authorization policies.</returns>
+    public static IEndpointConventionBuilder MapVefaCustomAuthAdminUI(
+        this IEndpointRouteBuilder endpoints,
+        Action<CustomAuthAdminUIOptions> configure)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
-        ArgumentException.ThrowIfNullOrEmpty(pathPrefix);
+        ArgumentNullException.ThrowIfNull(configure);
 
-        var normalizedPrefix = "/" + pathPrefix.Trim('/');
+        var options = new CustomAuthAdminUIOptions();
+        configure(options);
+        ValidateOptions(options);
+
+        var normalizedPrefix = "/" + options.PathPrefix.Trim('/');
         var assembly = typeof(AdminUIEndpointRouteExtensions).Assembly;
 
         // 1. Serve embedded static SPA resources
@@ -86,12 +102,7 @@ public static class AdminUIEndpointRouteExtensions
             ICustomAuthClientManager clientManager,
             CancellationToken cancellationToken) =>
         {
-            var pagedRequest = new CustomAuthPagedRequest
-            {
-                Page = page > 0 ? page : 1,
-                PageSize = pageSize > 0 ? pageSize : 10,
-                Search = search
-            };
+            var pagedRequest = CreatePagedRequest(page, pageSize, search, options);
 
             var result = await clientManager.GetPagedAsync(pagedRequest, cancellationToken).ConfigureAwait(false);
             return Results.Ok(result);
@@ -222,12 +233,7 @@ public static class AdminUIEndpointRouteExtensions
             ICustomAuthSessionManager sessionManager,
             CancellationToken cancellationToken) =>
         {
-            var pagedRequest = new CustomAuthPagedRequest
-            {
-                Page = page > 0 ? page : 1,
-                PageSize = pageSize > 0 ? pageSize : 10,
-                Search = search
-            };
+            var pagedRequest = CreatePagedRequest(page, pageSize, search, options);
 
             var result = await sessionManager.GetPagedAsync(pagedRequest, cancellationToken).ConfigureAwait(false);
             return Results.Ok(result);
@@ -257,12 +263,7 @@ public static class AdminUIEndpointRouteExtensions
             ICustomAuthTokenManager tokenManager,
             CancellationToken cancellationToken) =>
         {
-            var pagedRequest = new CustomAuthPagedRequest
-            {
-                Page = page > 0 ? page : 1,
-                PageSize = pageSize > 0 ? pageSize : 10,
-                Search = search
-            };
+            var pagedRequest = CreatePagedRequest(page, pageSize, search, options);
 
             var result = await tokenManager.GetRefreshTokensPagedAsync(pagedRequest, cancellationToken).ConfigureAwait(false);
             return Results.Ok(result);
@@ -311,17 +312,43 @@ public static class AdminUIEndpointRouteExtensions
             ICustomAuthAuditLogManager auditLogManager,
             CancellationToken cancellationToken) =>
         {
-            var pagedRequest = new CustomAuthPagedRequest
-            {
-                Page = page > 0 ? page : 1,
-                PageSize = pageSize > 0 ? pageSize : 10,
-                Search = search
-            };
+            var pagedRequest = CreatePagedRequest(page, pageSize, search, options);
 
             var result = await auditLogManager.GetPagedAsync(pagedRequest, cancellationToken).ConfigureAwait(false);
             return Results.Ok(result);
         });
 
         return indexRoute;
+    }
+
+    private static CustomAuthPagedRequest CreatePagedRequest(
+        int page,
+        int pageSize,
+        string? search,
+        CustomAuthAdminUIOptions options)
+    {
+        var requestedPageSize = pageSize > 0 ? pageSize : options.DefaultPageSize;
+
+        return new CustomAuthPagedRequest
+        {
+            Page = page > 0 ? page : 1,
+            PageSize = Math.Min(requestedPageSize, options.MaxPageSize),
+            Search = search
+        };
+    }
+
+    private static void ValidateOptions(CustomAuthAdminUIOptions options)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(options.PathPrefix);
+
+        if (options.DefaultPageSize <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(options), "Default page size must be greater than zero.");
+        }
+
+        if (options.MaxPageSize < options.DefaultPageSize)
+        {
+            throw new ArgumentOutOfRangeException(nameof(options), "Maximum page size must be greater than or equal to the default page size.");
+        }
     }
 }
