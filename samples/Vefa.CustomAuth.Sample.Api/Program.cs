@@ -32,6 +32,49 @@ builder.Services
         {
             ValidAudiences = validAudiences
         };
+
+        // Diagnostics: surface *why* a bearer token was rejected. Without this, the API just
+        // returns 401 with no explanation and tracking down audience/issuer/signature/expiry
+        // mismatches is slow. These handlers never expose the reason to the caller (the 401
+        // body stays generic); they only write it to the server log.
+        options.Events = new JwtBearerEvents
+        {
+            OnAuthenticationFailed = context =>
+            {
+                var logger = context.HttpContext.RequestServices
+                    .GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("Vefa.CustomAuth.Sample.Api.JwtBearer");
+                logger.LogWarning(
+                    context.Exception,
+                    "JWT bearer authentication failed: {Reason}. Expected issuer/authority: {Authority}, accepted audiences: [{ValidAudiences}].",
+                    context.Exception.Message,
+                    authority,
+                    string.Join(", ", validAudiences));
+                return Task.CompletedTask;
+            },
+            OnChallenge = context =>
+            {
+                var logger = context.HttpContext.RequestServices
+                    .GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("Vefa.CustomAuth.Sample.Api.JwtBearer");
+                logger.LogWarning(
+                    "JWT bearer challenge (401) for {Path}. error: '{Error}', description: '{ErrorDescription}'. Common causes: missing Authorization header, expired token, wrong audience, or signature validation failure.",
+                    context.Request.Path,
+                    context.Error,
+                    context.ErrorDescription);
+                return Task.CompletedTask;
+            },
+            OnForbidden = context =>
+            {
+                var logger = context.HttpContext.RequestServices
+                    .GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("Vefa.CustomAuth.Sample.Api.JwtBearer");
+                logger.LogWarning(
+                    "JWT bearer forbidden (403) for {Path}. The token was valid but did not satisfy the authorization policy (e.g. a required scope or role claim is missing).",
+                    context.Request.Path);
+                return Task.CompletedTask;
+            }
+        };
     });
 
 builder.Services.AddAuthorization();

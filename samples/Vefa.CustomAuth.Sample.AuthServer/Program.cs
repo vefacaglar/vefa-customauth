@@ -1,10 +1,14 @@
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Vefa.CustomAuth.AspNetCore.Extensions;
 using Vefa.CustomAuth.AspNetCore.Stores.InMemory;
+using Vefa.CustomAuth.Core.Services;
 using Vefa.CustomAuth.Core.Stores;
 using Vefa.CustomAuth.EntityFrameworkCore.Extensions;
 using Vefa.CustomAuth.Sample.AuthServer.Data;
+using Vefa.CustomAuth.Sample.AuthServer.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,7 +20,7 @@ builder.Services.TryAddSingleton<ICustomAuthUserStore>(_ => new InMemoryUserStor
         UserName = "demo",
         Password = "demo",
         Email = "demo@example.com",
-        // Вот burası sizin özel claim'lerinizi eklediğiniz yer:
+        // This is where you add your own custom claims:
         AdditionalClaims = new Dictionary<string, object>
         {
             { "role", new[] { "admin", "superadmin" } },
@@ -45,6 +49,34 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddRazorPages();
 
+// Brute-force protection is host-owned. Register a demo in-memory lockout tracker (registered
+// before AddCustomAuth so it wins over the library's default no-op tracker) and a rate limiter
+// that throttles POST /login per client IP. A production host should use a durable store and
+// tune these limits to its threat model.
+builder.Services.AddSingleton<ICustomAuthLoginAttemptTracker, DemoLoginAttemptTracker>();
+
+builder.Services.AddRateLimiter(rateLimiterOptions =>
+{
+    rateLimiterOptions.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    rateLimiterOptions.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+    {
+        // Only throttle the login POST; every other endpoint is unlimited in this sample.
+        if (HttpMethods.IsPost(httpContext.Request.Method)
+            && httpContext.Request.Path.StartsWithSegments("/login"))
+        {
+            var partitionKey = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            });
+        }
+
+        return RateLimitPartition.GetNoLimiter("__no_limit");
+    });
+});
+
 builder.Services
     .AddCustomAuth(options =>
     {
@@ -63,6 +95,7 @@ var app = builder.Build();
 
 app.UseCors();
 app.UseStaticFiles();
+app.UseRateLimiter();
 
 await DatabaseSeeder.EnsureDatabaseSeededAsync(app.Services);
 
@@ -102,9 +135,9 @@ public class MyProfileService : Vefa.CustomAuth.Core.Services.ICustomAuthProfile
         }
 
         // 4. DYNAMICALLY inject claims specifically based on the client!
-        if (context.Client.ClientId == "webapp1")
+        if (context.Client.ClientId == "sample-webapp")
         {
-            context.Claims["webapp1_specific_claim"] = "dynamically_added_value";
+            context.Claims["sample_webapp_specific_claim"] = "dynamically_added_value";
         }
     }
 
