@@ -34,6 +34,7 @@ tests/
 - JWKS endpoint backed by RSA signing keys.
 - JWT access token and ID token issuance.
 - Opaque refresh token issuance and rotation.
+- Confidential client authentication with `private_key_jwt`.
 - Sliding and absolute refresh token expiration.
 - Refresh token session binding and reuse detection.
 - Hashed authorization code and refresh token storage.
@@ -183,6 +184,12 @@ A client can receive refresh tokens only when refresh tokens are enabled for tha
 `RefreshTokenLifetime` controls the sliding lifetime. `RefreshTokenAbsoluteLifetime` controls the maximum lifetime of the token chain. Client-level `RefreshTokenLifetimeSeconds` and `RefreshTokenAbsoluteLifetimeSeconds` override the global options when set.
 
 If a consumed refresh token is used again, Vefa.CustomAuth records `RefreshTokenReuseDetected` and revokes the session-bound refresh token chain when possible.
+
+## Confidential Clients (`private_key_jwt`)
+
+Clients default to public (`token_endpoint_auth_method = none`, PKCE only). A backend client can instead authenticate at the token endpoint with `private_key_jwt`: it signs a short-lived JWT assertion with its private key, and the server verifies it against the client's registered public JWKS. Set `TokenEndpointAuthMethod = PrivateKeyJwt` and `JwksJson` on the client (or use the Admin UI client editor). The sample seeds a `service-client` for this.
+
+See [`docs/private-key-jwt.md`](docs/private-key-jwt.md) for the end-to-end flow, key generation, and how to sign an assertion.
 
 ## Production Hardening
 
