@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.AspNetCore.DataProtection;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
@@ -101,7 +102,11 @@ public sealed class V02EndpointTests
 
         // 5. Verify session is revoked in database
         var sessionStore = app.Services.GetRequiredService<ICustomAuthSessionStore>();
-        var sessionId = Guid.Parse(cookie.Split('=', 2)[1].Split(';', 2)[0]);
+        var dataProtection = app.Services.GetRequiredService<IDataProtectionProvider>();
+        var protector = dataProtection.CreateProtector("Vefa.CustomAuth.SessionCookie");
+        var rawCookieValue = cookie.Split('=', 2)[1].Split(';', 2)[0];
+        var decryptedSessionId = protector.Unprotect(rawCookieValue);
+        var sessionId = Guid.Parse(decryptedSessionId);
         var session = await sessionStore.FindAsync(sessionId);
         Assert.NotNull(session);
         Assert.NotNull(session!.RevokedAt);

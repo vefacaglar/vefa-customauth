@@ -114,10 +114,56 @@ public sealed class CustomAuthClientManager : ICustomAuthClientManager
             throw new ArgumentException("At least one redirect URI is required.", nameof(client));
         }
 
+        foreach (var uriString in client.RedirectUris)
+        {
+            ValidateRedirectUri(uriString, "Redirect URI", nameof(client));
+        }
+
+        if (client.PostLogoutRedirectUris != null)
+        {
+            foreach (var uriString in client.PostLogoutRedirectUris)
+            {
+                ValidateRedirectUri(uriString, "Post logout redirect URI", nameof(client));
+            }
+        }
+
         if (client.AllowRefreshTokens
             && (client.AllowedScopes == null || !client.AllowedScopes.Contains("offline_access", StringComparer.Ordinal)))
         {
             throw new ArgumentException("Clients that allow refresh tokens must include the offline_access scope.", nameof(client));
+        }
+    }
+
+    private static void ValidateRedirectUri(string uriString, string displayName, string paramName)
+    {
+        if (string.IsNullOrWhiteSpace(uriString))
+        {
+            throw new ArgumentException($"{displayName} cannot be empty.", paramName);
+        }
+
+        if (!Uri.TryCreate(uriString, UriKind.Absolute, out var uri))
+        {
+            throw new ArgumentException($"{displayName} '{uriString}' must be a valid absolute URI.", paramName);
+        }
+
+        if (!string.IsNullOrEmpty(uri.Fragment))
+        {
+            throw new ArgumentException($"{displayName} '{uriString}' must not contain a fragment.", paramName);
+        }
+
+        var isLoopback = uri.Host == "localhost" || uri.Host == "127.0.0.1" || uri.Host == "[::1]";
+
+        if (!string.Equals(uri.Scheme, "https", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!isLoopback)
+            {
+                throw new ArgumentException($"{displayName} '{uriString}' must use HTTPS unless it is a loopback address.", paramName);
+            }
+            
+            if (!string.Equals(uri.Scheme, "http", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ArgumentException($"{displayName} '{uriString}' must use HTTPS or HTTP (for loopback only).", paramName);
+            }
         }
     }
 }
