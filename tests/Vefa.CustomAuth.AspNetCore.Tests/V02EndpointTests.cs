@@ -14,6 +14,7 @@ using Microsoft.IdentityModel.Tokens;
 using Vefa.CustomAuth.AspNetCore.Extensions;
 using Vefa.CustomAuth.AspNetCore.Stores.InMemory;
 using Vefa.CustomAuth.Core.Models;
+using Vefa.CustomAuth.Core.Options;
 using Vefa.CustomAuth.Core.Stores;
 using Vefa.CustomAuth.Tokens;
 
@@ -185,6 +186,7 @@ public sealed class V02EndpointTests
             new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 ["token"] = refreshToken,
+                ["client_id"] = ClientId,
                 ["token_type_hint"] = "refresh_token"
             }));
 
@@ -208,12 +210,191 @@ public sealed class V02EndpointTests
             new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 ["token"] = "some-random-opaque-value",
+                ["client_id"] = ClientId,
             }));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
-    private static async Task<WebApplication> CreateAppAsync()
+    [Fact]
+    public async Task RevokeWithoutClientIdReturns400()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        var response = await client.PostAsync(
+            "/connect/revoke",
+            new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["token"] = "some-token",
+            }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var responseJson = await response.Content.ReadAsStringAsync();
+        Assert.Contains("invalid_request", responseJson);
+    }
+
+    [Fact]
+    public async Task RevokeWithInvalidClientIdReturns401()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        var response = await client.PostAsync(
+            "/connect/revoke",
+            new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["token"] = "some-token",
+                ["client_id"] = "non-existent-client",
+            }));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        var responseJson = await response.Content.ReadAsStringAsync();
+        Assert.Contains("invalid_client", responseJson);
+    }
+
+    [Fact]
+    public async Task RevokeWithDifferentClientIdReturns400()
+    {
+        await using var app = await CreateAppAsync(services =>
+        {
+            var store = services.BuildServiceProvider().GetRequiredService<ICustomAuthClientStore>() as InMemoryClientStore;
+            store?.StoreAsync(new CustomAuthClient
+            {
+                ClientId = "other-client",
+                DisplayName = "Other Client",
+                RedirectUris = { RedirectUri },
+                AllowedScopes = { "openid" }
+            }).GetAwaiter().GetResult();
+        });
+        using var client = app.GetTestClient();
+
+        // 1. Exchange code to get refresh token for test-client
+        var verifier = CreateVerifier();
+        var code = await IssueAuthorizationCodeAsync(client, verifier);
+        var tokenResponse = await ExchangeCodeAsync(client, code, verifier);
+        var refreshToken = await ReadJsonPropertyAsync(tokenResponse, "refresh_token");
+
+        // 2. Try to revoke it using 'other-client'
+        var response = await client.PostAsync(
+            "/connect/revoke",
+            new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["token"] = refreshToken,
+                ["client_id"] = "other-client",
+            }));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var responseJson = await response.Content.ReadAsStringAsync();
+        Assert.Contains("invalid_grant", responseJson);
+    }
+
+    [Fact]
+    public async Task IdTokenContainsAtHash()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        // 1. Obtain tokens
+        var verifier = CreateVerifier();
+        var code = await IssueAuthorizationCodeAsync(client, verifier);
+        var tokenResponse = await ExchangeCodeAsync(client, code, verifier);
+
+        var accessToken = await ReadJsonPropertyAsync(tokenResponse, "access_token");
+        var idToken = await ReadJsonPropertyAsync(tokenResponse, "id_token");
+
+        // 2. Decode ID token and check at_hash
+        var handler = new JsonWebTokenHandler();
+        var idJwt = handler.ReadJsonWebToken(idToken);
+
+        Assert.True(idJwt.TryGetClaim("at_hash", out var atHashClaim));
+        var atHash = atHashClaim.ToString();
+        Assert.False(string.IsNullOrWhiteSpace(atHash));
+
+        // 3. Recompute expected at_hash and verify
+        using var sha256 = SHA256.Create();
+        var tokenBytes = Encoding.ASCII.GetBytes(accessToken);
+        var fullHash = sha256.ComputeHash(tokenBytes);
+        var halfSize = fullHash.Length / 2;
+        var halfHash = new byte[halfSize];
+        Array.Copy(fullHash, halfHash, halfSize);
+        var expectedAtHash = Base64UrlEncoder.Encode(halfHash);
+
+        Assert.Equal(expectedAtHash, atHash);
+    }
+
+    private sealed class FakeLoginAttemptTracker : Core.Services.ICustomAuthLoginAttemptTracker
+    {
+        private int _failures;
+
+        public Task<bool> IsBlockedAsync(string userName, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(_failures >= 3);
+        }
+
+        public Task RecordSuccessAsync(string userName, CancellationToken cancellationToken = default)
+        {
+            _failures = 0;
+            return Task.CompletedTask;
+        }
+
+        public Task RecordFailureAsync(string userName, CancellationToken cancellationToken = default)
+        {
+            _failures++;
+            return Task.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task LoginAttemptTrackerBlocksAndLockoutWorks()
+    {
+        var tracker = new FakeLoginAttemptTracker();
+        await using var app = await CreateAppAsync(services =>
+        {
+            services.Replace(ServiceDescriptor.Scoped<Core.Services.ICustomAuthLoginAttemptTracker>(_ => tracker));
+        });
+
+        using var client = app.GetTestClient();
+
+        // 1. Perform 3 failed login attempts
+        var antiforgery = await GetAntiforgeryAsync(client);
+        for (int i = 0; i < 3; i++)
+        {
+            using var failedRequest = new HttpRequestMessage(HttpMethod.Post, "/login")
+            {
+                Content = new FormUrlEncodedContent(new Dictionary<string, string>
+                {
+                    ["userName"] = UserName,
+                    ["password"] = "wrong-password",
+                    ["returnUrl"] = "/dashboard",
+                    [antiforgery.FormFieldName] = antiforgery.RequestToken,
+                }),
+            };
+            failedRequest.Headers.Add("Cookie", antiforgery.Cookie);
+            var failedResponse = await client.SendAsync(failedRequest);
+            Assert.Equal(HttpStatusCode.Unauthorized, failedResponse.StatusCode);
+        }
+
+        // 2. Perform a 4th attempt (which should be blocked even with correct password)
+        using var blockedRequest = new HttpRequestMessage(HttpMethod.Post, "/login")
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["userName"] = UserName,
+                ["password"] = Password,
+                ["returnUrl"] = "/dashboard",
+                [antiforgery.FormFieldName] = antiforgery.RequestToken,
+            }),
+        };
+        blockedRequest.Headers.Add("Cookie", antiforgery.Cookie);
+        var blockedResponse = await client.SendAsync(blockedRequest);
+
+        Assert.Equal(HttpStatusCode.Locked, blockedResponse.StatusCode);
+        var content = await blockedResponse.Content.ReadAsStringAsync();
+        Assert.Contains("This account is temporarily locked due to too many failed login attempts.", content);
+    }
+
+    private static async Task<WebApplication> CreateAppAsync(Action<IServiceCollection>? configureServices = null, Action<CustomAuthOptions>? configureOptions = null)
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -222,6 +403,7 @@ public sealed class V02EndpointTests
             {
                 options.Issuer = "http://localhost";
                 options.RequireHttps = false;
+                configureOptions?.Invoke(options);
             })
             .AddJwtTokenSigning()
             .AddInMemoryStores(stores =>
@@ -247,6 +429,8 @@ public sealed class V02EndpointTests
                     }
                 });
             });
+
+        configureServices?.Invoke(builder.Services);
 
         var app = builder.Build();
         app.MapVefaCustomAuthEndpoints();

@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
+using Vefa.CustomAuth.Tokens;
 
 namespace Vefa.CustomAuth.AspNetCore.Endpoints;
 
@@ -20,6 +21,6 @@ internal static class PkceVerifier
             ? Base64UrlEncoder.Encode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)))
             : verifier;
 
-        return string.Equals(actual, challenge, StringComparison.Ordinal);
+        return SecureCompare.FixedTimeEquals(actual, challenge);
     }
 }

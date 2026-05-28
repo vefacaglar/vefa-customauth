@@ -57,6 +57,12 @@ public sealed class CustomAuthOptions
     public bool RequirePkce { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets the name of the rate limiting policy to apply to the login endpoint.
+    /// If null or empty, rate limiting is not applied at the routing level.
+    /// </summary>
+    public string? LoginRateLimitingPolicyName { get; set; }
+
+    /// <summary>
     /// Gets or sets a value indicating whether HTTPS is required for the issuer URI.
     /// </summary>
     public bool RequireHttps { get; set; } = true;

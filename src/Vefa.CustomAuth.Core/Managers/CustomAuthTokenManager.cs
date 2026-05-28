@@ -155,6 +155,35 @@ public sealed class CustomAuthTokenManager : ICustomAuthTokenManager
     }
 
     /// <inheritdoc/>
+    public async Task RevokeRefreshTokenChainAsync(CustomAuthRefreshToken token, DateTimeOffset revokedAt, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(token);
+        if (token.Id == Guid.Empty)
+        {
+            throw new ArgumentException("Token ID cannot be empty.", nameof(token));
+        }
+
+        if (token.SessionId is Guid sessionId)
+        {
+            await _refreshTokenStore.RevokeBySessionIdAsync(sessionId, revokedAt, cancellationToken).ConfigureAwait(false);
+
+            await _auditLogStore.StoreAsync(new CustomAuthAuditLog
+            {
+                Id = Guid.NewGuid(),
+                Action = "RefreshTokenChainRevoked",
+                TargetType = "Session",
+                TargetId = sessionId.ToString(),
+                ActorUserId = token.UserId,
+                Timestamp = revokedAt
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            await RevokeRefreshTokenAsync(token.Id, revokedAt, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <inheritdoc/>
     public async Task HandleRefreshTokenReuseAsync(CustomAuthRefreshToken token, DateTimeOffset detectedAt, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(token);

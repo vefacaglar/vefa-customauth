@@ -65,12 +65,23 @@ public static class CustomAuthEndpointRouteExtensions
             TokenEndpointService service,
             CancellationToken cancellationToken) => service.HandleAsync(request, cancellationToken));
 
-        endpoints.MapGet("/login", (HttpContext context, LoginEndpointService service) => service.Render(context));
+        var loginGetRoute = endpoints.MapGet("/login", (HttpContext context, LoginEndpointService service) => service.Render(context));
 
-        endpoints.MapPost("/login", (
+        var loginPostRoute = endpoints.MapPost("/login", (
             HttpContext context,
             LoginEndpointService service,
             CancellationToken cancellationToken) => service.HandleAsync(context, cancellationToken));
+
+        var optionsMonitor = (IOptionsMonitor<CustomAuthOptions>?)endpoints.ServiceProvider.GetService(typeof(IOptionsMonitor<CustomAuthOptions>));
+        if (optionsMonitor is not null)
+        {
+            var policyName = optionsMonitor.CurrentValue.LoginRateLimitingPolicyName;
+            if (!string.IsNullOrEmpty(policyName))
+            {
+                loginGetRoute.RequireRateLimiting(policyName);
+                loginPostRoute.RequireRateLimiting(policyName);
+            }
+        }
 
         endpoints.MapGet("/connect/logout", (
             HttpContext context,

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Vefa.CustomAuth.Core.Managers;
 using Vefa.CustomAuth.Core.Models;
 using Vefa.CustomAuth.Core.Options;
+using Vefa.CustomAuth.Core.Services;
 using Vefa.CustomAuth.Core.Stores;
 
 namespace Vefa.CustomAuth.AspNetCore.Endpoints;
@@ -15,6 +16,7 @@ internal sealed class LoginEndpointService
     private readonly ICustomAuthSessionManager _sessionManager;
     private readonly SessionCookieService _sessionCookieService;
     private readonly IAntiforgery _antiforgery;
+    private readonly ICustomAuthLoginAttemptTracker _loginAttemptTracker;
     private readonly IOptionsMonitor<CustomAuthOptions> _options;
     private readonly TimeProvider _timeProvider;
 
@@ -23,6 +25,7 @@ internal sealed class LoginEndpointService
         ICustomAuthSessionManager sessionManager,
         SessionCookieService sessionCookieService,
         IAntiforgery antiforgery,
+        ICustomAuthLoginAttemptTracker loginAttemptTracker,
         IOptionsMonitor<CustomAuthOptions> options,
         TimeProvider timeProvider)
     {
@@ -30,6 +33,7 @@ internal sealed class LoginEndpointService
         _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
         _sessionCookieService = sessionCookieService ?? throw new ArgumentNullException(nameof(sessionCookieService));
         _antiforgery = antiforgery ?? throw new ArgumentNullException(nameof(antiforgery));
+        _loginAttemptTracker = loginAttemptTracker ?? throw new ArgumentNullException(nameof(loginAttemptTracker));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
@@ -71,12 +75,21 @@ internal sealed class LoginEndpointService
             return Results.Content(RenderForm(returnUrl, _options.CurrentValue.LoginPath, refreshedTokens, "Username and password are required."), "text/html", statusCode: StatusCodes.Status400BadRequest);
         }
 
+        if (await _loginAttemptTracker.IsBlockedAsync(userName, cancellationToken).ConfigureAwait(false))
+        {
+            var refreshedTokens = _antiforgery.GetAndStoreTokens(context);
+            return Results.Content(RenderForm(returnUrl, _options.CurrentValue.LoginPath, refreshedTokens, "This account is temporarily locked due to too many failed login attempts."), "text/html", statusCode: StatusCodes.Status423Locked);
+        }
+
         var user = await _userStore.ValidateCredentialsAsync(userName, password, cancellationToken).ConfigureAwait(false);
         if (user is null)
         {
+            await _loginAttemptTracker.RecordFailureAsync(userName, cancellationToken).ConfigureAwait(false);
             var refreshedTokens = _antiforgery.GetAndStoreTokens(context);
             return Results.Content(RenderForm(returnUrl, _options.CurrentValue.LoginPath, refreshedTokens, "Invalid username or password."), "text/html", statusCode: StatusCodes.Status401Unauthorized);
         }
+
+        await _loginAttemptTracker.RecordSuccessAsync(userName, cancellationToken).ConfigureAwait(false);
 
         var now = _timeProvider.GetUtcNow();
         var session = new CustomAuthSession

@@ -80,6 +80,15 @@ public interface ICustomAuthTokenManager
     Task RevokeRefreshTokenAsync(Guid id, DateTimeOffset revokedAt, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Revokes a refresh token immediately, and if session-bound, also revokes its entire rotation chain.
+    /// </summary>
+    /// <param name="token">The refresh token to revoke.</param>
+    /// <param name="revokedAt">The timestamp when it was revoked.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    Task RevokeRefreshTokenChainAsync(CustomAuthRefreshToken token, DateTimeOffset revokedAt, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Records refresh token reuse and revokes the related refresh token chain when possible.
     /// </summary>
     /// <param name="token">The reused refresh token.</param>
