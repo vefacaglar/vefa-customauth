@@ -19,6 +19,21 @@ If the host application owns the `DbContext`, apply the CustomAuth model configu
 builder.Services.AddCustomAuthStores<AppDbContext>();
 ```
 
+## Client Relations
+
+`CustomAuthClient.RedirectUris`, `CustomAuthClient.PostLogoutRedirectUris`, and
+`CustomAuthClient.AllowedScopes` are exposed as `List<string>` in the public model. EF Core persists
+them as relational one-to-many child rows:
+
+| Default table | Contents |
+| --- | --- |
+| `CustomAuthClientRedirectUris` | Allowed authorization redirect URIs. |
+| `CustomAuthClientPostLogoutRedirectUris` | Allowed post-logout redirect URIs. |
+| `CustomAuthClientAllowedScopes` | Scopes the client may request. |
+
+If you derive from `CustomAuthDbContext`, you may override table names in `OnModelCreating` after
+calling `base.OnModelCreating(modelBuilder)`.
+
 ## Notes
 
 The EF Core provider stores authorization codes and refresh tokens as hashes. Configure migrations and indexes for the selected database provider before production use.

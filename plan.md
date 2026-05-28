@@ -197,6 +197,10 @@ public sealed class CustomAuthClient
 
 The client configuration should enforce exact redirect URI matching. Partial or wildcard redirect URI matching should be avoided in the first version.
 
+Persistence note: the public model keeps `RedirectUris`, `PostLogoutRedirectUris`, and `AllowedScopes`
+as `List<string>` for simple endpoint and Admin UI payloads. Relational providers persist those values
+as one-to-many child rows rather than serialized string columns.
+
 ---
 
 ## 7. Authorization Code Requirements

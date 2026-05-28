@@ -26,4 +26,8 @@ app.MapCustomAuthEndpoints();
 
 ## Notes
 
+The EF Core provider stores client redirect URIs, post-logout redirect URIs, and allowed scopes as
+relational child rows while keeping the public `CustomAuthClient` API as simple `List<string>`
+properties.
+
 For custom persistence providers, reference the lower-level packages directly instead of this composition package.

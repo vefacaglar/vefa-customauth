@@ -14,6 +14,7 @@ dotnet run --project samples/Vefa.CustomAuth.Sample.AuthServer
 
 - Auth server: `http://localhost:5175` (issuer; set in `launchSettings.json`)
 - Discovery: `http://localhost:5175/.well-known/openid-configuration`
+- Admin UI: `http://localhost:5175/customauth/`
 - Sign in with `demo` / `demo`.
 
 ## Core options (`AddCustomAuth`)
@@ -61,15 +62,36 @@ Controlled by the `UseAspNetCoreIdentity` configuration key (defaults to `true`)
 
 ## Persistence (EF Core / SQLite)
 
-Protocol data (clients, codes, tokens, signing keys, sessions) uses EF Core + SQLite:
+Protocol data (clients, codes, tokens, signing keys, sessions, scopes, and audit logs) uses EF Core + SQLite. This sample uses a derived `SampleCustomAuthDbContext` so the generated table names stay short and sample-friendly:
 
 ```csharp
-builder.Services.AddCustomAuthEntityFrameworkCore(o => o.UseSqlite("Data Source=customauth-sample.db"));
+builder.Services.AddDbContext<SampleCustomAuthDbContext>(o =>
+    o.UseSqlite("Data Source=customauth-sample.db"));
+builder.Services.AddCustomAuthStores<SampleCustomAuthDbContext>();
 ```
 
 `DatabaseSeeder` calls `EnsureCreatedAsync` and seeds the demo clients. The `.db` files are generated
-at runtime and are git-ignored. **If you change the client schema, delete `customauth-sample.db`** so it
-is recreated (`EnsureCreated` does not migrate an existing database).
+at runtime and are git-ignored. Client redirect URIs, post-logout redirect URIs, and allowed scopes
+are stored as one-to-many child rows, not as newline-delimited columns.
+
+The sample protocol database uses these table names:
+
+| Table | Purpose |
+| --- | --- |
+| `Clients` | Registered OAuth/OIDC clients. |
+| `ClientRedirectUris` | Allowed authorization redirect URIs per client. |
+| `ClientPostLogoutRedirectUris` | Allowed post-logout redirect URIs per client. |
+| `ClientAllowedScopes` | Scopes each client may request. |
+| `AuthorizationCodes` | Hashed, single-use authorization codes. |
+| `RefreshTokens` | Hashed refresh tokens and token-chain metadata. |
+| `Sessions` | SSO session records. |
+| `SigningKeys` | JWT signing keys. |
+| `Scopes` | Available OAuth/OIDC scopes. |
+| `AuditLogs` | Administrative and security audit events. |
+
+If you already have an older sample database, the seeder creates the new client relation tables when
+possible. For unrelated schema experiments, deleting `customauth-sample.db` is still the simplest way
+to recreate the demo database from scratch.
 
 Swap SQLite for SQL Server / PostgreSQL by changing the `UseSqlite(...)` call.
 
@@ -82,6 +104,28 @@ Swap SQLite for SQL Server / PostgreSQL by changing the `UseSqlite(...)` call.
 | `sample-webapp` | public (PKCE) | The Sample.WebApp relying party. |
 | `swagger-ui` | public (PKCE) | Swagger UI in Sample.Api. |
 | `service-client` | `private_key_jwt` | Confidential client; see below. |
+
+## Admin UI
+
+The sample maps the embedded Admin UI at:
+
+```text
+http://localhost:5175/customauth/
+```
+
+Because this sample auth server does not have a separate ASP.NET Core dashboard-user cookie, the Admin
+UI is configured with `AllowAnonymous = true` for local development only:
+
+```csharp
+app.MapCustomAuthAdminUI(options =>
+{
+    options.PathPrefix = "/customauth";
+    options.AllowAnonymous = true;
+});
+```
+
+Do not copy that anonymous setting into production. Protect the route with host application
+authorization or network controls.
 
 ## Confidential client (`private_key_jwt`)
 

@@ -82,6 +82,12 @@ Open the WebApp:
 http://localhost:5043
 ```
 
+Open the embedded Admin UI on the AuthServer:
+
+```text
+http://localhost:5175/customauth/
+```
+
 Use the sample credentials:
 
 ```text
@@ -90,7 +96,7 @@ demo / demo
 
 Press `Ctrl+C` in the script terminal to stop all sample apps.
 
-The AuthServer sample uses SQLite-backed EF stores for clients, authorization codes, refresh tokens, sessions, and signing keys. The demo user store can be either ASP.NET Core Identity or a simple in-memory store, because user persistence is intentionally owned by the host application.
+The AuthServer sample uses SQLite-backed EF stores for clients, authorization codes, refresh tokens, sessions, signing keys, scopes, and audit logs. The sample maps those tables with short names such as `Clients`, `ClientRedirectUris`, `ClientPostLogoutRedirectUris`, `ClientAllowedScopes`, `AuthorizationCodes`, `RefreshTokens`, and `SigningKeys`. The demo user store can be either ASP.NET Core Identity or a simple in-memory store, because user persistence is intentionally owned by the host application.
 
 For a full breakdown of the AuthServer sample's settings (user store selection, persistence, seeded clients, confidential `private_key_jwt` client, brute-force protection, logging), see its [configuration guide](samples/Vefa.CustomAuth.Sample.AuthServer/README.md).
 
@@ -149,6 +155,8 @@ builder.Services.AddCustomAuthEntityFrameworkCore(options =>
     options.UseSqlite(connectionString);
 });
 ```
+
+Client redirect URIs, post-logout redirect URIs, and allowed scopes are modeled as one-to-many relational child rows in EF Core. The public `CustomAuthClient` API still exposes them as `List<string>` for simple endpoint, seed, and Admin UI usage.
 
 For applications that own their own `DbContext`, register the CustomAuth model configuration on that context and then register the stores:
 
