@@ -1,5 +1,6 @@
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Vefa.CustomAuth.AspNetCore.Extensions;
@@ -8,29 +9,61 @@ using Vefa.CustomAuth.Core.Services;
 using Vefa.CustomAuth.Core.Stores;
 using Vefa.CustomAuth.EntityFrameworkCore.Extensions;
 using Vefa.CustomAuth.Sample.AuthServer.Data;
+using Vefa.CustomAuth.Sample.AuthServer.Identity;
 using Vefa.CustomAuth.Sample.AuthServer.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.TryAddSingleton<ICustomAuthUserStore>(_ => new InMemoryUserStore(new[]
+// Choose the user store. Both expose the same ICustomAuthUserStore contract to the library, so the
+// protocol code is identical either way. Set "UseAspNetCoreIdentity" to false in configuration to
+// use the simple in-memory demo store instead. Defaults to the Identity-backed store.
+var useAspNetCoreIdentity = builder.Configuration.GetValue("UseAspNetCoreIdentity", true);
+
+if (useAspNetCoreIdentity)
 {
-    new InMemoryUserStore.SeedUser
-    {
-        UserId = "user-1",
-        UserName = "demo",
-        Password = "demo",
-        Email = "demo@example.com",
-        // This is where you add your own custom claims:
-        AdditionalClaims = new Dictionary<string, object>
+    // ASP.NET Core Identity backs user lookup and password validation. It owns its own
+    // SampleIdentityDbContext (a separate SQLite database from the protocol data) and is wired to
+    // the library purely through the IdentityUserStore : ICustomAuthUserStore adapter.
+    builder.Services.AddDbContext<SampleIdentityDbContext>(options =>
+        options.UseSqlite("Data Source=identity-sample.db"));
+
+    builder.Services
+        .AddIdentityCore<IdentityUser>(options =>
         {
-            { "role", new[] { "admin", "superadmin" } },
-            { "department", "IT" },
-            { "tenant_id", 42 },
-            { "is_premium", true },
-            { "custom_permission", "write_access" }
-        }
-    },
-}));
+            // Relaxed so the "demo" / "demo" credentials work out of the box; tighten for production.
+            options.Password.RequiredLength = 4;
+            options.Password.RequireDigit = false;
+            options.Password.RequireUppercase = false;
+            options.Password.RequireLowercase = false;
+            options.Password.RequireNonAlphanumeric = false;
+        })
+        .AddRoles<IdentityRole>()
+        .AddEntityFrameworkStores<SampleIdentityDbContext>();
+
+    builder.Services.AddScoped<ICustomAuthUserStore, IdentityUserStore>();
+}
+else
+{
+    builder.Services.TryAddSingleton<ICustomAuthUserStore>(_ => new InMemoryUserStore(new[]
+    {
+        new InMemoryUserStore.SeedUser
+        {
+            UserId = "user-1",
+            UserName = "demo",
+            Password = "demo",
+            Email = "demo@example.com",
+            // This is where you add your own custom claims:
+            AdditionalClaims = new Dictionary<string, object>
+            {
+                { "role", new[] { "admin", "superadmin" } },
+                { "department", "IT" },
+                { "tenant_id", 42 },
+                { "is_premium", true },
+                { "custom_permission", "write_access" }
+            }
+        },
+    }));
+}
 
 builder.Services.AddCustomAuthEntityFrameworkCore(options =>
 {
@@ -98,6 +131,11 @@ app.UseStaticFiles();
 app.UseRateLimiter();
 
 await DatabaseSeeder.EnsureDatabaseSeededAsync(app.Services);
+
+if (useAspNetCoreIdentity)
+{
+    await IdentitySeeder.EnsureSeededAsync(app.Services);
+}
 
 app.MapGet("/", () => "Vefa.CustomAuth sample auth server. Sign in with demo / demo.");
 app.MapCustomAuthEndpoints();
