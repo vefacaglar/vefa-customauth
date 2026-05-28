@@ -126,7 +126,8 @@ public sealed class EfCustomAuthClientStore<TContext> : ICustomAuthClientStore
         return _context.Set<CustomAuthClient>()
             .Include(client => client.RedirectUriEntries)
             .Include(client => client.PostLogoutRedirectUriEntries)
-            .Include(client => client.AllowedScopeEntries);
+            .Include(client => client.AllowedScopeEntries)
+            .AsSplitQuery();
     }
 
     private static void PopulateClientLists(CustomAuthClient? client)

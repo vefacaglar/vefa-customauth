@@ -15,7 +15,7 @@ public static class DatabaseSeeder
     public static async Task EnsureDatabaseSeededAsync(IServiceProvider services)
     {
         await using var scope = services.CreateAsyncScope();
-        var context = scope.ServiceProvider.GetRequiredService<CustomAuthDbContext>();
+        var context = scope.ServiceProvider.GetRequiredService<SampleCustomAuthDbContext>();
         var environment = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
 
         await context.Database.EnsureCreatedAsync();
@@ -119,29 +119,29 @@ public static class DatabaseSeeder
         }
 
         await context.Database.ExecuteSqlRawAsync("""
-            CREATE TABLE IF NOT EXISTS "CustomAuthClientRedirectUris" (
+            CREATE TABLE IF NOT EXISTS "ClientRedirectUris" (
                 "ClientId" TEXT NOT NULL,
                 "Uri" TEXT NOT NULL,
-                CONSTRAINT "PK_CustomAuthClientRedirectUris" PRIMARY KEY ("ClientId", "Uri"),
-                CONSTRAINT "FK_CustomAuthClientRedirectUris_CustomAuthClients_ClientId" FOREIGN KEY ("ClientId") REFERENCES "CustomAuthClients" ("ClientId") ON DELETE CASCADE
+                CONSTRAINT "PK_ClientRedirectUris" PRIMARY KEY ("ClientId", "Uri"),
+                CONSTRAINT "FK_ClientRedirectUris_Clients_ClientId" FOREIGN KEY ("ClientId") REFERENCES "Clients" ("ClientId") ON DELETE CASCADE
             );
             """);
 
         await context.Database.ExecuteSqlRawAsync("""
-            CREATE TABLE IF NOT EXISTS "CustomAuthClientPostLogoutRedirectUris" (
+            CREATE TABLE IF NOT EXISTS "ClientPostLogoutRedirectUris" (
                 "ClientId" TEXT NOT NULL,
                 "Uri" TEXT NOT NULL,
-                CONSTRAINT "PK_CustomAuthClientPostLogoutRedirectUris" PRIMARY KEY ("ClientId", "Uri"),
-                CONSTRAINT "FK_CustomAuthClientPostLogoutRedirectUris_CustomAuthClients_ClientId" FOREIGN KEY ("ClientId") REFERENCES "CustomAuthClients" ("ClientId") ON DELETE CASCADE
+                CONSTRAINT "PK_ClientPostLogoutRedirectUris" PRIMARY KEY ("ClientId", "Uri"),
+                CONSTRAINT "FK_ClientPostLogoutRedirectUris_Clients_ClientId" FOREIGN KEY ("ClientId") REFERENCES "Clients" ("ClientId") ON DELETE CASCADE
             );
             """);
 
         await context.Database.ExecuteSqlRawAsync("""
-            CREATE TABLE IF NOT EXISTS "CustomAuthClientAllowedScopes" (
+            CREATE TABLE IF NOT EXISTS "ClientAllowedScopes" (
                 "ClientId" TEXT NOT NULL,
                 "Scope" TEXT NOT NULL,
-                CONSTRAINT "PK_CustomAuthClientAllowedScopes" PRIMARY KEY ("ClientId", "Scope"),
-                CONSTRAINT "FK_CustomAuthClientAllowedScopes_CustomAuthClients_ClientId" FOREIGN KEY ("ClientId") REFERENCES "CustomAuthClients" ("ClientId") ON DELETE CASCADE
+                CONSTRAINT "PK_ClientAllowedScopes" PRIMARY KEY ("ClientId", "Scope"),
+                CONSTRAINT "FK_ClientAllowedScopes_Clients_ClientId" FOREIGN KEY ("ClientId") REFERENCES "Clients" ("ClientId") ON DELETE CASCADE
             );
             """);
     }

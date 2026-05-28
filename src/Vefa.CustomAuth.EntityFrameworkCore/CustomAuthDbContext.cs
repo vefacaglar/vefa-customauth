@@ -10,6 +10,14 @@ public class CustomAuthDbContext : DbContext
     {
     }
 
+    /// <summary>
+    /// Initializes a derived custom auth DbContext with the supplied options.
+    /// </summary>
+    /// <param name="options">The context options.</param>
+    protected CustomAuthDbContext(DbContextOptions options) : base(options)
+    {
+    }
+
     public DbSet<CustomAuthClient> Clients => Set<CustomAuthClient>();
     public DbSet<CustomAuthClientRedirectUri> ClientRedirectUris => Set<CustomAuthClientRedirectUri>();
     public DbSet<CustomAuthClientPostLogoutRedirectUri> ClientPostLogoutRedirectUris => Set<CustomAuthClientPostLogoutRedirectUri>();

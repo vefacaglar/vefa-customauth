@@ -69,10 +69,11 @@ else
     }));
 }
 
-builder.Services.AddCustomAuthEntityFrameworkCore(options =>
+builder.Services.AddDbContext<SampleCustomAuthDbContext>(options =>
 {
     options.UseSqlite("Data Source=customauth-sample.db");
 });
+builder.Services.AddCustomAuthStores<SampleCustomAuthDbContext>();
 
 builder.Services.AddCors(options =>
 {
