@@ -15,6 +15,9 @@ public sealed class IndexModel : PageModel
     public string? ReturnUrl { get; set; }
 
     [BindProperty(SupportsGet = true)]
+    public string? UserName { get; set; }
+
+    [BindProperty(SupportsGet = true)]
     public bool? Registered { get; set; }
 
     [BindProperty(SupportsGet = true)]

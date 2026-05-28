@@ -77,13 +77,13 @@ internal sealed partial class LoginEndpointService
                 _ => "password",
             };
             LogMissingCredentials(missingField);
-            return RedirectToLoginPage(returnUrl, "missing_credentials");
+            return RedirectToLoginPage(returnUrl, "missing_credentials", userName);
         }
 
         if (await _loginAttemptTracker.IsBlockedAsync(userName, cancellationToken).ConfigureAwait(false))
         {
             LogAccountLocked(userName);
-            return RedirectToLoginPage(returnUrl, "account_locked");
+            return RedirectToLoginPage(returnUrl, "account_locked", userName);
         }
 
         var user = await _userStore.ValidateCredentialsAsync(userName, password, cancellationToken).ConfigureAwait(false);
@@ -91,7 +91,7 @@ internal sealed partial class LoginEndpointService
         {
             await _loginAttemptTracker.RecordFailureAsync(userName, cancellationToken).ConfigureAwait(false);
             LogInvalidCredentials(userName);
-            return RedirectToLoginPage(returnUrl, "invalid_credentials");
+            return RedirectToLoginPage(returnUrl, "invalid_credentials", userName);
         }
 
         await _loginAttemptTracker.RecordSuccessAsync(userName, cancellationToken).ConfigureAwait(false);
@@ -142,7 +142,7 @@ internal sealed partial class LoginEndpointService
         Message = "Login succeeded and SSO session opened (userName: {UserName}, sessionId: {SessionId}).")]
     private partial void LogLoginSucceeded(string userName, Guid sessionId);
 
-    private IResult RedirectToLoginPage(string returnUrl, string errorCode)
+    private IResult RedirectToLoginPage(string returnUrl, string errorCode, string? userName = null)
     {
         var query = new Dictionary<string, string?>
         {
@@ -151,6 +151,10 @@ internal sealed partial class LoginEndpointService
         if (!string.IsNullOrWhiteSpace(returnUrl))
         {
             query["returnUrl"] = returnUrl;
+        }
+        if (!string.IsNullOrWhiteSpace(userName))
+        {
+            query["userName"] = userName;
         }
 
         return Results.Redirect(QueryHelpers.AddQueryString(_options.CurrentValue.LoginPath, query));
