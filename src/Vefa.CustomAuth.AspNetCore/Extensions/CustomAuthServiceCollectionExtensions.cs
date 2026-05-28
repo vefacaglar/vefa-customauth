@@ -30,10 +30,14 @@ public static class CustomAuthServiceCollectionExtensions
             .ValidateOnStart();
 
         services.AddAntiforgery();
+        services.AddMemoryCache();
         services.TryAddSingleton<IValidateOptions<CustomAuthOptions>, CustomAuthOptionsValidator>();
         services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<Tokens.ClientAssertion.IClientAssertionValidator, Tokens.ClientAssertion.ClientAssertionValidator>();
+        services.TryAddSingleton<Services.IClientAssertionReplayCache, Services.MemoryClientAssertionReplayCache>();
         services.TryAddScoped<AuthorizationEndpointService>();
         services.TryAddScoped<LoginEndpointService>();
+        services.TryAddScoped<ClientAuthenticationService>();
         services.TryAddScoped<TokenEndpointService>();
         services.TryAddScoped<SessionCookieService>();
         services.TryAddScoped<LogoutEndpointService>();

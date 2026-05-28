@@ -55,4 +55,19 @@ public sealed class CustomAuthClient
     /// Rotation must not extend a refresh token chain beyond this lifetime.
     /// </summary>
     public int RefreshTokenAbsoluteLifetimeSeconds { get; set; } = 2592000;
+
+    /// <summary>
+    /// Gets or sets how the client authenticates at the token endpoint. Defaults to
+    /// <see cref="CustomAuthClientAuthenticationMethod.None"/> (public client, PKCE only).
+    /// </summary>
+    public CustomAuthClientAuthenticationMethod TokenEndpointAuthMethod { get; set; }
+        = CustomAuthClientAuthenticationMethod.None;
+
+    /// <summary>
+    /// Gets or sets the client's public keys as a JSON Web Key Set (JWKS) document, used to verify
+    /// <c>private_key_jwt</c> client assertions. Required when
+    /// <see cref="TokenEndpointAuthMethod"/> is <see cref="CustomAuthClientAuthenticationMethod.PrivateKeyJwt"/>.
+    /// This holds public key material only; private keys never leave the client.
+    /// </summary>
+    public string? JwksJson { get; set; }
 }

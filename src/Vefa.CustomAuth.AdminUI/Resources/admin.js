@@ -50,7 +50,9 @@ window.adminApp = function() {
             accessTokenLifetimeSeconds: 3600,
             refreshTokenLifetimeSeconds: 2592000,
             requirePkce: true,
-            allowRefreshTokens: true
+            allowRefreshTokens: true,
+            tokenEndpointAuthMethod: 0,
+            jwksJson: ''
         },
 
         // Scope Form State
@@ -116,7 +118,9 @@ window.adminApp = function() {
                 accessTokenLifetimeSeconds: 3600,
                 refreshTokenLifetimeSeconds: 2592000,
                 requirePkce: true,
-                allowRefreshTokens: true
+                allowRefreshTokens: true,
+                tokenEndpointAuthMethod: 0,
+                jwksJson: ''
             };
             this.modalOpen = true;
         },
@@ -132,7 +136,9 @@ window.adminApp = function() {
                 accessTokenLifetimeSeconds: client.accessTokenLifetimeSeconds,
                 refreshTokenLifetimeSeconds: client.refreshTokenLifetimeSeconds,
                 requirePkce: client.requirePkce,
-                allowRefreshTokens: client.allowRefreshTokens
+                allowRefreshTokens: client.allowRefreshTokens,
+                tokenEndpointAuthMethod: client.tokenEndpointAuthMethod || 0,
+                jwksJson: client.jwksJson || ''
             };
             this.modalOpen = true;
         },
@@ -177,7 +183,9 @@ window.adminApp = function() {
                 accessTokenLifetimeSeconds: this.form.accessTokenLifetimeSeconds,
                 refreshTokenLifetimeSeconds: this.form.refreshTokenLifetimeSeconds,
                 requirePkce: this.form.requirePkce,
-                allowRefreshTokens: this.form.allowRefreshTokens
+                allowRefreshTokens: this.form.allowRefreshTokens,
+                tokenEndpointAuthMethod: this.form.tokenEndpointAuthMethod,
+                jwksJson: this.form.tokenEndpointAuthMethod === 1 ? (this.form.jwksJson || '').trim() : null
             };
 
             try {

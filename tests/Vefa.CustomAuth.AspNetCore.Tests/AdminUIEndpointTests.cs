@@ -113,6 +113,42 @@ public sealed class AdminUIEndpointTests
     }
 
     [Fact]
+    public async Task AdminClientCrudPersistsPrivateKeyJwtFields()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        var antiforgery = await AntiforgeryTestHelpers.GetAdminUiAntiforgeryAsync(client);
+
+        const string jwks = "{\"keys\":[{\"kty\":\"RSA\",\"use\":\"sig\",\"alg\":\"RS256\",\"kid\":\"k1\",\"n\":\"abc\",\"e\":\"AQAB\"}]}";
+        var confidentialClient = new CustomAuthClient
+        {
+            ClientId = "confidential-admin-client",
+            DisplayName = "Confidential Client",
+            RedirectUris = new List<string> { "https://localhost/callback" },
+            AllowedScopes = new List<string> { "openid" },
+            AllowRefreshTokens = false,
+            TokenEndpointAuthMethod = CustomAuthClientAuthenticationMethod.PrivateKeyJwt,
+            JwksJson = jwks,
+        };
+
+        using var createRequest = new HttpRequestMessage(HttpMethod.Post, "/customauth/api/clients")
+        {
+            Content = JsonContent.Create(confidentialClient),
+        };
+        createRequest.Headers.Add("Cookie", antiforgery.Cookie);
+        createRequest.Headers.Add("RequestVerificationToken", antiforgery.RequestToken);
+        var createResponse = await client.SendAsync(createRequest);
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+
+        var listResponse = await client.GetAsync("/customauth/api/clients?page=1&pageSize=10");
+        var result = await listResponse.Content.ReadFromJsonAsync<CustomAuthPagedResult<CustomAuthClient>>();
+        var persisted = Assert.Single(result!.Items, c => c.ClientId == "confidential-admin-client");
+        Assert.Equal(CustomAuthClientAuthenticationMethod.PrivateKeyJwt, persisted.TokenEndpointAuthMethod);
+        Assert.Equal(jwks, persisted.JwksJson);
+    }
+
+    [Fact]
     public async Task AdminScopeEndpointsWorkCorrectly()
     {
         await using var app = await CreateAppAsync();

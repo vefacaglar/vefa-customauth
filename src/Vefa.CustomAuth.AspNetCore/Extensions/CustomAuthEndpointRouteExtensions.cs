@@ -42,7 +42,8 @@ public static class CustomAuthEndpointRouteExtensions
                 subject_types_supported = new[] { "public" },
                 id_token_signing_alg_values_supported = new[] { "RS256" },
                 scopes_supported = new[] { "openid", "profile", "email", "offline_access" },
-                token_endpoint_auth_methods_supported = new[] { "none" },
+                token_endpoint_auth_methods_supported = new[] { "none", "private_key_jwt" },
+                token_endpoint_auth_signing_alg_values_supported = new[] { "RS256", "RS384", "RS512", "PS256", "ES256", "ES384", "ES512" },
                 code_challenge_methods_supported = new[] { "S256" },
             });
         });

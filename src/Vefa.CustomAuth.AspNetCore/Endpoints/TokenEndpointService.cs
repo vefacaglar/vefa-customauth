@@ -17,6 +17,7 @@ internal sealed partial class TokenEndpointService
     private readonly ICustomAuthUserStore _userStore;
     private readonly ITokenIssuer _tokenIssuer;
     private readonly ICustomAuthProfileService _profileService;
+    private readonly ClientAuthenticationService _clientAuthentication;
     private readonly IOptionsMonitor<CustomAuthOptions> _options;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<TokenEndpointService> _logger;
@@ -27,6 +28,7 @@ internal sealed partial class TokenEndpointService
         ICustomAuthUserStore userStore,
         ITokenIssuer tokenIssuer,
         ICustomAuthProfileService profileService,
+        ClientAuthenticationService clientAuthentication,
         IOptionsMonitor<CustomAuthOptions> options,
         TimeProvider timeProvider,
         ILogger<TokenEndpointService> logger)
@@ -36,6 +38,7 @@ internal sealed partial class TokenEndpointService
         _userStore = userStore ?? throw new ArgumentNullException(nameof(userStore));
         _tokenIssuer = tokenIssuer ?? throw new ArgumentNullException(nameof(tokenIssuer));
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
+        _clientAuthentication = clientAuthentication ?? throw new ArgumentNullException(nameof(clientAuthentication));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -96,6 +99,12 @@ internal sealed partial class TokenEndpointService
                 ["WWW-Authenticate"] = "Basic realm=\"Vefa.CustomAuth\""
             };
             return EndpointResults.OAuthError("invalid_client", "The client is not registered.", StatusCodes.Status401Unauthorized, headers);
+        }
+
+        var authError = await _clientAuthentication.AuthenticateAsync(client, form, cancellationToken).ConfigureAwait(false);
+        if (authError is not null)
+        {
+            return authError;
         }
 
         var code = await _tokenManager.FindAuthorizationCodeByHashAsync(TokenHasher.Hash(codeValue), cancellationToken).ConfigureAwait(false);
@@ -223,6 +232,12 @@ internal sealed partial class TokenEndpointService
                 ["WWW-Authenticate"] = "Basic realm=\"Vefa.CustomAuth\""
             };
             return EndpointResults.OAuthError("invalid_client", "The client is not registered.", StatusCodes.Status401Unauthorized, headers);
+        }
+
+        var authError = await _clientAuthentication.AuthenticateAsync(client, form, cancellationToken).ConfigureAwait(false);
+        if (authError is not null)
+        {
+            return authError;
         }
 
         if (!client.AllowRefreshTokens)

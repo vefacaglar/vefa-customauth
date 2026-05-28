@@ -488,6 +488,20 @@
                     </label>
                 </div>
 
+                <div class="space-y-1">
+                    <label class="text-[11px] font-semibold text-slate-400" for="tokenEndpointAuthMethod">Token Endpoint Authentication</label>
+                    <select id="tokenEndpointAuthMethod" x-model.number="form.tokenEndpointAuthMethod" class="w-full bg-[#030406]/50 border border-white/[0.05] text-slate-200 px-3.5 py-2.5 rounded-xl text-xs focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all">
+                        <option value="0">None (public client, PKCE only)</option>
+                        <option value="1">private_key_jwt (confidential, signed assertion)</option>
+                    </select>
+                </div>
+
+                <div class="space-y-1" x-show="form.tokenEndpointAuthMethod === 1">
+                    <label class="text-[11px] font-semibold text-slate-400" for="jwksJson">Client JWKS (public keys)</label>
+                    <textarea id="jwksJson" x-model="form.jwksJson" placeholder='{"keys":[{"kty":"RSA","use":"sig","alg":"RS256","kid":"...","n":"...","e":"AQAB"}]}' class="w-full bg-[#030406]/50 border border-white/[0.05] text-slate-200 px-3.5 py-2.5 rounded-xl text-xs focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all min-h-[80px] resize-y font-mono"></textarea>
+                    <p class="text-[10px] text-slate-500">Public key set used to verify the client's <code>private_key_jwt</code> assertions. Paste public keys only — never a private key.</p>
+                </div>
+
                 <div class="flex justify-end gap-2 pt-6 border-t border-white/[0.05]">
                     <button type="button" @click="closeModal()" class="px-4 py-2 text-xs font-semibold text-slate-400 bg-white/[0.02] border border-white/[0.05] rounded-xl hover:bg-white/[0.05] transition-all cursor-pointer">Cancel</button>
                     <button type="submit" class="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 rounded-xl hover:bg-indigo-500 shadow-md shadow-indigo-600/20 transition-all cursor-pointer">Save Client</button>

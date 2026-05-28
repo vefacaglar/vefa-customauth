@@ -29,6 +29,12 @@ internal sealed class CustomAuthClientConfiguration : IEntityTypeConfiguration<C
         builder.Property(x => x.AllowedScopes)
             .HasConversion(v => string.Join(' ', v), v => v.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList())
             .Metadata.SetValueComparer(listComparer);
+
+        builder.Property(x => x.TokenEndpointAuthMethod)
+            .HasConversion<int>();
+
+        builder.Property(x => x.JwksJson)
+            .HasMaxLength(8000);
     }
 }
 

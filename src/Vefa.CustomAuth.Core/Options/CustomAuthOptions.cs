@@ -42,6 +42,12 @@ public sealed class CustomAuthOptions
     public bool DetectRefreshTokenReuse { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets the allowed clock skew when validating the lifetime (<c>exp</c>/<c>nbf</c>) of a
+    /// <c>private_key_jwt</c> client assertion. Defaults to 60 seconds.
+    /// </summary>
+    public TimeSpan ClientAssertionClockSkew { get; set; } = TimeSpan.FromSeconds(60);
+
+    /// <summary>
     /// Gets or sets the path to the host-provided login page. The authorization endpoint
     /// redirects unauthenticated users here with a <c>returnUrl</c> query parameter.
     /// The host owns this page (Razor Pages, MVC, Blazor, etc.) and is expected to

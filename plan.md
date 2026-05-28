@@ -643,6 +643,33 @@ Status: completed — All security audit hardening items (P2-13 through P2-20) a
 
 ---
 
+## Client Authentication: private_key_jwt (confidential clients)
+
+Status: completed
+
+Adds asymmetric client authentication at the token endpoint (RFC 7521 / 7523, OpenID Connect
+Core §9) so confidential (service-to-service) clients can prove their identity instead of relying
+on PKCE alone. Public clients keep `token_endpoint_auth_method = none` (default), so existing
+behavior is unchanged.
+
+- `CustomAuthClient` gains `TokenEndpointAuthMethod` (`None` / `PrivateKeyJwt`) and `JwksJson`
+  (inline public JWKS used to verify assertions; no `jwks_uri` fetching in this iteration).
+- `CustomAuthOptions.ClientAssertionClockSkew` (default 60s) bounds `exp`/`nbf` tolerance.
+- `Vefa.CustomAuth.Tokens.ClientAssertion.ClientAssertionValidator` validates the assertion with
+  `JsonWebTokenHandler`: signature against the client's JWKS, asymmetric algorithms only
+  (`none`/HMAC rejected), `aud` ∈ {issuer, token endpoint}, `iss == sub == client_id`, `exp`/`jti`
+  required.
+- `jti` replay protection via `IClientAssertionReplayCache` (default in-memory
+  `MemoryClientAssertionReplayCache`; swap for a distributed cache when running multiple instances).
+- `ClientAuthenticationService` enforces the method in both token grants; failures return opaque
+  `invalid_client` (401 + `WWW-Authenticate`) with precise server-side diagnostic logs.
+- Discovery advertises `private_key_jwt` and `token_endpoint_auth_signing_alg_values_supported`.
+- EF maps the new columns; Mongo picks them up via `AutoMap`. Admin UI client editor exposes the
+  method selector + JWKS textarea. Sample seeds a `service-client` confidential client (public JWKS
+  only). Covered by unit + integration tests (validator, end-to-end exchange, replay, forged key).
+
+---
+
 ## Recommended First Milestone
 
 The first milestone should be:
