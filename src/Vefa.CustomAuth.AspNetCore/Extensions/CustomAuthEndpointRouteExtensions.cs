@@ -32,7 +32,7 @@ public static class CustomAuthEndpointRouteExtensions
                 id_token_signing_alg_values_supported = new[] { "RS256" },
                 scopes_supported = new[] { "openid", "profile", "email", "offline_access" },
                 token_endpoint_auth_methods_supported = new[] { "none" },
-                code_challenge_methods_supported = new[] { "S256", "plain" },
+                code_challenge_methods_supported = new[] { "S256" },
             });
         });
 

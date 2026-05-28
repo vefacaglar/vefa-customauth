@@ -437,6 +437,74 @@ public sealed class CustomAuthEndpointTests
         Assert.Equal("RS256", key.GetProperty("alg").GetString());
     }
 
+    [Fact]
+    public async Task AuthorizeRejectsPlainPkceMethod()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        var verifier = CreateVerifier();
+        var challenge = Base64UrlEncoder.Encode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
+        var url = "/connect/authorize?client_id=" + Uri.EscapeDataString(ClientId)
+            + "&redirect_uri=" + Uri.EscapeDataString(RedirectUri)
+            + "&response_type=code"
+            + "&scope=" + Uri.EscapeDataString(Scope)
+            + "&code_challenge=" + Uri.EscapeDataString(challenge)
+            + "&code_challenge_method=plain"
+            + "&state=test-state";
+
+        var response = await client.GetAsync(url);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var location = response.Headers.Location;
+        Assert.NotNull(location);
+        Assert.Equal(RedirectUri, location!.GetLeftPart(UriPartial.Path));
+        var query = QueryHelpers.ParseQuery(location.Query);
+        Assert.Equal("invalid_request", query["error"].ToString());
+        Assert.Equal("Only S256 PKCE method is supported.", query["error_description"].ToString());
+    }
+
+    [Fact]
+    public async Task TokenEndpointInvalidClientReturns401WithWwwAuthenticate()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        var response = await client.PostAsync(
+            "/connect/token",
+            new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["grant_type"] = "authorization_code",
+                ["client_id"] = "non-existent-client",
+                ["redirect_uri"] = RedirectUri,
+                ["code"] = "some-code",
+                ["code_verifier"] = "some-verifier",
+            }));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        var authHeader = response.Headers.WwwAuthenticate.ToString();
+        Assert.Equal("Basic realm=\"Vefa.CustomAuth\"", authHeader);
+    }
+
+    [Fact]
+    public async Task RevocationEndpointInvalidClientReturns401WithWwwAuthenticate()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        var response = await client.PostAsync(
+            "/connect/revoke",
+            new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["token"] = "some-token",
+                ["client_id"] = "non-existent-client",
+            }));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        var authHeader = response.Headers.WwwAuthenticate.ToString();
+        Assert.Equal("Basic realm=\"Vefa.CustomAuth\"", authHeader);
+    }
+
     private static async Task<WebApplication> CreateAppAsync(
         TimeProvider? timeProvider = null,
         Action<CustomAuthOptions>? configureOptions = null,

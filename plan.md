@@ -622,18 +622,18 @@ Status: completed (2026-05-28) — All P1 security audit items are fully impleme
 
 ### P2 — hardening
 
-Status: pending — see audit plan §4.1 items 13–21.
+Status: partial — P2-13 (PKCE plain drop), P2-14 (auth code lifetime 60s), and P2-17 (invalid_client 401+WWW-Authenticate) are completed. Other hardening items are pending.
 
 ```text
-P2-13  Drop PKCE plain method from PkceVerifier and discovery
-P2-14  Lower default AuthorizationCodeLifetime to 60s
-P2-15  CSRF tokens on Admin UI mutating endpoints
-P2-16  Restrict /connect/logout state changes to POST + anti-forgery
-P2-17  Token endpoint returns 401 + WWW-Authenticate for invalid_client
-P2-18  Use __Host- cookie prefix + Data Protection wrapper for session cookie
-P2-19  Client redirect URI format validation (RFC 8252 §7.3)
-P2-20  EF Core cleanup service parity with MongoCustomAuthCleanupService
-P2-21  /connect/introspect (deferred per §3 unless a real consumer needs it)
+[x] P2-13  Drop PKCE plain method from PkceVerifier and discovery
+[x] P2-14  Lower default AuthorizationCodeLifetime to 60s
+[ ] P2-15  CSRF tokens on Admin UI mutating endpoints
+[ ] P2-16  Restrict /connect/logout state changes to POST + anti-forgery
+[x] P2-17  Token endpoint returns 401 + WWW-Authenticate for invalid_client
+[ ] P2-18  Use __Host- cookie prefix + Data Protection wrapper for session cookie
+[ ] P2-19  Client redirect URI format validation (RFC 8252 §7.3)
+[ ] P2-20  EF Core cleanup service parity with MongoCustomAuthCleanupService
+[ ] P2-21  /connect/introspect (deferred per §3 unless a real consumer needs it)
 ```
 
 ---

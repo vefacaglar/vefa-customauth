@@ -13,7 +13,7 @@ public sealed class CustomAuthOptions
     /// <summary>
     /// Gets or sets the authorization code lifetime.
     /// </summary>
-    public TimeSpan AuthorizationCodeLifetime { get; set; } = TimeSpan.FromMinutes(2);
+    public TimeSpan AuthorizationCodeLifetime { get; set; } = TimeSpan.FromSeconds(60);
 
     /// <summary>
     /// Gets or sets the access token lifetime.

@@ -69,7 +69,11 @@ internal sealed class TokenEndpointService
         var client = await _clientManager.FindByClientIdAsync(clientId, cancellationToken).ConfigureAwait(false);
         if (client is null)
         {
-            return EndpointResults.OAuthError("invalid_client", "The client is not registered.", StatusCodes.Status401Unauthorized);
+            var headers = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["WWW-Authenticate"] = "Basic realm=\"Vefa.CustomAuth\""
+            };
+            return EndpointResults.OAuthError("invalid_client", "The client is not registered.", StatusCodes.Status401Unauthorized, headers);
         }
 
         var code = await _tokenManager.FindAuthorizationCodeByHashAsync(TokenHasher.Hash(codeValue), cancellationToken).ConfigureAwait(false);
@@ -139,7 +143,11 @@ internal sealed class TokenEndpointService
         var client = await _clientManager.FindByClientIdAsync(clientId, cancellationToken).ConfigureAwait(false);
         if (client is null)
         {
-            return EndpointResults.OAuthError("invalid_client", "The client is not registered.", StatusCodes.Status401Unauthorized);
+            var headers = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["WWW-Authenticate"] = "Basic realm=\"Vefa.CustomAuth\""
+            };
+            return EndpointResults.OAuthError("invalid_client", "The client is not registered.", StatusCodes.Status401Unauthorized, headers);
         }
 
         if (!client.AllowRefreshTokens)

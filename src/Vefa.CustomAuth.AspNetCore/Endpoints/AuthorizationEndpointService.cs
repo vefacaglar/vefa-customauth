@@ -189,7 +189,7 @@ internal sealed class AuthorizationEndpointService
             return EndpointResults.OAuthAuthorizeRedirectError(
                 redirectUri,
                 "invalid_request",
-                "Only S256 and plain PKCE methods are supported.",
+                "Only S256 PKCE method is supported.",
                 state);
         }
 

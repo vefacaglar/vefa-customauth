@@ -6,8 +6,12 @@ namespace Vefa.CustomAuth.AspNetCore.Endpoints;
 
 internal static class EndpointResults
 {
-    public static IResult OAuthError(string error, string? description = null, int statusCode = StatusCodes.Status400BadRequest)
-        => new NoStoreJsonResult(new OAuthErrorResponse(error, description), statusCode);
+    public static IResult OAuthError(
+        string error, 
+        string? description = null, 
+        int statusCode = StatusCodes.Status400BadRequest,
+        IDictionary<string, string>? headers = null)
+        => new NoStoreJsonResult(new OAuthErrorResponse(error, description), statusCode, headers);
 
     /// <summary>
     /// JSON response that sets the RFC 6749 §5.1 cache headers (Cache-Control: no-store, Pragma: no-cache)
@@ -20,17 +24,26 @@ internal static class EndpointResults
     {
         private readonly object _value;
         private readonly int _statusCode;
+        private readonly IDictionary<string, string>? _headers;
 
-        public NoStoreJsonResult(object value, int statusCode)
+        public NoStoreJsonResult(object value, int statusCode, IDictionary<string, string>? headers = null)
         {
             _value = value;
             _statusCode = statusCode;
+            _headers = headers;
         }
 
         public Task ExecuteAsync(HttpContext httpContext)
         {
             httpContext.Response.Headers["Cache-Control"] = "no-store";
             httpContext.Response.Headers["Pragma"] = "no-cache";
+            if (_headers is not null)
+            {
+                foreach (var header in _headers)
+                {
+                    httpContext.Response.Headers[header.Key] = header.Value;
+                }
+            }
             return Results.Json(_value, statusCode: _statusCode).ExecuteAsync(httpContext);
         }
     }
