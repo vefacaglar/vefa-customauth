@@ -5,6 +5,10 @@ artifacts/
 out/
 publish/
 
+# Private signing/client keys — never commit private key material
+*.key
+*.pem
+
 # IDE
 .vs/
 .vscode/
