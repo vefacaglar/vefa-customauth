@@ -67,6 +67,7 @@ static async Task EnsureDatabaseSeededAsync(IServiceProvider services)
         RedirectUris = { "http://localhost:5043/signin-oidc" },
         PostLogoutRedirectUris = { "http://localhost:5043/" },
         AllowedScopes = { "openid", "profile", "email", "offline_access", "sample-api" },
+        AllowRefreshTokens = true,
     });
 
     await context.SaveChangesAsync();
