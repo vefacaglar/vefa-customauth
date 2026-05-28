@@ -48,6 +48,7 @@ public sealed class EfCustomAuthStoreTests
             ClientId = "client-1",
             DisplayName = "Client 1",
             RedirectUris = { "https://client.example.com/callback" },
+            PostLogoutRedirectUris = { "https://client.example.com/signout-callback" },
             AllowedScopes = { "openid" },
         }));
 
@@ -58,6 +59,15 @@ public sealed class EfCustomAuthStoreTests
 
         Assert.NotNull(client);
         Assert.Equal("Client 1", client!.DisplayName);
+        Assert.Equal(["https://client.example.com/callback"], client.RedirectUris);
+        Assert.Equal(["https://client.example.com/signout-callback"], client.PostLogoutRedirectUris);
+        Assert.Equal(["openid"], client.AllowedScopes);
+
+        await using var relationScope = provider.CreateAsyncScope();
+        var context = relationScope.ServiceProvider.GetRequiredService<CustomAuthDbContext>();
+        Assert.Equal(1, await context.ClientRedirectUris.CountAsync());
+        Assert.Equal(1, await context.ClientPostLogoutRedirectUris.CountAsync());
+        Assert.Equal(1, await context.ClientAllowedScopes.CountAsync());
     }
 
     [Fact]

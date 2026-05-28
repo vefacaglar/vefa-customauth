@@ -28,6 +28,9 @@ internal static class MongoCustomAuthClassMap
             {
                 map.AutoMap();
                 map.MapIdMember(c => c.ClientId);
+                map.UnmapMember(c => c.RedirectUriEntries);
+                map.UnmapMember(c => c.PostLogoutRedirectUriEntries);
+                map.UnmapMember(c => c.AllowedScopeEntries);
             });
 
             BsonClassMap.RegisterClassMap<CustomAuthAuthorizationCode>(map =>

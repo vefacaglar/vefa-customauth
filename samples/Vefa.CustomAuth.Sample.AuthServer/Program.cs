@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Vefa.CustomAuth.AdminUI.Extensions;
 using Vefa.CustomAuth.AspNetCore.Extensions;
 using Vefa.CustomAuth.AspNetCore.Stores.InMemory;
 using Vefa.CustomAuth.Core.Services;
@@ -161,6 +162,13 @@ if (useAspNetCoreIdentity)
 
 app.MapGet("/", () => "Vefa.CustomAuth sample auth server. Sign in with demo / demo.");
 app.MapCustomAuthEndpoints();
+app.MapCustomAuthAdminUI(options =>
+{
+    options.PathPrefix = "/customauth";
+    // This sample auth server has no ASP.NET Core application cookie for dashboard users.
+    // Keep anonymous access only for local development; protect this route in production.
+    options.AllowAnonymous = true;
+});
 app.MapRazorPages();
 
 app.Run();

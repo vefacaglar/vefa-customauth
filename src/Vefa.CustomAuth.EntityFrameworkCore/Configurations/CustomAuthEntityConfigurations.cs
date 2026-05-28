@@ -13,28 +13,63 @@ internal sealed class CustomAuthClientConfiguration : IEntityTypeConfiguration<C
         builder.Property(x => x.ClientId).HasMaxLength(200);
         builder.Property(x => x.DisplayName).HasMaxLength(200);
 
-        var listComparer = new Microsoft.EntityFrameworkCore.ChangeTracking.ValueComparer<List<string>>(
-            (a, b) => (a ?? new()).SequenceEqual(b ?? new()),
-            v => v.Aggregate(0, (h, s) => HashCode.Combine(h, s.GetHashCode())),
-            v => v.ToList());
+        builder.Ignore(x => x.RedirectUris);
+        builder.Ignore(x => x.PostLogoutRedirectUris);
+        builder.Ignore(x => x.AllowedScopes);
 
-        builder.Property(x => x.RedirectUris)
-            .HasConversion(v => string.Join('\n', v), v => v.Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList())
-            .Metadata.SetValueComparer(listComparer);
+        builder.HasMany(x => x.RedirectUriEntries)
+            .WithOne()
+            .HasForeignKey(x => x.ClientId)
+            .OnDelete(DeleteBehavior.Cascade);
 
-        builder.Property(x => x.PostLogoutRedirectUris)
-            .HasConversion(v => string.Join('\n', v), v => v.Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList())
-            .Metadata.SetValueComparer(listComparer);
+        builder.HasMany(x => x.PostLogoutRedirectUriEntries)
+            .WithOne()
+            .HasForeignKey(x => x.ClientId)
+            .OnDelete(DeleteBehavior.Cascade);
 
-        builder.Property(x => x.AllowedScopes)
-            .HasConversion(v => string.Join(' ', v), v => v.Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList())
-            .Metadata.SetValueComparer(listComparer);
+        builder.HasMany(x => x.AllowedScopeEntries)
+            .WithOne()
+            .HasForeignKey(x => x.ClientId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         builder.Property(x => x.TokenEndpointAuthMethod)
             .HasConversion<int>();
 
         builder.Property(x => x.JwksJson)
             .HasMaxLength(8000);
+    }
+}
+
+internal sealed class CustomAuthClientRedirectUriConfiguration : IEntityTypeConfiguration<CustomAuthClientRedirectUri>
+{
+    public void Configure(EntityTypeBuilder<CustomAuthClientRedirectUri> builder)
+    {
+        builder.ToTable("CustomAuthClientRedirectUris");
+        builder.HasKey(x => new { x.ClientId, x.Uri });
+        builder.Property(x => x.ClientId).HasMaxLength(200);
+        builder.Property(x => x.Uri).HasMaxLength(2000);
+    }
+}
+
+internal sealed class CustomAuthClientPostLogoutRedirectUriConfiguration : IEntityTypeConfiguration<CustomAuthClientPostLogoutRedirectUri>
+{
+    public void Configure(EntityTypeBuilder<CustomAuthClientPostLogoutRedirectUri> builder)
+    {
+        builder.ToTable("CustomAuthClientPostLogoutRedirectUris");
+        builder.HasKey(x => new { x.ClientId, x.Uri });
+        builder.Property(x => x.ClientId).HasMaxLength(200);
+        builder.Property(x => x.Uri).HasMaxLength(2000);
+    }
+}
+
+internal sealed class CustomAuthClientAllowedScopeConfiguration : IEntityTypeConfiguration<CustomAuthClientAllowedScope>
+{
+    public void Configure(EntityTypeBuilder<CustomAuthClientAllowedScope> builder)
+    {
+        builder.ToTable("CustomAuthClientAllowedScopes");
+        builder.HasKey(x => new { x.ClientId, x.Scope });
+        builder.Property(x => x.ClientId).HasMaxLength(200);
+        builder.Property(x => x.Scope).HasMaxLength(200);
     }
 }
 

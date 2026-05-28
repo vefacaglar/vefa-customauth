@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Vefa.CustomAuth.AdminUI\Vefa.CustomAuth.AdminUI.csproj" />
     <ProjectReference Include="..\..\src\Vefa.CustomAuth.AspNetCore\Vefa.CustomAuth.AspNetCore.csproj" />
     <ProjectReference Include="..\..\src\Vefa.CustomAuth.EntityFrameworkCore\Vefa.CustomAuth.EntityFrameworkCore.csproj" />
   </ItemGroup>

@@ -27,13 +27,17 @@ public sealed class EfCustomAuthClientStore<TContext> : ICustomAuthClientStore
     }
 
     /// <inheritdoc />
-    public Task<CustomAuthClient?> FindByClientIdAsync(string clientId, CancellationToken cancellationToken = default)
+    public async Task<CustomAuthClient?> FindByClientIdAsync(string clientId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(clientId);
 
-        return _context.Set<CustomAuthClient>()
+        var client = await QueryClients()
             .AsNoTracking()
-            .SingleOrDefaultAsync(client => client.ClientId == clientId, cancellationToken);
+            .SingleOrDefaultAsync(client => client.ClientId == clientId, cancellationToken)
+            .ConfigureAwait(false);
+
+        PopulateClientLists(client);
+        return client;
     }
 
     /// <inheritdoc />
@@ -41,7 +45,7 @@ public sealed class EfCustomAuthClientStore<TContext> : ICustomAuthClientStore
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var query = _context.Set<CustomAuthClient>()
+        var query = QueryClients()
             .AsNoTracking()
             .AsQueryable();
 
@@ -64,6 +68,11 @@ public sealed class EfCustomAuthClientStore<TContext> : ICustomAuthClientStore
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
+        foreach (var item in items)
+        {
+            PopulateClientLists(item);
+        }
+
         return new CustomAuthPagedResult<CustomAuthClient>
         {
             Items = items,
@@ -77,13 +86,16 @@ public sealed class EfCustomAuthClientStore<TContext> : ICustomAuthClientStore
         ArgumentNullException.ThrowIfNull(client);
         ArgumentException.ThrowIfNullOrEmpty(client.ClientId);
 
-        var exists = await _context.Set<CustomAuthClient>()
-            .AnyAsync(c => c.ClientId == client.ClientId, cancellationToken)
+        var existing = await QueryClients()
+            .SingleOrDefaultAsync(c => c.ClientId == client.ClientId, cancellationToken)
             .ConfigureAwait(false);
 
-        if (exists)
+        SyncClientRelations(client);
+
+        if (existing is not null)
         {
-            _context.Set<CustomAuthClient>().Update(client);
+            _context.Entry(existing).CurrentValues.SetValues(client);
+            ReplaceClientRelations(existing, client);
         }
         else
         {
@@ -107,5 +119,111 @@ public sealed class EfCustomAuthClientStore<TContext> : ICustomAuthClientStore
             _context.Set<CustomAuthClient>().Remove(client);
             await _context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    private IQueryable<CustomAuthClient> QueryClients()
+    {
+        return _context.Set<CustomAuthClient>()
+            .Include(client => client.RedirectUriEntries)
+            .Include(client => client.PostLogoutRedirectUriEntries)
+            .Include(client => client.AllowedScopeEntries);
+    }
+
+    private static void PopulateClientLists(CustomAuthClient? client)
+    {
+        if (client is null)
+        {
+            return;
+        }
+
+        client.RedirectUris = client.RedirectUriEntries
+            .Select(entry => entry.Uri)
+            .ToList();
+        client.PostLogoutRedirectUris = client.PostLogoutRedirectUriEntries
+            .Select(entry => entry.Uri)
+            .ToList();
+        client.AllowedScopes = client.AllowedScopeEntries
+            .Select(entry => entry.Scope)
+            .ToList();
+    }
+
+    private static void ReplaceClientRelations(CustomAuthClient target, CustomAuthClient source)
+    {
+        target.RedirectUris = source.RedirectUris.ToList();
+        target.PostLogoutRedirectUris = source.PostLogoutRedirectUris.ToList();
+        target.AllowedScopes = source.AllowedScopes.ToList();
+
+        target.RedirectUriEntries.Clear();
+        target.PostLogoutRedirectUriEntries.Clear();
+        target.AllowedScopeEntries.Clear();
+
+        foreach (var entry in source.RedirectUriEntries)
+        {
+            target.RedirectUriEntries.Add(new CustomAuthClientRedirectUri
+            {
+                ClientId = target.ClientId,
+                Uri = entry.Uri
+            });
+        }
+
+        foreach (var entry in source.PostLogoutRedirectUriEntries)
+        {
+            target.PostLogoutRedirectUriEntries.Add(new CustomAuthClientPostLogoutRedirectUri
+            {
+                ClientId = target.ClientId,
+                Uri = entry.Uri
+            });
+        }
+
+        foreach (var entry in source.AllowedScopeEntries)
+        {
+            target.AllowedScopeEntries.Add(new CustomAuthClientAllowedScope
+            {
+                ClientId = target.ClientId,
+                Scope = entry.Scope
+            });
+        }
+    }
+
+    private static void SyncClientRelations(CustomAuthClient client)
+    {
+        client.RedirectUriEntries.Clear();
+        client.PostLogoutRedirectUriEntries.Clear();
+        client.AllowedScopeEntries.Clear();
+
+        foreach (var redirectUri in NormalizeValues(client.RedirectUris))
+        {
+            client.RedirectUriEntries.Add(new CustomAuthClientRedirectUri
+            {
+                ClientId = client.ClientId,
+                Uri = redirectUri
+            });
+        }
+
+        foreach (var postLogoutRedirectUri in NormalizeValues(client.PostLogoutRedirectUris))
+        {
+            client.PostLogoutRedirectUriEntries.Add(new CustomAuthClientPostLogoutRedirectUri
+            {
+                ClientId = client.ClientId,
+                Uri = postLogoutRedirectUri
+            });
+        }
+
+        foreach (var allowedScope in NormalizeValues(client.AllowedScopes))
+        {
+            client.AllowedScopeEntries.Add(new CustomAuthClientAllowedScope
+            {
+                ClientId = client.ClientId,
+                Scope = allowedScope
+            });
+        }
+    }
+
+    private static IEnumerable<string> NormalizeValues(IEnumerable<string>? values)
+    {
+        return (values ?? [])
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value.Trim())
+            .Distinct(StringComparer.Ordinal);
     }
 }

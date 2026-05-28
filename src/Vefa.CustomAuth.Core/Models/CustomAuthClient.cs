@@ -21,14 +21,29 @@ public sealed class CustomAuthClient
     public List<string> RedirectUris { get; set; } = new();
 
     /// <summary>
+    /// Gets the relational redirect URI records for persistence providers that model client URIs as child rows.
+    /// </summary>
+    public List<CustomAuthClientRedirectUri> RedirectUriEntries { get; } = new();
+
+    /// <summary>
     /// Gets or sets the list of allowed post-logout redirect URIs after the user ends their session.
     /// </summary>
     public List<string> PostLogoutRedirectUris { get; set; } = new();
 
     /// <summary>
+    /// Gets the relational post-logout redirect URI records for persistence providers that model client URIs as child rows.
+    /// </summary>
+    public List<CustomAuthClientPostLogoutRedirectUri> PostLogoutRedirectUriEntries { get; } = new();
+
+    /// <summary>
     /// Gets or sets the list of scopes that this client is permitted to request.
     /// </summary>
     public List<string> AllowedScopes { get; set; } = new();
+
+    /// <summary>
+    /// Gets the relational allowed-scope records for persistence providers that model client scopes as child rows.
+    /// </summary>
+    public List<CustomAuthClientAllowedScope> AllowedScopeEntries { get; } = new();
 
     /// <summary>
     /// Gets or sets a value indicating whether this client is required to use Proof Key for Code Exchange (PKCE).
