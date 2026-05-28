@@ -186,6 +186,17 @@ By default, packages are written to `artifacts/packages`. To use a custom output
 scripts/pack-all-packages.sh 1.0.0 ./artifacts
 ```
 
+Push packages to NuGet.org:
+
+```bash
+export NUGET_API_KEY="your-api-key"
+
+dotnet nuget push "artifacts/*.nupkg" \
+  --api-key "$NUGET_API_KEY" \
+  --source https://api.nuget.org/v3/index.json \
+  --skip-duplicate
+```
+
 ## Status
 
 This repository is still in active development. The current implementation is useful for validating the package design and sample SSO flow, but it still needs public API stabilization, documentation, and production hardening before publishing.
