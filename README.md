@@ -172,6 +172,20 @@ dotnet build --no-restore -p:UseSharedCompilation=false -nr:false -v:minimal
 dotnet test --no-build -v:minimal
 ```
 
+## Pack Packages
+
+Create all NuGet packages with an explicit version:
+
+```bash
+scripts/pack-all-packages.sh 1.0.0
+```
+
+By default, packages are written to `artifacts/packages`. To use a custom output directory:
+
+```bash
+scripts/pack-all-packages.sh 1.0.0 ./artifacts
+```
+
 ## Status
 
 This repository is still in active development. The current implementation is useful for validating the package design and sample SSO flow, but it still needs public API stabilization, documentation, and production hardening before publishing.
