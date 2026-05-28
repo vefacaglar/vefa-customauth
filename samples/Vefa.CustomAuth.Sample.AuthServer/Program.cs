@@ -28,7 +28,7 @@ builder.Services.AddVefaCustomAuthEntityFrameworkCore(options =>
 builder.Services.AddRazorPages();
 
 builder.Services
-    .AddVefaCustomAuth(options =>
+    .AddCustomAuth(options =>
     {
         options.Issuer = "http://localhost:5175";
         options.RequireHttps = false;

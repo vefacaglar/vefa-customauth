@@ -19,7 +19,7 @@ public static class CustomAuthServiceCollectionExtensions
     /// <param name="services">The service collection.</param>
     /// <param name="configure">The options configuration callback.</param>
     /// <returns>A builder that can be used to register token signing and stores.</returns>
-    public static CustomAuthBuilder AddVefaCustomAuth(this IServiceCollection services, Action<CustomAuthOptions> configure)
+    public static CustomAuthBuilder AddCustomAuth(this IServiceCollection services, Action<CustomAuthOptions> configure)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configure);
