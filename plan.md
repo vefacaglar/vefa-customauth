@@ -622,7 +622,7 @@ Status: completed (2026-05-28) — All P1 security audit items are fully impleme
 
 ### P2 — hardening
 
-Status: partial — P2-13 (PKCE plain drop), P2-14 (auth code lifetime 60s), P2-15 (Admin UI CSRF), P2-16 (Secure logout with confirmation and anti-forgery), and P2-17 (invalid_client 401+WWW-Authenticate) are completed. Other hardening items are pending.
+Status: partial — P2-13 (PKCE plain drop), P2-14 (auth code lifetime 60s), P2-15 (Admin UI CSRF), P2-16 (Secure logout with confirmation and anti-forgery), P2-17 (invalid_client 401+WWW-Authenticate), P2-18 (SSO Session Cookie Hardening), P2-19 (Client Redirect URI Validation), and P2-20 (EF Core Cleanup Service Optimization) are completed. Other hardening items are pending.
 
 ```text
 [x] P2-13  Drop PKCE plain method from PkceVerifier and discovery
@@ -630,9 +630,9 @@ Status: partial — P2-13 (PKCE plain drop), P2-14 (auth code lifetime 60s), P2-
 [x] P2-15  CSRF tokens on Admin UI mutating endpoints
 [x] P2-16  Restrict /connect/logout state changes to POST + anti-forgery
 [x] P2-17  Token endpoint returns 401 + WWW-Authenticate for invalid_client
-[ ] P2-18  Use __Host- cookie prefix + Data Protection wrapper for session cookie
-[ ] P2-19  Client redirect URI format validation (RFC 8252 §7.3)
-[ ] P2-20  EF Core cleanup service parity with MongoCustomAuthCleanupService
+[x] P2-18  Use __Host- cookie prefix + Data Protection wrapper for session cookie
+[x] P2-19  Client redirect URI format validation (RFC 8252 §7.3)
+[x] P2-20  EF Core cleanup service parity with MongoCustomAuthCleanupService
 [ ] P2-21  /connect/introspect (deferred per §3 unless a real consumer needs it)
 ```
 

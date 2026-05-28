@@ -367,7 +367,7 @@ public sealed class EfCustomAuthStoreTests
     [Fact]
     public async Task CleanupServiceClearsExpiredRecords()
     {
-        await using var provider = CreateProvider();
+        await using var provider = CreateSqliteProvider();
         var timeProvider = new FakeTimeProvider();
         var now = timeProvider.GetUtcNow();
 

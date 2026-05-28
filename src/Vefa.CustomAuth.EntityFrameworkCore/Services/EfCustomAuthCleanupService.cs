@@ -33,40 +33,67 @@ public sealed class EfCustomAuthCleanupService<TContext> : ICustomAuthCleanupSer
     public async Task CleanupAsync(CancellationToken cancellationToken = default)
     {
         var now = _timeProvider.GetUtcNow();
+        var provider = _context.Database.ProviderName;
+        var useMemoryCleanup = provider == "Microsoft.EntityFrameworkCore.InMemory"
+            || provider == "Microsoft.EntityFrameworkCore.Sqlite";
 
-        // 1. Clear expired or consumed authorization codes
         var codesSet = _context.Set<CustomAuthAuthorizationCode>();
-        var expiredCodes = await codesSet
-            .Where(c => c.ExpiresAt <= now || c.ConsumedAt != null)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
-        if (expiredCodes.Count > 0)
-        {
-            codesSet.RemoveRange(expiredCodes);
-        }
-
-        // 2. Clear expired refresh tokens
         var tokensSet = _context.Set<CustomAuthRefreshToken>();
-        var expiredTokens = await tokensSet
-            .Where(t => t.ExpiresAt <= now)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
-        if (expiredTokens.Count > 0)
-        {
-            tokensSet.RemoveRange(expiredTokens);
-        }
-
-        // 3. Clear expired or revoked sessions
         var sessionsSet = _context.Set<CustomAuthSession>();
-        var expiredSessions = await sessionsSet
-            .Where(s => s.ExpiresAt <= now || s.RevokedAt != null)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
-        if (expiredSessions.Count > 0)
-        {
-            sessionsSet.RemoveRange(expiredSessions);
-        }
 
-        await _context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        if (useMemoryCleanup)
+        {
+            var hasChanges = false;
+
+            // 1. Clear expired or consumed authorization codes
+            var expiredCodes = await codesSet.ToListAsync(cancellationToken).ConfigureAwait(false);
+            var toRemoveCodes = expiredCodes.Where(c => c.ExpiresAt <= now || c.ConsumedAt != null).ToList();
+            if (toRemoveCodes.Count > 0)
+            {
+                codesSet.RemoveRange(toRemoveCodes);
+                hasChanges = true;
+            }
+
+            // 2. Clear expired refresh tokens
+            var expiredTokens = await tokensSet.ToListAsync(cancellationToken).ConfigureAwait(false);
+            var toRemoveTokens = expiredTokens.Where(t => t.ExpiresAt <= now).ToList();
+            if (toRemoveTokens.Count > 0)
+            {
+                tokensSet.RemoveRange(toRemoveTokens);
+                hasChanges = true;
+            }
+
+            // 3. Clear expired or revoked sessions
+            var expiredSessions = await sessionsSet.ToListAsync(cancellationToken).ConfigureAwait(false);
+            var toRemoveSessions = expiredSessions.Where(s => s.ExpiresAt <= now || s.RevokedAt != null).ToList();
+            if (toRemoveSessions.Count > 0)
+            {
+                sessionsSet.RemoveRange(toRemoveSessions);
+                hasChanges = true;
+            }
+
+            if (hasChanges)
+            {
+                await _context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            }
+        }
+        else
+        {
+            // For relational production providers (PostgreSQL, SQL Server, MySQL), execute direct bulk deletions
+            await codesSet
+                .Where(c => c.ExpiresAt <= now || c.ConsumedAt != null)
+                .ExecuteDeleteAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            await tokensSet
+                .Where(t => t.ExpiresAt <= now)
+                .ExecuteDeleteAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            await sessionsSet
+                .Where(s => s.ExpiresAt <= now || s.RevokedAt != null)
+                .ExecuteDeleteAsync(cancellationToken)
+                .ConfigureAwait(false);
+        }
     }
 }
