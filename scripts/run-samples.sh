@@ -19,10 +19,31 @@ cleanup() {
   done
 }
 
+free_port() {
+  local port="$1"
+  local pids
+  # lsof returns non-zero when nothing is listening; guard so 'set -e' does not abort.
+  pids="$(lsof -ti "tcp:${port}" -sTCP:LISTEN 2>/dev/null || true)"
+  if [ -n "$pids" ]; then
+    echo "Port ${port} is in use; stopping existing process(es): ${pids//$'\n'/ }"
+    # shellcheck disable=SC2086
+    kill $pids 2>/dev/null || true
+    sleep 1
+    pids="$(lsof -ti "tcp:${port}" -sTCP:LISTEN 2>/dev/null || true)"
+    if [ -n "$pids" ]; then
+      # shellcheck disable=SC2086
+      kill -9 $pids 2>/dev/null || true
+    fi
+  fi
+}
+
 start_app() {
   local name="$1"
   local project="$2"
   local url="$3"
+  local port="${url##*:}"
+
+  free_port "$port"
 
   echo "Starting $name at $url"
   dotnet run --no-build --project "$ROOT_DIR/$project" --launch-profile http &
