@@ -17,6 +17,31 @@ Use this checklist before publishing or deploying a Vefa.CustomAuth server outsi
 - Keep `SameSite=Lax` unless a documented cross-site scenario requires a different value.
 - Set session lifetimes deliberately and align cleanup behavior with those lifetimes.
 
+## Data Protection
+
+The SSO session cookie value is encrypted and signed with ASP.NET Core Data Protection
+(`IDataProtectionProvider`, protector purpose `Vefa.CustomAuth.SessionCookie`). The library consumes
+the host's registered provider; it does not call `AddDataProtection()` itself, so configuring the key
+ring is the host's responsibility.
+
+- Persist the Data Protection key ring to durable, shared storage (file share, Redis, Azure Blob,
+  database) so keys survive restarts and are shared across instances. The default key location is
+  per-machine and may be ephemeral in containers — without persistence, sessions break on restart or
+  scale-out.
+- Encrypt keys at rest (`ProtectKeysWith...`, e.g. a certificate, Azure Key Vault, or DPAPI).
+- Set a stable application name with `SetApplicationName(...)` so all instances derive the same keys.
+- When multiple Vefa.CustomAuth servers must NOT share sessions, give them distinct application names
+  (or separate key rings) so their cookies are not cross-readable.
+
+Example:
+
+```csharp
+builder.Services.AddDataProtection()
+    .SetApplicationName("vefa-customauth-authserver")
+    .PersistKeysToFileSystem(new DirectoryInfo("/var/keys/customauth"))
+    .ProtectKeysWithCertificate(dataProtectionCertificate);
+```
+
 ## Tokens
 
 - Keep authorization code lifetimes short, preferably 60 to 120 seconds.

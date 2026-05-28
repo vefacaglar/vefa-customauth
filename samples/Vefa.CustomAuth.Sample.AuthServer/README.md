@@ -139,6 +139,14 @@ failed login the library redirects to `LoginPath?error=<code>`; the page maps th
 These logs explain *why* an authorize/token/client-auth request was rejected (redirect_uri mismatch,
 PKCE failure, invalid client assertion, etc.) without leaking the reason to the caller.
 
+## Data Protection (session cookie)
+
+The SSO session cookie is encrypted and signed with ASP.NET Core Data Protection. The library uses
+the host's `IDataProtectionProvider`; this sample relies on the framework's default key ring, which is
+fine for local development. In production, configure key persistence and at-rest encryption (and a
+stable application name across instances) — see the
+[production hardening guide](../../docs/production-hardening.md#data-protection).
+
 ## CORS
 
 `AddCors` with an allow-all default policy is enabled for local convenience. Restrict origins in
