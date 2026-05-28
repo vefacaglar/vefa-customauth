@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
-namespace Vefa.CustomAuth.Sample.AuthServer.Pages;
+namespace Vefa.CustomAuth.Sample.AuthServer.Pages.Logout;
 
 /// <summary>
 /// Host-owned logout confirmation page. The library redirects here when an end-session
@@ -9,7 +9,7 @@ namespace Vefa.CustomAuth.Sample.AuthServer.Pages;
 /// <c>/connect/logout</c> (with antiforgery + forwarded parameters) so the library can
 /// terminate the session.
 /// </summary>
-public sealed class LogoutModel : PageModel
+public sealed class IndexModel : PageModel
 {
     [BindProperty(SupportsGet = true, Name = "post_logout_redirect_uri")]
     public string? PostLogoutRedirectUri { get; set; }

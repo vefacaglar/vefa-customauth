@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
-namespace Vefa.CustomAuth.Sample.AuthServer.Pages;
+namespace Vefa.CustomAuth.Sample.AuthServer.Pages.Login;
 
 /// <summary>
 /// Host-owned login page. The form posts to <c>/login</c>, which the library handles
@@ -9,7 +9,7 @@ namespace Vefa.CustomAuth.Sample.AuthServer.Pages;
 /// only renders the form and surfaces error codes the library appended to the query
 /// string after a failed attempt.
 /// </summary>
-public sealed class LoginModel : PageModel
+public sealed class IndexModel : PageModel
 {
     [BindProperty(SupportsGet = true)]
     public string? ReturnUrl { get; set; }

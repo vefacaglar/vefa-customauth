@@ -51,6 +51,7 @@ builder.Services
 var app = builder.Build();
 
 app.UseCors();
+app.UseStaticFiles();
 
 await Vefa.CustomAuth.Sample.AuthServer.Data.DatabaseSeeder.EnsureDatabaseSeededAsync(app.Services);
 
