@@ -6,11 +6,6 @@
 
 <div class="container">
     <div class="header">
-        <div class="icon">
-            <svg viewBox="0 0 24 24">
-                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path>
-            </svg>
-        </div>
         <h1>Reset Password</h1>
         <div class="subtitle">recover access to your account</div>
     </div>
@@ -18,11 +13,6 @@
     @if (!string.IsNullOrEmpty(Model.ErrorMessage))
     {
         <div class="alert-error">
-            <svg viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="12"></line>
-                <line x1="12" y1="16" x2="12.01" y2="16"></line>
-            </svg>
             <span>@Model.ErrorMessage</span>
         </div>
     }
@@ -30,12 +20,7 @@
     @if (!Model.IsIdentityEnabled)
     {
         <div class="alert-error" style="text-align: center; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem;">
-            <svg viewBox="0 0 24 24" style="width: 32px; height: 32px;">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                <line x1="12" y1="9" x2="12" y2="13"></line>
-                <line x1="12" y1="17" x2="12.01" y2="17"></line>
-            </svg>
-            <strong style="font-weight: 600; color: #ffffff;">Password Reset Unavailable</strong>
+            <strong style="font-weight: 400; color: var(--text-primary);">Password Reset Unavailable</strong>
             <span style="font-size: 0.825rem; color: var(--text-secondary);">
                 ASP.NET Core Identity is disabled in this environment. Set <code>UseAspNetCoreIdentity</code> to <code>true</code> in configuration to enable user persistence.
             </span>
@@ -48,27 +33,23 @@
     else if (Model.Submitted)
     {
         <div class="alert-success">
-            <svg viewBox="0 0 24 24">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                <polyline points="22 4 12 14.01 9 11.01"></polyline>
-            </svg>
             <span>Reset instructions sent! Check your inbox (or simulated debug links below).</span>
         </div>
 
         @if (!string.IsNullOrEmpty(Model.ResetLink))
         {
-            <div class="demo-box" style="margin-top: 1.5rem; text-align: left; background: rgba(59, 130, 246, 0.04); border: 1px dashed rgba(59, 130, 246, 0.2); border-radius: 12px; padding: 1rem;">
-                <div class="demo-title" style="color: var(--accent-color); font-weight: 600; margin-bottom: 0.5rem;">🛠️ Local Reset Link (Demo Debug)</div>
-                <p style="font-size: 0.825rem; line-height: 1.45; color: var(--text-secondary); margin: 0 0 0.75rem 0;">
+            <div class="demo-box" style="margin-top: 1rem; text-align: left; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                <div class="demo-title" style="color: var(--accent-color); font-weight: 400; margin-bottom: 0.5rem;">Local Reset Link (Demo Debug)</div>
+                <p style="font-size: 0.78rem; line-height: 1.45; color: var(--text-secondary); margin: 0 0 0.75rem 0;">
                     Since no SMTP email provider is configured in this sample, you can click the generated reset link below to test the password reset flow:
                 </p>
-                <a href="@Model.ResetLink" class="btn-submit" style="display: block; text-align: center; text-decoration: none; margin: 0; padding: 0.75rem; font-size: 0.9rem;">Proceed to Reset Password</a>
+                <a href="@Model.ResetLink" class="btn-submit" style="display: block; text-align: center; text-decoration: none; margin: 0;">Proceed to Reset Password</a>
             </div>
         }
         else
         {
-            <div class="demo-box" style="margin-top: 1.5rem; background: rgba(239, 68, 68, 0.02); border: 1px dashed rgba(239, 68, 68, 0.12);">
-                <div class="demo-title" style="color: var(--error-text);">⚠️ User Not Found</div>
+            <div class="demo-box" style="margin-top: 1rem; text-align: left; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+                <div class="demo-title" style="color: var(--error-text);">User Not Found</div>
                 <p style="font-size: 0.8rem; margin: 0.25rem 0 0 0; color: var(--text-secondary);">
                     No reset link was generated because the email <strong>@Model.Email</strong> is not registered in ASP.NET Core Identity.
                 </p>

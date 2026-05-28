@@ -6,12 +6,6 @@
 
 <div class="container">
     <div class="header">
-        <div class="icon">
-            <svg viewBox="0 0 24 24">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-            </svg>
-        </div>
         <h1>Sign In</h1>
         <div class="subtitle">to continue to your application</div>
     </div>
@@ -19,10 +13,6 @@
     @if (Model.Registered == true)
     {
         <div class="alert-success">
-            <svg viewBox="0 0 24 24">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                <polyline points="22 4 12 14.01 9 11.01"></polyline>
-            </svg>
             <span>Registration successful! You can now sign in below.</span>
         </div>
     }
@@ -30,10 +20,6 @@
     @if (Model.ResetSuccess == true)
     {
         <div class="alert-success">
-            <svg viewBox="0 0 24 24">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                <polyline points="22 4 12 14.01 9 11.01"></polyline>
-            </svg>
             <span>Your password has been successfully reset. You can now sign in below.</span>
         </div>
     }
@@ -41,11 +27,6 @@
     @if (!string.IsNullOrEmpty(Model.ErrorMessage))
     {
         <div class="alert-error">
-            <svg viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="12"></line>
-                <line x1="12" y1="16" x2="12.01" y2="16"></line>
-            </svg>
             <span>@Model.ErrorMessage</span>
         </div>
     }
@@ -81,7 +62,7 @@
     <div class="divider"></div>
 
     <div class="demo-box">
-        <div class="demo-title">💡 Quick Demo Access</div>
+        <div class="demo-title">Quick Demo Access</div>
         Use credentials <span class="demo-badge">demo</span> / <span class="demo-badge">demo</span>
     </div>
 </div>

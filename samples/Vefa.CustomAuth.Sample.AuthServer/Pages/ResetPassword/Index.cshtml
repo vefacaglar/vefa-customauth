@@ -6,14 +6,6 @@
 
 <div class="container">
     <div class="header">
-        <div class="icon">
-            <svg viewBox="0 0 24 24">
-                <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10c0 1.84-.495 3.567-1.36 5.048L19 15"></path>
-                <path d="M22 11.5V17h-5.5"></path>
-                <rect x="8" y="11" width="8" height="5" rx="1"></rect>
-                <path d="M9 11V9a3 3 0 0 1 6 0v2"></path>
-            </svg>
-        </div>
         <h1>Update Password</h1>
         <div class="subtitle">enter your new password below</div>
     </div>
@@ -21,12 +13,7 @@
     @if (!string.IsNullOrEmpty(Model.ErrorMessage) && (string.IsNullOrEmpty(Model.Email) || string.IsNullOrEmpty(Model.Token)))
     {
         <div class="alert-error" style="text-align: center; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem;">
-            <svg viewBox="0 0 24 24" style="width: 32px; height: 32px;">
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="12"></line>
-                <line x1="12" y1="16" x2="12.01" y2="16"></line>
-            </svg>
-            <strong style="font-weight: 600; color: #ffffff;">Link Invalid or Expired</strong>
+            <strong style="font-weight: 400; color: var(--text-primary);">Link Invalid or Expired</strong>
             <span style="font-size: 0.825rem; color: var(--text-secondary);">
                 @Model.ErrorMessage
             </span>
@@ -41,11 +28,6 @@
         @if (!string.IsNullOrEmpty(Model.ErrorMessage))
         {
             <div class="alert-error">
-                <svg viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="12" y1="8" x2="12" y2="12"></line>
-                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                </svg>
                 <span>@Model.ErrorMessage</span>
             </div>
         }
