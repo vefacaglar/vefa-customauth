@@ -62,15 +62,25 @@ public sealed class AdminUIEndpointTests
         Assert.Single(result!.Items);
         Assert.Equal(ClientId, result.Items[0].ClientId);
 
+        // Fetch Antiforgery token
+        var antiforgery = await AntiforgeryTestHelpers.GetAdminUiAntiforgeryAsync(client);
+
         // 2. Create client (POST)
         var newClient = new CustomAuthClient
         {
             ClientId = "new-app",
             DisplayName = "New Application",
             RedirectUris = new List<string> { "https://localhost/callback" },
-            AllowedScopes = new List<string> { "openid" }
+            AllowedScopes = new List<string> { "openid" },
+            AllowRefreshTokens = false
         };
-        var createResponse = await client.PostAsJsonAsync("/customauth/api/clients", newClient);
+        using var createRequest = new HttpRequestMessage(HttpMethod.Post, "/customauth/api/clients")
+        {
+            Content = JsonContent.Create(newClient)
+        };
+        createRequest.Headers.Add("Cookie", antiforgery.Cookie);
+        createRequest.Headers.Add("RequestVerificationToken", antiforgery.RequestToken);
+        var createResponse = await client.SendAsync(createRequest);
         Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
 
         // 3. Verify created client in list (GET)
@@ -80,11 +90,20 @@ public sealed class AdminUIEndpointTests
 
         // 4. Update client (PUT)
         newClient.DisplayName = "Updated Application Name";
-        var updateResponse = await client.PutAsJsonAsync($"/customauth/api/clients/{newClient.ClientId}", newClient);
+        using var updateRequest = new HttpRequestMessage(HttpMethod.Put, $"/customauth/api/clients/{newClient.ClientId}")
+        {
+            Content = JsonContent.Create(newClient)
+        };
+        updateRequest.Headers.Add("Cookie", antiforgery.Cookie);
+        updateRequest.Headers.Add("RequestVerificationToken", antiforgery.RequestToken);
+        var updateResponse = await client.SendAsync(updateRequest);
         Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
 
         // 5. Delete client (DELETE)
-        var deleteResponse = await client.DeleteAsync($"/customauth/api/clients/{newClient.ClientId}");
+        using var deleteRequest = new HttpRequestMessage(HttpMethod.Delete, $"/customauth/api/clients/{newClient.ClientId}");
+        deleteRequest.Headers.Add("Cookie", antiforgery.Cookie);
+        deleteRequest.Headers.Add("RequestVerificationToken", antiforgery.RequestToken);
+        var deleteResponse = await client.SendAsync(deleteRequest);
         Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
 
         // 6. Verify deleted (GET)
@@ -105,6 +124,9 @@ public sealed class AdminUIEndpointTests
         var scopes = await listResponse.Content.ReadFromJsonAsync<List<CustomAuthScope>>();
         Assert.NotNull(scopes);
 
+        // Fetch Antiforgery token
+        var antiforgery = await AntiforgeryTestHelpers.GetAdminUiAntiforgeryAsync(client);
+
         // 2. Create scope (POST)
         var newScope = new CustomAuthScope
         {
@@ -114,7 +136,13 @@ public sealed class AdminUIEndpointTests
             Required = false,
             Emphasize = true
         };
-        var createResponse = await client.PostAsJsonAsync("/customauth/api/scopes", newScope);
+        using var createRequest = new HttpRequestMessage(HttpMethod.Post, "/customauth/api/scopes")
+        {
+            Content = JsonContent.Create(newScope)
+        };
+        createRequest.Headers.Add("Cookie", antiforgery.Cookie);
+        createRequest.Headers.Add("RequestVerificationToken", antiforgery.RequestToken);
+        var createResponse = await client.SendAsync(createRequest);
         Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
 
         // 3. Verify created scope in list
@@ -124,11 +152,20 @@ public sealed class AdminUIEndpointTests
 
         // 4. Update scope (PUT)
         newScope.Description = "Updated description";
-        var updateResponse = await client.PutAsJsonAsync($"/customauth/api/scopes/{newScope.Name}", newScope);
+        using var updateRequest = new HttpRequestMessage(HttpMethod.Put, $"/customauth/api/scopes/{newScope.Name}")
+        {
+            Content = JsonContent.Create(newScope)
+        };
+        updateRequest.Headers.Add("Cookie", antiforgery.Cookie);
+        updateRequest.Headers.Add("RequestVerificationToken", antiforgery.RequestToken);
+        var updateResponse = await client.SendAsync(updateRequest);
         Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
 
         // 5. Delete scope (DELETE)
-        var deleteResponse = await client.DeleteAsync($"/customauth/api/scopes/{newScope.Name}");
+        using var deleteRequest = new HttpRequestMessage(HttpMethod.Delete, $"/customauth/api/scopes/{newScope.Name}");
+        deleteRequest.Headers.Add("Cookie", antiforgery.Cookie);
+        deleteRequest.Headers.Add("RequestVerificationToken", antiforgery.RequestToken);
+        var deleteResponse = await client.SendAsync(deleteRequest);
         Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
     }
 
@@ -172,6 +209,60 @@ public sealed class AdminUIEndpointTests
     }
 
     [Fact]
+    public async Task AdminUiMutatingEndpointsEnforceAntiforgery()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        var newClient = new CustomAuthClient
+        {
+            ClientId = "csrf-fail-app",
+            DisplayName = "CSRF Fail App",
+            RedirectUris = new List<string> { "https://localhost/callback" },
+            AllowedScopes = new List<string> { "openid" },
+            AllowRefreshTokens = false
+        };
+
+        var response = await client.PostAsJsonAsync("/customauth/api/clients", newClient);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.Contains("Antiforgery token validation failed", content);
+    }
+
+    [Fact]
+    public async Task AdminApiRoutesRejectAnonymousRequestsByDefault()
+    {
+        await using var app = await CreateSecuredAppAsync();
+        using var client = app.GetTestClient();
+
+        var paths = new[]
+        {
+            "/customauth/",
+            "/customauth/api/clients?page=1&pageSize=10",
+            "/customauth/api/scopes",
+            "/customauth/api/sessions?page=1&pageSize=10",
+            "/customauth/api/refresh-tokens?page=1&pageSize=10",
+            "/customauth/api/signing-keys",
+            "/customauth/api/audit-logs?page=1&pageSize=10",
+        };
+
+        foreach (var path in paths)
+        {
+            var response = await client.GetAsync(path);
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
+
+        var post = await client.PostAsJsonAsync("/customauth/api/clients", new CustomAuthClient
+        {
+            ClientId = "anon-attempt",
+            RedirectUris = new List<string> { "https://localhost/cb" },
+            AllowedScopes = new List<string> { "openid" },
+            AllowRefreshTokens = false,
+        });
+        Assert.Equal(HttpStatusCode.Unauthorized, post.StatusCode);
+    }
+
+    [Fact]
     public async Task AdminAuditLogEndpointsWorkCorrectly()
     {
         await using var app = await CreateAppAsync();
@@ -208,9 +299,60 @@ public sealed class AdminUIEndpointTests
 
         var app = builder.Build();
         app.MapVefaCustomAuthEndpoints();
-        app.MapVefaCustomAuthAdminUI();
-        
+        app.MapVefaCustomAuthAdminUI(options => options.AllowAnonymous = true);
+
         await app.StartAsync();
         return app;
+    }
+
+    private static async Task<WebApplication> CreateSecuredAppAsync()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services
+            .AddVefaCustomAuth(options =>
+            {
+                options.Issuer = "http://localhost";
+                options.RequireHttps = false;
+            })
+            .AddJwtTokenSigning()
+            .AddInMemoryStores(stores =>
+            {
+                stores.Clients.Add(new CustomAuthClient
+                {
+                    ClientId = ClientId,
+                    DisplayName = "Test Admin Client",
+                    RedirectUris = { "https://localhost/signin-oidc" },
+                    AllowedScopes = { "openid", "profile" },
+                });
+            });
+
+        builder.Services
+            .AddAuthentication("Test")
+            .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, NoOpAuthenticationHandler>("Test", _ => { });
+        builder.Services.AddAuthorization();
+
+        var app = builder.Build();
+        app.UseAuthentication();
+        app.UseAuthorization();
+        app.MapVefaCustomAuthEndpoints();
+        app.MapVefaCustomAuthAdminUI();
+
+        await app.StartAsync();
+        return app;
+    }
+
+    private sealed class NoOpAuthenticationHandler : Microsoft.AspNetCore.Authentication.AuthenticationHandler<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions>
+    {
+        public NoOpAuthenticationHandler(
+            Microsoft.Extensions.Options.IOptionsMonitor<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions> options,
+            Microsoft.Extensions.Logging.ILoggerFactory logger,
+            System.Text.Encodings.Web.UrlEncoder encoder)
+            : base(options, logger, encoder)
+        {
+        }
+
+        protected override Task<Microsoft.AspNetCore.Authentication.AuthenticateResult> HandleAuthenticateAsync()
+            => Task.FromResult(Microsoft.AspNetCore.Authentication.AuthenticateResult.NoResult());
     }
 }

@@ -32,7 +32,7 @@ public static class CustomAuthEndpointRouteExtensions
                 id_token_signing_alg_values_supported = new[] { "RS256" },
                 scopes_supported = new[] { "openid", "profile", "email", "offline_access" },
                 token_endpoint_auth_methods_supported = new[] { "none" },
-                code_challenge_methods_supported = new[] { "S256", "plain" },
+                code_challenge_methods_supported = new[] { "S256" },
             });
         });
 
@@ -65,12 +65,23 @@ public static class CustomAuthEndpointRouteExtensions
             TokenEndpointService service,
             CancellationToken cancellationToken) => service.HandleAsync(request, cancellationToken));
 
-        endpoints.MapGet("/login", (HttpRequest request, LoginEndpointService service) => service.Render(request));
+        var loginGetRoute = endpoints.MapGet("/login", (HttpContext context, LoginEndpointService service) => service.Render(context));
 
-        endpoints.MapPost("/login", (
+        var loginPostRoute = endpoints.MapPost("/login", (
             HttpContext context,
             LoginEndpointService service,
             CancellationToken cancellationToken) => service.HandleAsync(context, cancellationToken));
+
+        var optionsMonitor = (IOptionsMonitor<CustomAuthOptions>?)endpoints.ServiceProvider.GetService(typeof(IOptionsMonitor<CustomAuthOptions>));
+        if (optionsMonitor is not null)
+        {
+            var policyName = optionsMonitor.CurrentValue.LoginRateLimitingPolicyName;
+            if (!string.IsNullOrEmpty(policyName))
+            {
+                loginGetRoute.RequireRateLimiting(policyName);
+                loginPostRoute.RequireRateLimiting(policyName);
+            }
+        }
 
         endpoints.MapGet("/connect/logout", (
             HttpContext context,
@@ -83,6 +94,11 @@ public static class CustomAuthEndpointRouteExtensions
             CancellationToken cancellationToken) => service.HandleAsync(context, cancellationToken));
 
         endpoints.MapGet("/connect/userinfo", (
+            HttpContext context,
+            UserInfoEndpointService service,
+            CancellationToken cancellationToken) => service.HandleAsync(context, cancellationToken));
+
+        endpoints.MapPost("/connect/userinfo", (
             HttpContext context,
             UserInfoEndpointService service,
             CancellationToken cancellationToken) => service.HandleAsync(context, cancellationToken));

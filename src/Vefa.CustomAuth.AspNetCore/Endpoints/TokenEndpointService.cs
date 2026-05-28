@@ -69,7 +69,11 @@ internal sealed class TokenEndpointService
         var client = await _clientManager.FindByClientIdAsync(clientId, cancellationToken).ConfigureAwait(false);
         if (client is null)
         {
-            return EndpointResults.OAuthError("invalid_client", "The client is not registered.", StatusCodes.Status401Unauthorized);
+            var headers = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["WWW-Authenticate"] = "Basic realm=\"Vefa.CustomAuth\""
+            };
+            return EndpointResults.OAuthError("invalid_client", "The client is not registered.", StatusCodes.Status401Unauthorized, headers);
         }
 
         var code = await _tokenManager.FindAuthorizationCodeByHashAsync(TokenHasher.Hash(codeValue), cancellationToken).ConfigureAwait(false);
@@ -92,6 +96,12 @@ internal sealed class TokenEndpointService
             return EndpointResults.OAuthError("invalid_grant", "The authorization code is invalid.");
         }
 
+        var consumed = await _tokenManager.MarkAuthorizationCodeConsumedAsync(code.Id, now, cancellationToken).ConfigureAwait(false);
+        if (!consumed)
+        {
+            return EndpointResults.OAuthError("invalid_grant", "The authorization code is invalid.");
+        }
+
         var issued = await _tokenIssuer.IssueAsync(
             new TokenIssueRequest
             {
@@ -99,11 +109,13 @@ internal sealed class TokenEndpointService
                 ClientId = clientId,
                 Scope = code.Scope,
                 AuthTime = code.CreatedAt,
+                Nonce = code.Nonce,
                 AdditionalClaims = GetAdditionalClaims(user),
             },
             cancellationToken).ConfigureAwait(false);
 
         var absoluteExpiresAt = now.Add(GetRefreshTokenAbsoluteLifetime(client));
+        var includeRefreshToken = CanIssueRefreshToken(client, code.Scope);
         await StoreRefreshTokenAsync(
             issued.RefreshToken,
             client,
@@ -114,9 +126,8 @@ internal sealed class TokenEndpointService
             absoluteExpiresAt,
             now,
             cancellationToken).ConfigureAwait(false);
-        await _tokenManager.MarkAuthorizationCodeConsumedAsync(code.Id, now, cancellationToken).ConfigureAwait(false);
 
-        return Results.Json(CreateTokenResponse(issued, code.Scope, client.AllowRefreshTokens));
+        return EndpointResults.NoStoreJson(CreateTokenResponse(issued, code.Scope, includeRefreshToken));
     }
 
     private async Task<IResult> ExchangeRefreshTokenAsync(IFormCollection form, CancellationToken cancellationToken)
@@ -132,7 +143,11 @@ internal sealed class TokenEndpointService
         var client = await _clientManager.FindByClientIdAsync(clientId, cancellationToken).ConfigureAwait(false);
         if (client is null)
         {
-            return EndpointResults.OAuthError("invalid_client", "The client is not registered.", StatusCodes.Status401Unauthorized);
+            var headers = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["WWW-Authenticate"] = "Basic realm=\"Vefa.CustomAuth\""
+            };
+            return EndpointResults.OAuthError("invalid_client", "The client is not registered.", StatusCodes.Status401Unauthorized, headers);
         }
 
         if (!client.AllowRefreshTokens)
@@ -151,6 +166,11 @@ internal sealed class TokenEndpointService
             return EndpointResults.OAuthError("invalid_grant", "The refresh token is invalid.");
         }
 
+        if (!HasOfflineAccess(refreshToken.Scope))
+        {
+            return EndpointResults.OAuthError("invalid_grant", "The refresh token is invalid.");
+        }
+
         if (refreshToken.ConsumedAt is not null)
         {
             if (_options.CurrentValue.DetectRefreshTokenReuse)
@@ -164,6 +184,19 @@ internal sealed class TokenEndpointService
         var user = await _userStore.FindByIdAsync(refreshToken.UserId, cancellationToken).ConfigureAwait(false);
         if (user is null)
         {
+            return EndpointResults.OAuthError("invalid_grant", "The refresh token is invalid.");
+        }
+
+        var consumed = await _tokenManager.MarkRefreshTokenConsumedAsync(refreshToken.Id, now, cancellationToken).ConfigureAwait(false);
+        if (!consumed)
+        {
+            // Lost the atomic check-and-set. Another caller already consumed this token between our
+            // lookup and our update — treat it as reuse and revoke the chain.
+            if (_options.CurrentValue.DetectRefreshTokenReuse)
+            {
+                await _tokenManager.HandleRefreshTokenReuseAsync(refreshToken, now, cancellationToken).ConfigureAwait(false);
+            }
+
             return EndpointResults.OAuthError("invalid_grant", "The refresh token is invalid.");
         }
 
@@ -187,9 +220,8 @@ internal sealed class TokenEndpointService
             refreshToken.AbsoluteExpiresAt,
             now,
             cancellationToken).ConfigureAwait(false);
-        await _tokenManager.MarkRefreshTokenConsumedAsync(refreshToken.Id, now, cancellationToken).ConfigureAwait(false);
 
-        return Results.Json(CreateTokenResponse(issued, refreshToken.Scope, includeRefreshToken: true));
+        return EndpointResults.NoStoreJson(CreateTokenResponse(issued, refreshToken.Scope, includeRefreshToken: true));
     }
 
     private async Task StoreRefreshTokenAsync(
@@ -203,7 +235,7 @@ internal sealed class TokenEndpointService
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
-        if (!client.AllowRefreshTokens)
+        if (!CanIssueRefreshToken(client, scope))
         {
             return;
         }
@@ -244,6 +276,13 @@ internal sealed class TokenEndpointService
             : _options.CurrentValue.RefreshTokenAbsoluteLifetime;
         return configuredLifetime >= slidingLifetime ? configuredLifetime : slidingLifetime;
     }
+
+    private static bool CanIssueRefreshToken(CustomAuthClient client, string scope)
+        => client.AllowRefreshTokens && HasOfflineAccess(scope);
+
+    private static bool HasOfflineAccess(string scope)
+        => scope.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Contains("offline_access", StringComparer.Ordinal);
 
     private static IReadOnlyDictionary<string, string>? GetAdditionalClaims(CustomAuthUserInfo user)
     {

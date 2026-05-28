@@ -1,3 +1,5 @@
+using System.Net;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
@@ -16,6 +18,7 @@ internal sealed class LogoutEndpointService
     private readonly SessionCookieService _sessionCookieService;
     private readonly ISigningCredentialsProvider _signingCredentialsProvider;
     private readonly IOptionsMonitor<CustomAuthOptions> _options;
+    private readonly IAntiforgery _antiforgery;
     private readonly TimeProvider _timeProvider;
 
     public LogoutEndpointService(
@@ -24,6 +27,7 @@ internal sealed class LogoutEndpointService
         SessionCookieService sessionCookieService,
         ISigningCredentialsProvider signingCredentialsProvider,
         IOptionsMonitor<CustomAuthOptions> options,
+        IAntiforgery antiforgery,
         TimeProvider timeProvider)
     {
         _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
@@ -31,6 +35,7 @@ internal sealed class LogoutEndpointService
         _sessionCookieService = sessionCookieService ?? throw new ArgumentNullException(nameof(sessionCookieService));
         _signingCredentialsProvider = signingCredentialsProvider ?? throw new ArgumentNullException(nameof(signingCredentialsProvider));
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        _antiforgery = antiforgery ?? throw new ArgumentNullException(nameof(antiforgery));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
@@ -38,17 +43,7 @@ internal sealed class LogoutEndpointService
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        // 1. Terminate the active SSO session if present
-        var session = await _sessionCookieService.GetCurrentSessionAsync(context, cancellationToken).ConfigureAwait(false);
-        if (session is not null)
-        {
-            await _sessionManager.RevokeAsync(session.Id, cancellationToken).ConfigureAwait(false);
-        }
-
-        // Clear the cookie anyway
-        _sessionCookieService.SignOut(context);
-
-        // 2. Parse request parameters (accept both GET query and POST form)
+        // 1. Parse request parameters (accept both GET query and POST form)
         var request = context.Request;
         var idTokenHint = request.Method == HttpMethods.Post
             ? request.Form["id_token_hint"].ToString()
@@ -66,8 +61,9 @@ internal sealed class LogoutEndpointService
             ? request.Form["client_id"].ToString()
             : request.Query["client_id"].ToString();
 
-        // 3. Cryptographically validate id_token_hint to discover the client ID
+        // 2. Cryptographically validate id_token_hint to discover the client ID
         string? clientId = null;
+        var hasValidIdTokenHint = false;
         if (!string.IsNullOrWhiteSpace(idTokenHint))
         {
             try
@@ -91,6 +87,7 @@ internal sealed class LogoutEndpointService
                 {
                     clientId = validationResult.ClaimsIdentity.FindFirst("client_id")?.Value
                         ?? validationResult.ClaimsIdentity.FindFirst(JwtRegisteredClaimNames.Aud)?.Value;
+                    hasValidIdTokenHint = !string.IsNullOrWhiteSpace(clientId);
                 }
             }
             catch
@@ -105,7 +102,43 @@ internal sealed class LogoutEndpointService
             clientId = clientIdParam;
         }
 
-        // 4. Validate post_logout_redirect_uri against registered client config
+        // 3. Security checks for GET vs POST
+        if (HttpMethods.IsGet(request.Method))
+        {
+            if (!hasValidIdTokenHint)
+            {
+                // Serve the secure Logout Confirmation page
+                var antiforgeryToken = _antiforgery.GetAndStoreTokens(context);
+                return Results.Content(GetConfirmationHtml(antiforgeryToken.RequestToken!, postLogoutRedirectUri, state, clientIdParam), "text/html");
+            }
+        }
+        else if (HttpMethods.IsPost(request.Method))
+        {
+            if (!hasValidIdTokenHint)
+            {
+                // Validate Antiforgery token
+                try
+                {
+                    await _antiforgery.ValidateRequestAsync(context).ConfigureAwait(false);
+                }
+                catch (AntiforgeryValidationException)
+                {
+                    return Results.BadRequest("Antiforgery token validation failed.");
+                }
+            }
+        }
+
+        // 4. Terminate the active SSO session if present (only when intent is confirmed!)
+        var session = await _sessionCookieService.GetCurrentSessionAsync(context, cancellationToken).ConfigureAwait(false);
+        if (session is not null)
+        {
+            await _sessionManager.RevokeAsync(session.Id, cancellationToken).ConfigureAwait(false);
+        }
+
+        // Clear the cookie anyway
+        _sessionCookieService.SignOut(context);
+
+        // 5. Validate post_logout_redirect_uri against registered client config
         var isValidRedirect = false;
         if (!string.IsNullOrWhiteSpace(clientId) && !string.IsNullOrWhiteSpace(postLogoutRedirectUri))
         {
@@ -126,7 +159,7 @@ internal sealed class LogoutEndpointService
             return Results.Redirect(redirectUrl);
         }
 
-        // 5. Render premium, gorgeous minimalistic success HTML
+        // 6. Render premium, gorgeous minimalistic success HTML
         var html = @"<!DOCTYPE html>
 <html lang=""en"">
 <head>
@@ -250,5 +283,154 @@ internal sealed class LogoutEndpointService
 </html>";
 
         return Results.Content(html, "text/html");
+    }
+
+    private static string GetConfirmationHtml(string antiforgeryToken, string postLogoutRedirectUri, string state, string clientId)
+    {
+        return $@"<!DOCTYPE html>
+<html lang=""en"">
+<head>
+    <meta charset=""UTF-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+    <title>Confirm Log Out</title>
+    <link href=""https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap"" rel=""stylesheet"">
+    <style>
+        :root {{
+            --bg-color: #0d0f12;
+            --card-bg: rgba(20, 24, 33, 0.6);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-primary: #ffffff;
+            --text-secondary: #8e9cae;
+            --accent-color: #3b82f6;
+            --accent-gradient: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+        }}
+        body {{
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: 'Outfit', sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }}
+        .container {{
+            position: relative;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            padding: 3rem 2.5rem;
+            border-radius: 24px;
+            backdrop-filter: blur(16px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            text-align: center;
+            max-width: 420px;
+            width: 90%;
+            z-index: 1;
+        }}
+        .glow {{
+            position: absolute;
+            width: 250px;
+            height: 250px;
+            background: var(--accent-color);
+            filter: blur(120px);
+            opacity: 0.15;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 0;
+        }}
+        .icon {{
+            width: 64px;
+            height: 64px;
+            background: var(--accent-gradient);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.5rem;
+            box-shadow: 0 8px 16px rgba(59, 130, 246, 0.25);
+        }}
+        .icon svg {{
+            width: 32px;
+            height: 32px;
+            fill: none;
+            stroke: #ffffff;
+            stroke-width: 2.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }}
+        h1 {{
+            font-size: 2rem;
+            font-weight: 600;
+            margin: 0 0 0.5rem;
+            letter-spacing: -0.5px;
+        }}
+        p {{
+            color: var(--text-secondary);
+            font-size: 1rem;
+            line-height: 1.6;
+            margin: 0 0 2rem;
+        }}
+        .btn {{
+            display: block;
+            text-decoration: none;
+            padding: 0.8rem 2rem;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+            width: 100%;
+            text-align: center;
+        }}
+        .btn-confirm {{
+            background: var(--accent-gradient);
+            color: #ffffff;
+            border: none;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+            margin-bottom: 0.75rem;
+            cursor: pointer;
+        }}
+        .btn-confirm:hover {{
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+        }}
+        .btn-cancel {{
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }}
+        .btn-cancel:hover {{
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-primary);
+        }}
+    </style>
+</head>
+<body>
+    <div class=""glow""></div>
+    <div class=""container"">
+        <div class=""icon"">
+            <svg viewBox=""0 0 24 24"">
+                <path d=""M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4""></path>
+                <polyline points=""16 17 21 12 16 7""></polyline>
+                <line x1=""21"" y1=""12"" x2=""9"" y2=""12""></line>
+            </svg>
+        </div>
+        <h1>Log Out?</h1>
+        <p>Are you sure you want to end your SSO session? You will be signed out of all connected applications.</p>
+        <form method=""post"" action=""/connect/logout"">
+            <input type=""hidden"" name=""__RequestVerificationToken"" value=""{antiforgeryToken}"" />
+            <input type=""hidden"" name=""post_logout_redirect_uri"" value=""{WebUtility.HtmlEncode(postLogoutRedirectUri)}"" />
+            <input type=""hidden"" name=""state"" value=""{WebUtility.HtmlEncode(state)}"" />
+            <input type=""hidden"" name=""client_id"" value=""{WebUtility.HtmlEncode(clientId)}"" />
+            <button type=""submit"" class=""btn btn-confirm"">Yes, Log Out</button>
+            <a href=""/"" class=""btn btn-cancel"">Cancel</a>
+        </form>
+    </div>
+</body>
+</html>";
     }
 }

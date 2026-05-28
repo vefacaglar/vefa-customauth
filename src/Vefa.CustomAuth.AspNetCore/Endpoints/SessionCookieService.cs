@@ -1,3 +1,8 @@
+using System;
+using System.Security.Cryptography;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using Vefa.CustomAuth.Core.Managers;
@@ -10,25 +15,53 @@ internal sealed class SessionCookieService
 {
     private readonly ICustomAuthSessionManager _sessionManager;
     private readonly IOptionsMonitor<CustomAuthOptions> _options;
+    private readonly IDataProtector _protector;
     private readonly TimeProvider _timeProvider;
 
     public SessionCookieService(
         ICustomAuthSessionManager sessionManager,
         IOptionsMonitor<CustomAuthOptions> options,
+        IDataProtectionProvider dataProtectionProvider,
         TimeProvider timeProvider)
     {
         _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        ArgumentNullException.ThrowIfNull(dataProtectionProvider);
+        _protector = dataProtectionProvider.CreateProtector("Vefa.CustomAuth.SessionCookie");
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+    }
+
+    private string GetEffectiveCookieName()
+    {
+        var options = _options.CurrentValue;
+        if (options.RequireHttps && !options.CookieName.StartsWith("__Host-", StringComparison.Ordinal))
+        {
+            return "__Host-" + options.CookieName.TrimStart('.');
+        }
+        return options.CookieName;
     }
 
     public async Task<CustomAuthSession?> GetCurrentSessionAsync(HttpContext context, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        var options = _options.CurrentValue;
-        if (!context.Request.Cookies.TryGetValue(options.CookieName, out var rawSessionId)
-            || !Guid.TryParse(rawSessionId, out var sessionId))
+        var cookieName = GetEffectiveCookieName();
+        if (!context.Request.Cookies.TryGetValue(cookieName, out var rawCookieValue))
+        {
+            return null;
+        }
+
+        string rawSessionId;
+        try
+        {
+            rawSessionId = _protector.Unprotect(rawCookieValue);
+        }
+        catch (CryptographicException)
+        {
+            return null; // Value was tampered with or key was rotated
+        }
+
+        if (!Guid.TryParse(rawSessionId, out var sessionId))
         {
             return null;
         }
@@ -49,15 +82,19 @@ internal sealed class SessionCookieService
         ArgumentNullException.ThrowIfNull(session);
 
         var options = _options.CurrentValue;
+        var protectedValue = _protector.Protect(session.Id.ToString("D"));
+        var cookieName = GetEffectiveCookieName();
+
         context.Response.Cookies.Append(
-            options.CookieName,
-            session.Id.ToString("D"),
+            cookieName,
+            protectedValue,
             new CookieOptions
             {
                 HttpOnly = true,
                 Secure = options.RequireHttps,
                 SameSite = SameSiteMode.Lax,
                 Expires = session.ExpiresAt,
+                Path = "/"
             });
     }
 
@@ -66,13 +103,16 @@ internal sealed class SessionCookieService
         ArgumentNullException.ThrowIfNull(context);
 
         var options = _options.CurrentValue;
+        var cookieName = GetEffectiveCookieName();
+
         context.Response.Cookies.Delete(
-            options.CookieName,
+            cookieName,
             new CookieOptions
             {
                 HttpOnly = true,
                 Secure = options.RequireHttps,
                 SameSite = SameSiteMode.Lax,
+                Path = "/"
             });
     }
 }

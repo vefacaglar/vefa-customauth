@@ -147,14 +147,22 @@ window.adminApp = function() {
             if (idx > -1) {
                 // Remove if not required OIDC scope
                 if (scopeName === 'openid') return;
+                if (scopeName === 'offline_access') this.form.allowRefreshTokens = false;
                 this.form.allowedScopes.splice(idx, 1);
             } else {
                 this.form.allowedScopes.push(scopeName);
+                if (scopeName === 'offline_access') this.form.allowRefreshTokens = true;
             }
         },
 
         isScopeSelected(scopeName) {
             return this.form.allowedScopes.includes(scopeName);
+        },
+
+        toggleRefreshTokens() {
+            if (this.form.allowRefreshTokens && !this.form.allowedScopes.includes('offline_access')) {
+                this.form.allowedScopes.push('offline_access');
+            }
         },
 
         // Submit Form
@@ -178,7 +186,10 @@ window.adminApp = function() {
 
                 const response = await fetch(url, {
                     method: method,
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    },
                     body: JSON.stringify(clientData)
                 });
 
@@ -203,7 +214,10 @@ window.adminApp = function() {
 
             try {
                 const response = await fetch(`${apiBase}/${encodeURIComponent(clientId)}`, {
-                    method: 'DELETE'
+                    method: 'DELETE',
+                    headers: {
+                        'RequestVerificationToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    }
                 });
 
                 if (!response.ok) throw new Error('Failed to delete client.');
@@ -366,7 +380,10 @@ builder.Services
 
                 const response = await fetch(url, {
                     method: method,
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'RequestVerificationToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    },
                     body: JSON.stringify(scopeData)
                 });
 
@@ -388,7 +405,12 @@ builder.Services
             if (!confirm(`Are you sure you want to delete scope '${name}'?`)) return;
 
             try {
-                const response = await fetch(`${scopesApiBase}/${encodeURIComponent(name)}`, { method: 'DELETE' });
+                const response = await fetch(`${scopesApiBase}/${encodeURIComponent(name)}`, { 
+                    method: 'DELETE',
+                    headers: {
+                        'RequestVerificationToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    }
+                });
                 if (!response.ok) throw new Error('Failed to delete scope.');
                 this.showToast('Scope deleted.');
                 await this.loadScopes();
@@ -416,7 +438,12 @@ builder.Services
             if (!confirm('Are you sure you want to revoke this session?')) return;
 
             try {
-                const response = await fetch(`${sessionsApiBase}/${sessionId}/revoke`, { method: 'POST' });
+                const response = await fetch(`${sessionsApiBase}/${sessionId}/revoke`, { 
+                    method: 'POST',
+                    headers: {
+                        'RequestVerificationToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    }
+                });
                 if (!response.ok) throw new Error('Failed to revoke session.');
                 this.showToast('Session revoked.');
                 await this.loadSessions();
@@ -443,7 +470,12 @@ builder.Services
             if (!confirm('Are you sure you want to revoke this refresh token?')) return;
 
             try {
-                const response = await fetch(`${tokensApiBase}/${tokenId}/revoke`, { method: 'POST' });
+                const response = await fetch(`${tokensApiBase}/${tokenId}/revoke`, { 
+                    method: 'POST',
+                    headers: {
+                        'RequestVerificationToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    }
+                });
                 if (!response.ok) throw new Error('Failed to revoke refresh token.');
                 this.showToast('Refresh token revoked.');
                 await this.loadRefreshTokens();

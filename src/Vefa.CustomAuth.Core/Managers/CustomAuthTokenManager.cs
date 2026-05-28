@@ -56,14 +56,18 @@ public sealed class CustomAuthTokenManager : ICustomAuthTokenManager
     }
 
     /// <inheritdoc/>
-    public async Task MarkAuthorizationCodeConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default)
+    public async Task<bool> MarkAuthorizationCodeConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default)
     {
         if (id == Guid.Empty)
         {
             throw new ArgumentException("Code ID cannot be empty.", nameof(id));
         }
 
-        await _codeStore.MarkConsumedAsync(id, consumedAt, cancellationToken).ConfigureAwait(false);
+        var consumed = await _codeStore.MarkConsumedAsync(id, consumedAt, cancellationToken).ConfigureAwait(false);
+        if (!consumed)
+        {
+            return false;
+        }
 
         await _auditLogStore.StoreAsync(new CustomAuthAuditLog
         {
@@ -73,6 +77,8 @@ public sealed class CustomAuthTokenManager : ICustomAuthTokenManager
             TargetId = id.ToString(),
             Timestamp = _timeProvider.GetUtcNow()
         }, cancellationToken).ConfigureAwait(false);
+
+        return true;
     }
 
     /// <inheritdoc/>
@@ -103,14 +109,18 @@ public sealed class CustomAuthTokenManager : ICustomAuthTokenManager
     }
 
     /// <inheritdoc/>
-    public async Task MarkRefreshTokenConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default)
+    public async Task<bool> MarkRefreshTokenConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default)
     {
         if (id == Guid.Empty)
         {
             throw new ArgumentException("Token ID cannot be empty.", nameof(id));
         }
 
-        await _refreshTokenStore.MarkConsumedAsync(id, consumedAt, cancellationToken).ConfigureAwait(false);
+        var consumed = await _refreshTokenStore.MarkConsumedAsync(id, consumedAt, cancellationToken).ConfigureAwait(false);
+        if (!consumed)
+        {
+            return false;
+        }
 
         await _auditLogStore.StoreAsync(new CustomAuthAuditLog
         {
@@ -120,6 +130,8 @@ public sealed class CustomAuthTokenManager : ICustomAuthTokenManager
             TargetId = id.ToString(),
             Timestamp = _timeProvider.GetUtcNow()
         }, cancellationToken).ConfigureAwait(false);
+
+        return true;
     }
 
     /// <inheritdoc/>
@@ -140,6 +152,35 @@ public sealed class CustomAuthTokenManager : ICustomAuthTokenManager
             TargetId = id.ToString(),
             Timestamp = _timeProvider.GetUtcNow()
         }, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc/>
+    public async Task RevokeRefreshTokenChainAsync(CustomAuthRefreshToken token, DateTimeOffset revokedAt, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(token);
+        if (token.Id == Guid.Empty)
+        {
+            throw new ArgumentException("Token ID cannot be empty.", nameof(token));
+        }
+
+        if (token.SessionId is Guid sessionId)
+        {
+            await _refreshTokenStore.RevokeBySessionIdAsync(sessionId, revokedAt, cancellationToken).ConfigureAwait(false);
+
+            await _auditLogStore.StoreAsync(new CustomAuthAuditLog
+            {
+                Id = Guid.NewGuid(),
+                Action = "RefreshTokenChainRevoked",
+                TargetType = "Session",
+                TargetId = sessionId.ToString(),
+                ActorUserId = token.UserId,
+                Timestamp = revokedAt
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            await RevokeRefreshTokenAsync(token.Id, revokedAt, cancellationToken).ConfigureAwait(false);
+        }
     }
 
     /// <inheritdoc/>

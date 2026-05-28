@@ -49,8 +49,11 @@ var app = builder.Build();
 // Redirect root to the Admin UI
 app.MapGet("/", () => Results.Redirect("/customauth"));
 
-// Map SSO protocol endpoints and the embedded Admin UI
+// Map SSO protocol endpoints and the embedded Admin UI.
+// AllowAnonymous is enabled here for the local sample only; production deployments
+// must either wire RequireAuthorization through CustomAuthAdminUIOptions.AuthorizationPolicyName
+// or rely on the application's default authorization policy.
 app.MapVefaCustomAuthEndpoints();
-app.MapVefaCustomAuthAdminUI();
+app.MapVefaCustomAuthAdminUI(options => options.AllowAnonymous = true);
 
 app.Run();

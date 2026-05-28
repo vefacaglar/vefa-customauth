@@ -28,13 +28,22 @@ public sealed class InMemoryAuthorizationCodeStore : ICustomAuthAuthorizationCod
         return Task.FromResult(code);
     }
 
-    public Task MarkConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default)
+    public Task<bool> MarkConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default)
     {
-        if (_codesById.TryGetValue(id, out var code))
+        if (!_codesById.TryGetValue(id, out var code))
         {
-            code.ConsumedAt = consumedAt;
+            return Task.FromResult(false);
         }
 
-        return Task.CompletedTask;
+        lock (code)
+        {
+            if (code.ConsumedAt is not null)
+            {
+                return Task.FromResult(false);
+            }
+
+            code.ConsumedAt = consumedAt;
+            return Task.FromResult(true);
+        }
     }
 }

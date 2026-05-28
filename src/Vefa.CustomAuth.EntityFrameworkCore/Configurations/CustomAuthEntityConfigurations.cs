@@ -45,6 +45,7 @@ internal sealed class CustomAuthAuthorizationCodeConfiguration : IEntityTypeConf
         builder.Property(x => x.UserId).HasMaxLength(200);
         builder.Property(x => x.RedirectUri).HasMaxLength(2000);
         builder.Property(x => x.Scope).HasMaxLength(2000);
+        builder.Property(x => x.Nonce).HasMaxLength(512);
     }
 }
 

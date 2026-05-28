@@ -169,6 +169,8 @@ Refresh tokens are opaque values stored only as hashes. Each refresh token belon
 
 Refresh token rotation is enabled by default: using a refresh token consumes it and issues a replacement token. The replacement token keeps the original token chain's absolute expiration and records the consumed token as its parent.
 
+A client can receive refresh tokens only when refresh tokens are enabled for that client and the granted scopes include `offline_access`. If `offline_access` is not requested or not allowed for the client, the token response does not include a refresh token.
+
 `RefreshTokenLifetime` controls the sliding lifetime. `RefreshTokenAbsoluteLifetime` controls the maximum lifetime of the token chain. Client-level `RefreshTokenLifetimeSeconds` and `RefreshTokenAbsoluteLifetimeSeconds` override the global options when set.
 
 If a consumed refresh token is used again, Vefa.CustomAuth records `RefreshTokenReuseDetected` and revokes the session-bound refresh token chain when possible.

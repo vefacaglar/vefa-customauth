@@ -44,10 +44,12 @@ public sealed class MongoCustomAuthAuthorizationCodeStore : ICustomAuthAuthoriza
     }
 
     /// <inheritdoc/>
-    public async Task MarkConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default)
+    public async Task<bool> MarkConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default)
     {
-        var filter = Builders<CustomAuthAuthorizationCode>.Filter.Eq(c => c.Id, id);
+        var filter = Builders<CustomAuthAuthorizationCode>.Filter.Eq(c => c.Id, id)
+            & Builders<CustomAuthAuthorizationCode>.Filter.Eq(c => c.ConsumedAt, null);
         var update = Builders<CustomAuthAuthorizationCode>.Update.Set(c => c.ConsumedAt, consumedAt);
-        await _collection.UpdateOneAsync(filter, update, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var result = await _collection.UpdateOneAsync(filter, update, cancellationToken: cancellationToken).ConfigureAwait(false);
+        return result.IsAcknowledged && result.ModifiedCount == 1;
     }
 }
