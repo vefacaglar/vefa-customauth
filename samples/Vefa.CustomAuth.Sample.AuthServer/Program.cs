@@ -40,7 +40,8 @@ if (useAspNetCoreIdentity)
             options.Password.RequireNonAlphanumeric = false;
         })
         .AddRoles<IdentityRole>()
-        .AddEntityFrameworkStores<SampleIdentityDbContext>();
+        .AddEntityFrameworkStores<SampleIdentityDbContext>()
+        .AddDefaultTokenProviders();
 
     builder.Services.AddScoped<ICustomAuthUserStore, IdentityUserStore>();
 }

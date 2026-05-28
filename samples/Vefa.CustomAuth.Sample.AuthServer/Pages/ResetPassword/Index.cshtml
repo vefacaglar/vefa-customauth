@@ -1,0 +1,79 @@
+@page
+@model Vefa.CustomAuth.Sample.AuthServer.Pages.ResetPassword.IndexModel
+@{
+    ViewData["Title"] = "Update Password";
+}
+
+<div class="container">
+    <div class="header">
+        <div class="icon">
+            <svg viewBox="0 0 24 24">
+                <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10c0 1.84-.495 3.567-1.36 5.048L19 15"></path>
+                <path d="M22 11.5V17h-5.5"></path>
+                <rect x="8" y="11" width="8" height="5" rx="1"></rect>
+                <path d="M9 11V9a3 3 0 0 1 6 0v2"></path>
+            </svg>
+        </div>
+        <h1>Update Password</h1>
+        <div class="subtitle">enter your new password below</div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(Model.ErrorMessage) && (string.IsNullOrEmpty(Model.Email) || string.IsNullOrEmpty(Model.Token)))
+    {
+        <div class="alert-error" style="text-align: center; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem;">
+            <svg viewBox="0 0 24 24" style="width: 32px; height: 32px;">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <strong style="font-weight: 600; color: #ffffff;">Link Invalid or Expired</strong>
+            <span style="font-size: 0.825rem; color: var(--text-secondary);">
+                @Model.ErrorMessage
+            </span>
+        </div>
+
+        <div class="auth-footer">
+            <a href="/ForgotPassword?ReturnUrl=@System.Net.WebUtility.UrlEncode(Model.ReturnUrl ?? "")" class="auth-link">Request a New Link</a>
+        </div>
+    }
+    else
+    {
+        @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+        {
+            <div class="alert-error">
+                <svg viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <span>@Model.ErrorMessage</span>
+            </div>
+        }
+
+        <form method="post">
+            <input type="hidden" name="Email" value="@Model.Email" />
+            <input type="hidden" name="Token" value="@Model.Token" />
+            <input type="hidden" name="ReturnUrl" value="@Model.ReturnUrl" />
+
+            <div class="form-group">
+                <label class="form-label" for="newPassword">New Password</label>
+                <div class="input-wrapper">
+                    <input class="input-control" id="newPassword" name="NewPassword" type="password" placeholder="Min. 4 characters" required autofocus />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="confirmNewPassword">Confirm New Password</label>
+                <div class="input-wrapper">
+                    <input class="input-control" id="confirmNewPassword" name="ConfirmNewPassword" type="password" placeholder="Confirm your new password" required />
+                </div>
+            </div>
+
+            <button type="submit" class="btn-submit">Update Password</button>
+        </form>
+
+        <div class="auth-footer">
+            <a href="/Login?ReturnUrl=@System.Net.WebUtility.UrlEncode(Model.ReturnUrl ?? "")" class="auth-link">Cancel and Sign In</a>
+        </div>
+    }
+</div>

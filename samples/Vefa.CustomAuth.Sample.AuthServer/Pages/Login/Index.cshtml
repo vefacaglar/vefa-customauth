@@ -27,6 +27,17 @@
         </div>
     }
 
+    @if (Model.ResetSuccess == true)
+    {
+        <div class="alert-success">
+            <svg viewBox="0 0 24 24">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+            <span>Your password has been successfully reset. You can now sign in below.</span>
+        </div>
+    }
+
     @if (!string.IsNullOrEmpty(Model.ErrorMessage))
     {
         <div class="alert-error">
@@ -51,7 +62,10 @@
         </div>
 
         <div class="form-group">
-            <label class="form-label" for="password">Password</label>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <label class="form-label" style="margin-bottom: 0;" for="password">Password</label>
+                <a href="/ForgotPassword?ReturnUrl=@System.Net.WebUtility.UrlEncode(Model.ReturnUrl ?? "")" class="auth-link" style="font-size: 0.8rem;">Forgot password?</a>
+            </div>
             <div class="input-wrapper">
                 <input class="input-control" id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" required />
             </div>
