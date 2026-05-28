@@ -70,6 +70,20 @@ public sealed class CustomAuthOptionsValidator : IValidateOptions<CustomAuthOpti
             failures.Add($"{nameof(options.LoginPath)} must start with '/'.");
         }
 
+        if (string.IsNullOrWhiteSpace(options.LogoutPath))
+        {
+            failures.Add($"{nameof(options.LogoutPath)} must not be empty.");
+        }
+        else if (!options.LogoutPath.StartsWith('/'))
+        {
+            failures.Add($"{nameof(options.LogoutPath)} must start with '/'.");
+        }
+
+        if (string.IsNullOrWhiteSpace(options.PostLogoutRedirectUri))
+        {
+            failures.Add($"{nameof(options.PostLogoutRedirectUri)} must not be empty.");
+        }
+
         if (string.IsNullOrWhiteSpace(options.CookieName))
         {
             failures.Add($"{nameof(options.CookieName)} must not be empty.");

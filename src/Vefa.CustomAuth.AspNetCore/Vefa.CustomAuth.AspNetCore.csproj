@@ -16,10 +16,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Resources\*.html" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\Vefa.CustomAuth.Core\Vefa.CustomAuth.Core.csproj" />
     <ProjectReference Include="..\Vefa.CustomAuth.Tokens\Vefa.CustomAuth.Tokens.csproj" />
   </ItemGroup>

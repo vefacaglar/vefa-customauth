@@ -1,6 +1,6 @@
-using System.Net;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Options;
 using Vefa.CustomAuth.Core.Managers;
 using Vefa.CustomAuth.Core.Models;
@@ -10,6 +10,11 @@ using Vefa.CustomAuth.Core.Stores;
 
 namespace Vefa.CustomAuth.AspNetCore.Endpoints;
 
+/// <summary>
+/// Handles the credential-validation half of the login flow. UI rendering is the host's
+/// responsibility; this service consumes a POST submission, validates antiforgery,
+/// authenticates the user, opens an SSO session, and redirects.
+/// </summary>
 internal sealed class LoginEndpointService
 {
     private readonly ICustomAuthUserStore _userStore;
@@ -38,18 +43,14 @@ internal sealed class LoginEndpointService
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
-    public IResult Render(HttpContext context)
-    {
-        ArgumentNullException.ThrowIfNull(context);
-
-        var returnUrl = context.Request.Query["returnUrl"].ToString();
-        var tokens = _antiforgery.GetAndStoreTokens(context);
-        return Results.Content(RenderForm(returnUrl, _options.CurrentValue.LoginPath, tokens, null), "text/html");
-    }
-
     public async Task<IResult> HandleAsync(HttpContext context, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
+
+        var form = await context.Request.ReadFormAsync(cancellationToken).ConfigureAwait(false);
+        var userName = form["userName"].ToString();
+        var password = form["password"].ToString();
+        var returnUrl = form["returnUrl"].ToString();
 
         try
         {
@@ -57,36 +58,24 @@ internal sealed class LoginEndpointService
         }
         catch (AntiforgeryValidationException)
         {
-            var failedTokens = _antiforgery.GetAndStoreTokens(context);
-            return Results.Content(
-                RenderForm(string.Empty, _options.CurrentValue.LoginPath, failedTokens, "Your session has expired. Please try again."),
-                "text/html",
-                statusCode: StatusCodes.Status400BadRequest);
+            return RedirectToLoginPage(returnUrl, "antiforgery_failed");
         }
-
-        var form = await context.Request.ReadFormAsync(cancellationToken).ConfigureAwait(false);
-        var userName = form["userName"].ToString();
-        var password = form["password"].ToString();
-        var returnUrl = form["returnUrl"].ToString();
 
         if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(password))
         {
-            var refreshedTokens = _antiforgery.GetAndStoreTokens(context);
-            return Results.Content(RenderForm(returnUrl, _options.CurrentValue.LoginPath, refreshedTokens, "Username and password are required."), "text/html", statusCode: StatusCodes.Status400BadRequest);
+            return RedirectToLoginPage(returnUrl, "missing_credentials");
         }
 
         if (await _loginAttemptTracker.IsBlockedAsync(userName, cancellationToken).ConfigureAwait(false))
         {
-            var refreshedTokens = _antiforgery.GetAndStoreTokens(context);
-            return Results.Content(RenderForm(returnUrl, _options.CurrentValue.LoginPath, refreshedTokens, "This account is temporarily locked due to too many failed login attempts."), "text/html", statusCode: StatusCodes.Status423Locked);
+            return RedirectToLoginPage(returnUrl, "account_locked");
         }
 
         var user = await _userStore.ValidateCredentialsAsync(userName, password, cancellationToken).ConfigureAwait(false);
         if (user is null)
         {
             await _loginAttemptTracker.RecordFailureAsync(userName, cancellationToken).ConfigureAwait(false);
-            var refreshedTokens = _antiforgery.GetAndStoreTokens(context);
-            return Results.Content(RenderForm(returnUrl, _options.CurrentValue.LoginPath, refreshedTokens, "Invalid username or password."), "text/html", statusCode: StatusCodes.Status401Unauthorized);
+            return RedirectToLoginPage(returnUrl, "invalid_credentials");
         }
 
         await _loginAttemptTracker.RecordSuccessAsync(userName, cancellationToken).ConfigureAwait(false);
@@ -106,44 +95,18 @@ internal sealed class LoginEndpointService
         return Results.Redirect(IsLocalReturnUrl(returnUrl) ? returnUrl : "/");
     }
 
-    private static string LoadTemplate(string resourceName)
+    private IResult RedirectToLoginPage(string returnUrl, string errorCode)
     {
-        var assembly = typeof(LoginEndpointService).Assembly;
-        using var stream = assembly.GetManifestResourceStream($"Vefa.CustomAuth.AspNetCore.Resources.{resourceName}");
-        if (stream is null)
+        var query = new Dictionary<string, string?>
         {
-            throw new InvalidOperationException($"Embedded resource '{resourceName}' not found.");
+            ["error"] = errorCode,
+        };
+        if (!string.IsNullOrWhiteSpace(returnUrl))
+        {
+            query["returnUrl"] = returnUrl;
         }
-        using var reader = new System.IO.StreamReader(stream);
-        return reader.ReadToEnd();
-    }
 
-    private static string RenderForm(string returnUrl, string loginPath, AntiforgeryTokenSet tokens, string? error)
-    {
-        var encodedReturnUrl = WebUtility.HtmlEncode(returnUrl);
-        var encodedLoginPath = WebUtility.HtmlEncode(loginPath);
-        var encodedFormFieldName = WebUtility.HtmlEncode(tokens.FormFieldName);
-        var encodedRequestToken = WebUtility.HtmlEncode(tokens.RequestToken);
-        var errorMarkup = string.IsNullOrWhiteSpace(error)
-            ? string.Empty
-            : $$"""
-              <div class="alert-error">
-                  <svg viewBox="0 0 24 24">
-                      <circle cx="12" cy="12" r="10"></circle>
-                      <line x1="12" y1="8" x2="12" y2="12"></line>
-                      <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                  </svg>
-                  <span>{{WebUtility.HtmlEncode(error)}}</span>
-              </div>
-              """;
-
-        var template = LoadTemplate("login.html");
-        return template
-            .Replace("{{encodedReturnUrl}}", encodedReturnUrl, StringComparison.Ordinal)
-            .Replace("{{encodedLoginPath}}", encodedLoginPath, StringComparison.Ordinal)
-            .Replace("{{encodedFormFieldName}}", encodedFormFieldName, StringComparison.Ordinal)
-            .Replace("{{encodedRequestToken}}", encodedRequestToken, StringComparison.Ordinal)
-            .Replace("{{errorMarkup}}", errorMarkup, StringComparison.Ordinal);
+        return Results.Redirect(QueryHelpers.AddQueryString(_options.CurrentValue.LoginPath, query));
     }
 
     private static bool IsLocalReturnUrl(string returnUrl)

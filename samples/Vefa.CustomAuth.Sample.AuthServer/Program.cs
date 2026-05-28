@@ -32,7 +32,9 @@ builder.Services
     {
         options.Issuer = "http://localhost:5175";
         options.RequireHttps = false;
-        options.MapDefaultLoginEndpoint = false; // Disable built-in login UI to use Razor Pages!
+        // LoginPath / LogoutPath point at this host's Razor Pages; the library only
+        // handles POST /login (credential validation) and /connect/logout (RP-initiated
+        // logout). UI rendering is fully owned by the host.
     })
     .AddJwtTokenSigning();
 

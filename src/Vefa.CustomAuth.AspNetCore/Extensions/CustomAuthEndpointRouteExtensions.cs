@@ -8,8 +8,19 @@ using Vefa.CustomAuth.Tokens.Signing;
 
 namespace Vefa.CustomAuth.AspNetCore.Extensions;
 
+/// <summary>
+/// Maps the Vefa.CustomAuth OAuth2 / OIDC protocol endpoints onto an
+/// <see cref="IEndpointRouteBuilder"/>. The library deliberately does not ship a
+/// rendered login or logout UI — the host owns those pages and points at them via
+/// <see cref="CustomAuthOptions.LoginPath"/> and <see cref="CustomAuthOptions.LogoutPath"/>.
+/// </summary>
 public static class CustomAuthEndpointRouteExtensions
 {
+    /// <summary>
+    /// Maps the protocol endpoints: discovery, JWKS, authorize, token, userinfo,
+    /// revoke, RP-initiated logout, and the credential-validation POST handler for
+    /// <see cref="CustomAuthOptions.LoginPath"/>.
+    /// </summary>
     public static IEndpointRouteBuilder MapVefaCustomAuthEndpoints(this IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
@@ -68,35 +79,20 @@ public static class CustomAuthEndpointRouteExtensions
         var optionsMonitor = (IOptionsMonitor<CustomAuthOptions>?)endpoints.ServiceProvider.GetService(typeof(IOptionsMonitor<CustomAuthOptions>));
         var options = optionsMonitor?.CurrentValue ?? new CustomAuthOptions();
 
-        if (options.MapDefaultLoginEndpoint)
-        {
-            var loginGetRoute = endpoints.MapGet(options.LoginPath, (HttpContext context, LoginEndpointService service) => service.Render(context));
+        endpoints.MapPost(options.LoginPath, (
+            HttpContext context,
+            LoginEndpointService service,
+            CancellationToken cancellationToken) => service.HandleAsync(context, cancellationToken));
 
-            var loginPostRoute = endpoints.MapPost(options.LoginPath, (
-                HttpContext context,
-                LoginEndpointService service,
-                CancellationToken cancellationToken) => service.HandleAsync(context, cancellationToken));
+        endpoints.MapGet("/connect/logout", (
+            HttpContext context,
+            LogoutEndpointService service,
+            CancellationToken cancellationToken) => service.HandleAsync(context, cancellationToken));
 
-            var policyName = options.LoginRateLimitingPolicyName;
-            if (!string.IsNullOrEmpty(policyName))
-            {
-                loginGetRoute.RequireRateLimiting(policyName);
-                loginPostRoute.RequireRateLimiting(policyName);
-            }
-        }
-
-        if (options.MapDefaultLogoutEndpoint)
-        {
-            endpoints.MapGet("/connect/logout", (
-                HttpContext context,
-                LogoutEndpointService service,
-                CancellationToken cancellationToken) => service.HandleAsync(context, cancellationToken));
-
-            endpoints.MapPost("/connect/logout", (
-                HttpContext context,
-                LogoutEndpointService service,
-                CancellationToken cancellationToken) => service.HandleAsync(context, cancellationToken));
-        }
+        endpoints.MapPost("/connect/logout", (
+            HttpContext context,
+            LogoutEndpointService service,
+            CancellationToken cancellationToken) => service.HandleAsync(context, cancellationToken));
 
         endpoints.MapGet("/connect/userinfo", (
             HttpContext context,

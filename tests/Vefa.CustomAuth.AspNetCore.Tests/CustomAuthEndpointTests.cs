@@ -180,7 +180,8 @@ public sealed class CustomAuthEndpointTests
                 ["returnUrl"] = "/",
             }));
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Contains("error=antiforgery_failed", response.Headers.Location!.OriginalString);
     }
 
     [Fact]
@@ -547,6 +548,7 @@ public sealed class CustomAuthEndpointTests
         }
 
         var app = builder.Build();
+        app.MapAntiforgeryStub();
         app.MapVefaCustomAuthEndpoints();
         await app.StartAsync();
         return app;
