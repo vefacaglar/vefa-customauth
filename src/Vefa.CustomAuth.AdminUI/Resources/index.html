@@ -297,7 +297,11 @@
                             <th class="text-left px-4 py-3 font-semibold text-slate-400">Token ID</th>
                             <th class="text-left px-4 py-3 font-semibold text-slate-400">Client ID</th>
                             <th class="text-left px-4 py-3 font-semibold text-slate-400">User ID</th>
+                            <th class="text-left px-4 py-3 font-semibold text-slate-400">Session</th>
+                            <th class="text-left px-4 py-3 font-semibold text-slate-400">Parent</th>
                             <th class="text-left px-4 py-3 font-semibold text-slate-400">Created</th>
+                            <th class="text-left px-4 py-3 font-semibold text-slate-400">Expires</th>
+                            <th class="text-left px-4 py-3 font-semibold text-slate-400">Absolute</th>
                             <th class="text-left px-4 py-3 font-semibold text-slate-400">Status</th>
                             <th class="text-right px-4 py-3 font-semibold text-slate-400">Actions</th>
                         </tr>
@@ -308,12 +312,16 @@
                                 <td class="px-4 py-3 font-mono text-[10px] text-slate-300" x-text="token.id.substring(0, 8) + '...'"></td>
                                 <td class="px-4 py-3 text-indigo-400" x-text="token.clientId"></td>
                                 <td class="px-4 py-3 text-slate-200" x-text="token.userId"></td>
+                                <td class="px-4 py-3 font-mono text-[10px] text-slate-400" x-text="token.sessionId ? token.sessionId.substring(0, 8) + '...' : '-'"></td>
+                                <td class="px-4 py-3 font-mono text-[10px] text-slate-500" x-text="token.parentTokenId ? token.parentTokenId.substring(0, 8) + '...' : '-'"></td>
                                 <td class="px-4 py-3 text-slate-400" x-text="formatDate(token.createdAt)"></td>
+                                <td class="px-4 py-3 text-slate-400" x-text="formatDate(token.expiresAt)"></td>
+                                <td class="px-4 py-3 text-slate-400" x-text="formatDate(token.absoluteExpiresAt)"></td>
                                 <td class="px-4 py-3">
                                     <span x-show="token.revokedAt" class="text-[9px] font-bold text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">Revoked</span>
                                     <span x-show="token.consumedAt && !token.revokedAt" class="text-[9px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">Consumed</span>
-                                    <span x-show="!token.revokedAt && !token.consumedAt && new Date(token.expiresAt) > new Date()" class="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">Active</span>
-                                    <span x-show="!token.revokedAt && !token.consumedAt && new Date(token.expiresAt) <= new Date()" class="text-[9px] font-bold text-slate-500 bg-slate-500/10 px-1.5 py-0.5 rounded">Expired</span>
+                                    <span x-show="isRefreshTokenActive(token)" class="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">Active</span>
+                                    <span x-show="!token.revokedAt && !token.consumedAt && !isRefreshTokenActive(token)" class="text-[9px] font-bold text-slate-500 bg-slate-500/10 px-1.5 py-0.5 rounded">Expired</span>
                                 </td>
                                 <td class="px-4 py-3 text-right">
                                     <button x-show="!token.revokedAt && !token.consumedAt" @click="revokeRefreshToken(token.id)" class="px-3 py-1.5 text-[10px] font-semibold text-red-400 bg-red-500/5 border border-red-500/10 rounded-lg hover:bg-red-500/10 transition-all cursor-pointer">Revoke</button>

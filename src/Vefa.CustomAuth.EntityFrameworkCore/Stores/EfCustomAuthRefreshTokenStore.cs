@@ -93,4 +93,20 @@ public sealed class EfCustomAuthRefreshTokenStore<TContext> : ICustomAuthRefresh
         token.RevokedAt = revokedAt;
         await _context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
+
+    /// <inheritdoc />
+    public async Task RevokeBySessionIdAsync(Guid sessionId, DateTimeOffset revokedAt, CancellationToken cancellationToken = default)
+    {
+        var tokens = await _context.Set<CustomAuthRefreshToken>()
+            .Where(item => item.SessionId == sessionId && item.RevokedAt == null)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        foreach (var token in tokens)
+        {
+            token.RevokedAt = revokedAt;
+        }
+
+        await _context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
 }

@@ -21,6 +21,7 @@ public sealed class CustomAuthOptionsValidationTests
             AccessTokenLifetime = TimeSpan.FromHours(1),
             IdTokenLifetime = TimeSpan.FromHours(1),
             RefreshTokenLifetime = TimeSpan.FromDays(30),
+            RefreshTokenAbsoluteLifetime = TimeSpan.FromDays(30),
             LoginPath = "/login",
             CookieName = ".Vefa.CustomAuth.Session",
             RequireHttps = true
@@ -47,6 +48,7 @@ public sealed class CustomAuthOptionsValidationTests
             AccessTokenLifetime = TimeSpan.FromHours(1),
             IdTokenLifetime = TimeSpan.FromHours(1),
             RefreshTokenLifetime = TimeSpan.FromDays(30),
+            RefreshTokenAbsoluteLifetime = TimeSpan.FromDays(30),
             LoginPath = "/login",
             CookieName = ".Vefa.CustomAuth.Session"
         };
@@ -70,6 +72,7 @@ public sealed class CustomAuthOptionsValidationTests
             AccessTokenLifetime = lifetime,
             IdTokenLifetime = lifetime,
             RefreshTokenLifetime = lifetime,
+            RefreshTokenAbsoluteLifetime = lifetime,
             LoginPath = "/login",
             CookieName = ".Vefa.CustomAuth.Session"
         };
@@ -81,6 +84,28 @@ public sealed class CustomAuthOptionsValidationTests
         Assert.Contains(result.Failures, f => f.Contains(nameof(options.AccessTokenLifetime)));
         Assert.Contains(result.Failures, f => f.Contains(nameof(options.IdTokenLifetime)));
         Assert.Contains(result.Failures, f => f.Contains(nameof(options.RefreshTokenLifetime)));
+        Assert.Contains(result.Failures, f => f.Contains(nameof(options.RefreshTokenAbsoluteLifetime)));
+    }
+
+    [Fact]
+    public void RefreshTokenAbsoluteLifetimeShorterThanSlidingLifetime_FailsValidation()
+    {
+        var options = new CustomAuthOptions
+        {
+            Issuer = "https://auth.example.com",
+            AuthorizationCodeLifetime = TimeSpan.FromMinutes(2),
+            AccessTokenLifetime = TimeSpan.FromHours(1),
+            IdTokenLifetime = TimeSpan.FromHours(1),
+            RefreshTokenLifetime = TimeSpan.FromDays(30),
+            RefreshTokenAbsoluteLifetime = TimeSpan.FromDays(7),
+            LoginPath = "/login",
+            CookieName = ".Vefa.CustomAuth.Session"
+        };
+
+        var result = _validator.Validate(null, options);
+
+        Assert.True(result.Failed);
+        Assert.Contains(result.Failures, f => f.Contains(nameof(options.RefreshTokenAbsoluteLifetime)));
     }
 
     [Theory]
@@ -96,6 +121,7 @@ public sealed class CustomAuthOptionsValidationTests
             AccessTokenLifetime = TimeSpan.FromHours(1),
             IdTokenLifetime = TimeSpan.FromHours(1),
             RefreshTokenLifetime = TimeSpan.FromDays(30),
+            RefreshTokenAbsoluteLifetime = TimeSpan.FromDays(30),
             LoginPath = loginPath,
             CookieName = ".Vefa.CustomAuth.Session"
         };
@@ -118,6 +144,7 @@ public sealed class CustomAuthOptionsValidationTests
             AccessTokenLifetime = TimeSpan.FromHours(1),
             IdTokenLifetime = TimeSpan.FromHours(1),
             RefreshTokenLifetime = TimeSpan.FromDays(30),
+            RefreshTokenAbsoluteLifetime = TimeSpan.FromDays(30),
             LoginPath = "/login",
             CookieName = cookieName
         };

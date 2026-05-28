@@ -289,6 +289,14 @@ builder.Services
             return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         },
 
+        isRefreshTokenActive(token) {
+            const now = new Date();
+            return !token.revokedAt
+                && !token.consumedAt
+                && new Date(token.expiresAt) > now
+                && new Date(token.absoluteExpiresAt) > now;
+        },
+
         // Load available scopes for client form picker
         async loadAvailableScopes() {
             try {

@@ -37,3 +37,5 @@ POST /login
 ## Security Notes
 
 Keep PKCE enabled, use exact redirect URI matching, and configure HTTPS in production.
+
+Refresh tokens are rotated on use, have sliding and absolute expiration, and detect reuse of consumed tokens.

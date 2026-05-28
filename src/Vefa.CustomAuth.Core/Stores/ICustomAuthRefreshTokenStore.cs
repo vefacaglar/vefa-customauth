@@ -48,4 +48,13 @@ public interface ICustomAuthRefreshTokenStore
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     Task RevokeAsync(Guid id, DateTimeOffset revokedAt, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Revokes all active refresh tokens associated with an SSO session.
+    /// </summary>
+    /// <param name="sessionId">The SSO session identifier.</param>
+    /// <param name="revokedAt">The timestamp when the tokens were revoked.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    Task RevokeBySessionIdAsync(Guid sessionId, DateTimeOffset revokedAt, CancellationToken cancellationToken = default);
 }

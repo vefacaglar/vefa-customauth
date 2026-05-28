@@ -39,6 +39,7 @@ internal sealed class CustomAuthAuthorizationCodeConfiguration : IEntityTypeConf
         builder.ToTable("CustomAuthAuthorizationCodes");
         builder.HasKey(x => x.Id);
         builder.HasIndex(x => x.CodeHash).IsUnique();
+        builder.HasIndex(x => x.SessionId);
         builder.Property(x => x.CodeHash).HasMaxLength(200);
         builder.Property(x => x.ClientId).HasMaxLength(200);
         builder.Property(x => x.UserId).HasMaxLength(200);
@@ -54,6 +55,9 @@ internal sealed class CustomAuthRefreshTokenConfiguration : IEntityTypeConfigura
         builder.ToTable("CustomAuthRefreshTokens");
         builder.HasKey(x => x.Id);
         builder.HasIndex(x => x.TokenHash).IsUnique();
+        builder.HasIndex(x => x.SessionId);
+        builder.HasIndex(x => x.ParentTokenId);
+        builder.HasIndex(x => x.AbsoluteExpiresAt);
         builder.Property(x => x.TokenHash).HasMaxLength(200);
         builder.Property(x => x.ClientId).HasMaxLength(200);
         builder.Property(x => x.UserId).HasMaxLength(200);

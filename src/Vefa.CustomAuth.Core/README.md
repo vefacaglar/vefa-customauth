@@ -32,4 +32,4 @@ public sealed class AppUserStore : ICustomAuthUserStore
 
 ## Notes
 
-Store implementations should persist only hashed authorization codes and hashed refresh tokens. Host applications own user persistence and should implement `ICustomAuthUserStore`.
+Store implementations should persist only hashed authorization codes and hashed refresh tokens. Refresh token implementations should preserve session IDs, parent token IDs, sliding expiration, absolute expiration, revocation, and consumed timestamps. Host applications own user persistence and should implement `ICustomAuthUserStore`.

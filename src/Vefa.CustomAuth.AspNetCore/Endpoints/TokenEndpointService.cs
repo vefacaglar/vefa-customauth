@@ -103,7 +103,17 @@ internal sealed class TokenEndpointService
             },
             cancellationToken).ConfigureAwait(false);
 
-        await StoreRefreshTokenAsync(issued.RefreshToken, client, user.UserId, code.Scope, null, now, cancellationToken).ConfigureAwait(false);
+        var absoluteExpiresAt = now.Add(GetRefreshTokenAbsoluteLifetime(client));
+        await StoreRefreshTokenAsync(
+            issued.RefreshToken,
+            client,
+            user.UserId,
+            code.Scope,
+            code.SessionId,
+            parentTokenId: null,
+            absoluteExpiresAt,
+            now,
+            cancellationToken).ConfigureAwait(false);
         await _tokenManager.MarkAuthorizationCodeConsumedAsync(code.Id, now, cancellationToken).ConfigureAwait(false);
 
         return Results.Json(CreateTokenResponse(issued, code.Scope, client.AllowRefreshTokens));
@@ -133,11 +143,21 @@ internal sealed class TokenEndpointService
         var refreshToken = await _tokenManager.FindRefreshTokenByHashAsync(TokenHasher.Hash(refreshTokenValue), cancellationToken).ConfigureAwait(false);
         var now = _timeProvider.GetUtcNow();
         if (refreshToken is null
-            || refreshToken.ConsumedAt is not null
-            || refreshToken.RevokedAt is not null
             || refreshToken.ExpiresAt <= now
+            || refreshToken.AbsoluteExpiresAt <= now
+            || refreshToken.RevokedAt is not null
             || !string.Equals(refreshToken.ClientId, clientId, StringComparison.Ordinal))
         {
+            return EndpointResults.OAuthError("invalid_grant", "The refresh token is invalid.");
+        }
+
+        if (refreshToken.ConsumedAt is not null)
+        {
+            if (_options.CurrentValue.DetectRefreshTokenReuse)
+            {
+                await _tokenManager.HandleRefreshTokenReuseAsync(refreshToken, now, cancellationToken).ConfigureAwait(false);
+            }
+
             return EndpointResults.OAuthError("invalid_grant", "The refresh token is invalid.");
         }
 
@@ -163,6 +183,8 @@ internal sealed class TokenEndpointService
             user.UserId,
             refreshToken.Scope,
             refreshToken.SessionId,
+            refreshToken.Id,
+            refreshToken.AbsoluteExpiresAt,
             now,
             cancellationToken).ConfigureAwait(false);
         await _tokenManager.MarkRefreshTokenConsumedAsync(refreshToken.Id, now, cancellationToken).ConfigureAwait(false);
@@ -176,6 +198,8 @@ internal sealed class TokenEndpointService
         string userId,
         string scope,
         Guid? sessionId,
+        Guid? parentTokenId,
+        DateTimeOffset absoluteExpiresAt,
         DateTimeOffset now,
         CancellationToken cancellationToken)
     {
@@ -192,17 +216,34 @@ internal sealed class TokenEndpointService
                 ClientId = client.ClientId,
                 UserId = userId,
                 SessionId = sessionId,
+                ParentTokenId = parentTokenId,
                 Scope = scope,
                 CreatedAt = now,
-                ExpiresAt = now.Add(GetRefreshTokenLifetime(client)),
+                ExpiresAt = GetRefreshTokenExpiresAt(client, now, absoluteExpiresAt),
+                AbsoluteExpiresAt = absoluteExpiresAt,
             },
             cancellationToken).ConfigureAwait(false);
+    }
+
+    private DateTimeOffset GetRefreshTokenExpiresAt(CustomAuthClient client, DateTimeOffset now, DateTimeOffset absoluteExpiresAt)
+    {
+        var slidingExpiresAt = now.Add(GetRefreshTokenLifetime(client));
+        return slidingExpiresAt <= absoluteExpiresAt ? slidingExpiresAt : absoluteExpiresAt;
     }
 
     private TimeSpan GetRefreshTokenLifetime(CustomAuthClient client)
         => client.RefreshTokenLifetimeSeconds > 0
             ? TimeSpan.FromSeconds(client.RefreshTokenLifetimeSeconds)
             : _options.CurrentValue.RefreshTokenLifetime;
+
+    private TimeSpan GetRefreshTokenAbsoluteLifetime(CustomAuthClient client)
+    {
+        var slidingLifetime = GetRefreshTokenLifetime(client);
+        var configuredLifetime = client.RefreshTokenAbsoluteLifetimeSeconds > 0
+            ? TimeSpan.FromSeconds(client.RefreshTokenAbsoluteLifetimeSeconds)
+            : _options.CurrentValue.RefreshTokenAbsoluteLifetime;
+        return configuredLifetime >= slidingLifetime ? configuredLifetime : slidingLifetime;
+    }
 
     private static IReadOnlyDictionary<string, string>? GetAdditionalClaims(CustomAuthUserInfo user)
     {

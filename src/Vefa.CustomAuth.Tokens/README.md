@@ -2,7 +2,7 @@
 
 JWT signing and token issuance services for Vefa.CustomAuth.
 
-This package issues JWT access tokens, JWT ID tokens, and opaque refresh tokens. It depends on `Vefa.CustomAuth.Core` for signing key persistence abstractions.
+This package issues JWT access tokens, JWT ID tokens, and opaque refresh token values. It depends on `Vefa.CustomAuth.Core` for signing key persistence abstractions.
 
 ## Typical Usage
 
@@ -20,3 +20,5 @@ builder.Services
 ## Security Notes
 
 Signing keys are loaded from `ICustomAuthSigningKeyStore`. Use durable storage in production and protect private key material.
+
+Refresh token persistence, rotation, absolute expiration, and reuse detection are handled by the ASP.NET Core endpoint and Core manager/store layers.

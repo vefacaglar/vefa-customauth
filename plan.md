@@ -291,7 +291,7 @@ email
 
 ## 9. Refresh Token Requirements
 
-Status: partial — `CustomAuthRefreshToken` model, opaque token / hash helpers, and basic rotation at the token endpoint are implemented; reuse detection remains a later hardening step.
+Status: completed
 
 Refresh tokens must be:
 
@@ -303,7 +303,7 @@ bound to user_id
 optionally bound to session_id
 ```
 
-Reuse detection should be added after the basic rotation flow is working.
+Reuse detection is part of the refresh token lifecycle.
 
 Suggested model:
 
@@ -314,16 +314,18 @@ public sealed class CustomAuthRefreshToken
     public string TokenHash { get; set; }
     public string ClientId { get; set; }
     public string UserId { get; set; }
-    public string? SessionId { get; set; }
+    public Guid? SessionId { get; set; }
+    public Guid? ParentTokenId { get; set; }
     public string Scope { get; set; }
     public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset AbsoluteExpiresAt { get; set; }
     public DateTimeOffset? ConsumedAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 }
 ```
 
-For the first version, refresh token rotation is enough. Reuse detection can be added in v0.2 or later.
+Refresh tokens support rotation, session binding, parent-token tracking, absolute expiration, revocation, and reuse detection.
 
 ---
 

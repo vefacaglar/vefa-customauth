@@ -87,4 +87,13 @@ public sealed class MongoCustomAuthRefreshTokenStore : ICustomAuthRefreshTokenSt
         var update = Builders<CustomAuthRefreshToken>.Update.Set(t => t.RevokedAt, revokedAt);
         await _collection.UpdateOneAsync(filter, update, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
+
+    /// <inheritdoc/>
+    public async Task RevokeBySessionIdAsync(Guid sessionId, DateTimeOffset revokedAt, CancellationToken cancellationToken = default)
+    {
+        var filter = Builders<CustomAuthRefreshToken>.Filter.Eq(t => t.SessionId, sessionId)
+            & Builders<CustomAuthRefreshToken>.Filter.Eq(t => t.RevokedAt, null);
+        var update = Builders<CustomAuthRefreshToken>.Update.Set(t => t.RevokedAt, revokedAt);
+        await _collection.UpdateManyAsync(filter, update, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
 }

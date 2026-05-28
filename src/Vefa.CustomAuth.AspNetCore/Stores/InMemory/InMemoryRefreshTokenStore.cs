@@ -71,4 +71,14 @@ public sealed class InMemoryRefreshTokenStore : ICustomAuthRefreshTokenStore
 
         return Task.CompletedTask;
     }
+
+    public Task RevokeBySessionIdAsync(Guid sessionId, DateTimeOffset revokedAt, CancellationToken cancellationToken = default)
+    {
+        foreach (var token in _tokensById.Values.Where(token => token.SessionId == sessionId && token.RevokedAt is null))
+        {
+            token.RevokedAt = revokedAt;
+        }
+
+        return Task.CompletedTask;
+    }
 }

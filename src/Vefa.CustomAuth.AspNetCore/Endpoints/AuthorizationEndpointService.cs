@@ -75,6 +75,7 @@ internal sealed class AuthorizationEndpointService
                 CodeHash = TokenHasher.Hash(rawCode),
                 ClientId = client.ClientId,
                 UserId = session.UserId,
+                SessionId = session.Id,
                 RedirectUri = redirectUri,
                 CodeChallenge = codeChallenge,
                 CodeChallengeMethod = codeChallengeMethod,

@@ -34,6 +34,8 @@ tests/
 - JWKS endpoint backed by RSA signing keys.
 - JWT access token and ID token issuance.
 - Opaque refresh token issuance and rotation.
+- Sliding and absolute refresh token expiration.
+- Refresh token session binding and reuse detection.
 - Hashed authorization code and refresh token storage.
 - In-memory stores for tests and simple local scenarios.
 - EF Core `DbContext` and store implementations.
@@ -160,6 +162,16 @@ app.MapVefaCustomAuthAdminUI("/customauth")
 ```
 
 The Admin UI is optional. In production, protect it with host application authorization.
+
+## Refresh Token Lifecycle
+
+Refresh tokens are opaque values stored only as hashes. Each refresh token belongs to a client, user, and SSO session when a session is available.
+
+Refresh token rotation is enabled by default: using a refresh token consumes it and issues a replacement token. The replacement token keeps the original token chain's absolute expiration and records the consumed token as its parent.
+
+`RefreshTokenLifetime` controls the sliding lifetime. `RefreshTokenAbsoluteLifetime` controls the maximum lifetime of the token chain. Client-level `RefreshTokenLifetimeSeconds` and `RefreshTokenAbsoluteLifetimeSeconds` override the global options when set.
+
+If a consumed refresh token is used again, Vefa.CustomAuth records `RefreshTokenReuseDetected` and revokes the session-bound refresh token chain when possible.
 
 ## Production Hardening
 

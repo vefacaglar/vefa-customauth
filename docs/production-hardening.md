@@ -22,7 +22,9 @@ Use this checklist before publishing or deploying a Vefa.CustomAuth server outsi
 - Keep authorization code lifetimes short, preferably 60 to 120 seconds.
 - Keep authorization codes and refresh tokens stored only as hashes.
 - Use opaque refresh tokens and rotate them on every use.
-- Treat reuse of a consumed refresh token as a suspicious event.
+- Keep refresh token reuse detection enabled.
+- Treat reuse of a consumed refresh token as a suspicious event and review the related audit log.
+- Configure both sliding and absolute refresh token lifetimes.
 - Keep access token lifetimes short enough for the protected API risk profile.
 - Validate issuer, audience, signature, and token lifetime in every protected API.
 

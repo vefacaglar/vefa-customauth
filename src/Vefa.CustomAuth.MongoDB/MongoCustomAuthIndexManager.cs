@@ -68,8 +68,12 @@ public static class MongoCustomAuthIndexManager
                 new CreateIndexOptions { Name = "IX_UserId" }),
             new(Builders<CustomAuthRefreshToken>.IndexKeys.Ascending(t => t.SessionId),
                 new CreateIndexOptions { Name = "IX_SessionId" }),
+            new(Builders<CustomAuthRefreshToken>.IndexKeys.Ascending(t => t.ParentTokenId),
+                new CreateIndexOptions { Name = "IX_ParentTokenId" }),
             new(Builders<CustomAuthRefreshToken>.IndexKeys.Ascending(t => t.ExpiresAt),
                 new CreateIndexOptions { Name = "IX_ExpiresAt" }),
+            new(Builders<CustomAuthRefreshToken>.IndexKeys.Ascending(t => t.AbsoluteExpiresAt),
+                new CreateIndexOptions { Name = "IX_AbsoluteExpiresAt" }),
         };
         await collection.Indexes.CreateManyAsync(indexModels, cancellationToken).ConfigureAwait(false);
     }

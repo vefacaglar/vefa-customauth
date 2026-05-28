@@ -32,6 +32,11 @@ public sealed class CustomAuthRefreshToken
     public Guid? SessionId { get; set; }
 
     /// <summary>
+    /// Gets or sets the identifier of the refresh token that was rotated to issue this token.
+    /// </summary>
+    public Guid? ParentTokenId { get; set; }
+
+    /// <summary>
     /// Gets or sets the scopes granted to this refresh token.
     /// </summary>
     public string Scope { get; set; } = default!;
@@ -40,6 +45,12 @@ public sealed class CustomAuthRefreshToken
     /// Gets or sets the exact date and time when the refresh token will expire.
     /// </summary>
     public DateTimeOffset ExpiresAt { get; set; }
+
+    /// <summary>
+    /// Gets or sets the absolute expiration time for the refresh token chain.
+    /// Rotation must not extend this value.
+    /// </summary>
+    public DateTimeOffset AbsoluteExpiresAt { get; set; }
 
     /// <summary>
     /// Gets or sets the date and time when the refresh token was rotated (consumed).

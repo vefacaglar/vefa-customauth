@@ -26,9 +26,20 @@ public sealed class CustomAuthOptions
     public TimeSpan IdTokenLifetime { get; set; } = TimeSpan.FromHours(1);
 
     /// <summary>
-    /// Gets or sets the refresh token lifetime.
+    /// Gets or sets the sliding refresh token lifetime.
     /// </summary>
     public TimeSpan RefreshTokenLifetime { get; set; } = TimeSpan.FromDays(30);
+
+    /// <summary>
+    /// Gets or sets the maximum lifetime of a refresh token chain.
+    /// Rotation does not extend this lifetime.
+    /// </summary>
+    public TimeSpan RefreshTokenAbsoluteLifetime { get; set; } = TimeSpan.FromDays(30);
+
+    /// <summary>
+    /// Gets or sets a value indicating whether refresh token reuse should revoke the related token chain.
+    /// </summary>
+    public bool DetectRefreshTokenReuse { get; set; } = true;
 
     /// <summary>
     /// Gets or sets the login path used when an authorization request requires interactive sign-in.
