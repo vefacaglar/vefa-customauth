@@ -42,6 +42,45 @@ builder.Services.AddDataProtection()
     .ProtectKeysWithCertificate(dataProtectionCertificate);
 ```
 
+## Load-balanced / web farm deployments
+
+When more than one instance runs behind a load balancer, several pieces of state must be shared or
+they will behave inconsistently from request to request. This is the same class of issue as a typical
+ASP.NET Core / IdentityServer farm.
+
+- **Data Protection key ring (most important).** The SSO session cookie *and* the antiforgery tokens
+  used on `POST /login`, `/connect/logout`, and the Admin UI are protected with Data Protection. If
+  instances do not share the key ring and a common application name, a cookie or token created by one
+  instance fails on another — symptoms are random "logged out" states and `antiforgery_failed`
+  errors. Configure a shared key store (Redis, database, Azure Blob) and the same
+  `SetApplicationName(...)` on every instance:
+
+  ```csharp
+  var redis = StackExchange.Redis.ConnectionMultiplexer.Connect("redis:6379");
+  builder.Services.AddDataProtection()
+      .SetApplicationName("vefa-customauth-authserver") // identical on every instance
+      .PersistKeysToStackExchangeRedis(redis, "DataProtection-Keys")
+      .ProtectKeysWithCertificate(dataProtectionCertificate);
+  ```
+
+  Relying-party apps that use the OIDC handler must do the same so their correlation/nonce cookies
+  survive being read by a different instance.
+
+- **Use shared persistent stores.** Clients, authorization codes, refresh tokens, sessions, and
+  signing keys must live in EF Core or MongoDB (never in-memory), so every instance sees the same data.
+  Signing keys in particular must come from the shared store so the JWKS is consistent across the farm.
+
+- **Distribute the `private_key_jwt` replay cache.** The default `IClientAssertionReplayCache` is
+  per-instance (in-memory). Under load balancing a replayed assertion could land on a different
+  instance and go undetected. Register a distributed implementation (e.g. Redis) when using
+  confidential clients across multiple instances.
+
+- **Distribute brute-force lockout state.** Any `ICustomAuthLoginAttemptTracker` you provide should be
+  backed by shared storage so a lockout counts attempts across all instances.
+
+- **Respect forwarded headers.** Configure `ForwardedHeaders` so the issuer, scheme, and generated
+  URLs reflect the public origin behind the proxy.
+
 ## Tokens
 
 - Keep authorization code lifetimes short, preferably 60 to 120 seconds.

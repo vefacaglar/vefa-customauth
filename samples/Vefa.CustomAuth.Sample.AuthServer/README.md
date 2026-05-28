@@ -141,11 +141,25 @@ PKCE failure, invalid client assertion, etc.) without leaking the reason to the 
 
 ## Data Protection (session cookie)
 
-The SSO session cookie is encrypted and signed with ASP.NET Core Data Protection. The library uses
-the host's `IDataProtectionProvider`; this sample relies on the framework's default key ring, which is
-fine for local development. In production, configure key persistence and at-rest encryption (and a
-stable application name across instances) — see the
-[production hardening guide](../../docs/production-hardening.md#data-protection).
+The SSO session cookie and antiforgery tokens are encrypted/signed with ASP.NET Core Data Protection.
+The library uses the host's `IDataProtectionProvider`; this sample wires the key ring to **SQLite** via
+`Microsoft.AspNetCore.DataProtection.EntityFrameworkCore` so the keys persist and are shareable:
+
+```csharp
+builder.Services.AddDbContext<SampleDataProtectionDbContext>(o =>
+    o.UseSqlite("Data Source=dataprotection-sample.db"));
+
+builder.Services.AddDataProtection()
+    .SetApplicationName("vefa-customauth-authserver")     // identical on every instance
+    .PersistKeysToDbContext<SampleDataProtectionDbContext>();
+```
+
+`SampleDataProtectionDbContext` implements `IDataProtectionKeyContext` and lives in its own SQLite
+database (`dataprotection-sample.db`). Because the keys are persisted and the application name is
+fixed, cookies survive restarts and any instance behind a load balancer can read another's cookies —
+this is the web-farm fix. For production, also encrypt the keys at rest (`ProtectKeysWith...`) and use
+shared storage (a shared DB, Redis, or Azure Blob). See the
+[production hardening guide](../../docs/production-hardening.md#load-balanced--web-farm-deployments).
 
 ## CORS
 

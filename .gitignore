@@ -46,10 +46,9 @@ _ReSharper*/
 secrets.json
 appsettings.*.Local.json
 samples/Vefa.CustomAuth.Sample.AuthServer/customauth-sample.db*
-
+samples/Vefa.CustomAuth.Sample.AuthServer/identity-sample.db*
+samples/Vefa.CustomAuth.Sample.AuthServer/dataprotection-sample.db*
 # Claude
 .claude/
 CLAUDE.local.md
-samples/Vefa.CustomAuth.Sample.AuthServer/identity-sample.db
-samples/Vefa.CustomAuth.Sample.AuthServer/identity-sample.db-shm
-samples/Vefa.CustomAuth.Sample.AuthServer/identity-sample.db-wal
+

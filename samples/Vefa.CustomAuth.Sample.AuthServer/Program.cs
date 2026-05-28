@@ -1,4 +1,5 @@
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -9,6 +10,7 @@ using Vefa.CustomAuth.Core.Services;
 using Vefa.CustomAuth.Core.Stores;
 using Vefa.CustomAuth.EntityFrameworkCore.Extensions;
 using Vefa.CustomAuth.Sample.AuthServer.Data;
+using Vefa.CustomAuth.Sample.AuthServer.DataProtection;
 using Vefa.CustomAuth.Sample.AuthServer.Identity;
 using Vefa.CustomAuth.Sample.AuthServer.Services;
 
@@ -110,6 +112,17 @@ builder.Services.AddRateLimiter(rateLimiterOptions =>
     });
 });
 
+// Persist the Data Protection key ring in SQLite so the SSO session cookie and antiforgery tokens
+// stay readable across restarts and across every instance behind a load balancer. SetApplicationName
+// must be identical on all instances; without a shared key ring + name, instances cannot decrypt each
+// other's cookies (random logouts / antiforgery failures). See docs/production-hardening.md.
+builder.Services.AddDbContext<SampleDataProtectionDbContext>(options =>
+    options.UseSqlite("Data Source=dataprotection-sample.db"));
+
+builder.Services.AddDataProtection()
+    .SetApplicationName("vefa-customauth-authserver")
+    .PersistKeysToDbContext<SampleDataProtectionDbContext>();
+
 builder.Services
     .AddCustomAuth(options =>
     {
@@ -131,6 +144,14 @@ app.UseStaticFiles();
 app.UseRateLimiter();
 
 await DatabaseSeeder.EnsureDatabaseSeededAsync(app.Services);
+
+// Ensure the Data Protection key table exists before the key ring is first accessed.
+using (var dataProtectionScope = app.Services.CreateScope())
+{
+    await dataProtectionScope.ServiceProvider
+        .GetRequiredService<SampleDataProtectionDbContext>()
+        .Database.EnsureCreatedAsync();
+}
 
 if (useAspNetCoreIdentity)
 {
