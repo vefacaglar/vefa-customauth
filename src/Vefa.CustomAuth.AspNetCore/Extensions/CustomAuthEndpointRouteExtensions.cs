@@ -65,17 +65,19 @@ public static class CustomAuthEndpointRouteExtensions
             TokenEndpointService service,
             CancellationToken cancellationToken) => service.HandleAsync(request, cancellationToken));
 
-        var loginGetRoute = endpoints.MapGet("/login", (HttpContext context, LoginEndpointService service) => service.Render(context));
-
-        var loginPostRoute = endpoints.MapPost("/login", (
-            HttpContext context,
-            LoginEndpointService service,
-            CancellationToken cancellationToken) => service.HandleAsync(context, cancellationToken));
-
         var optionsMonitor = (IOptionsMonitor<CustomAuthOptions>?)endpoints.ServiceProvider.GetService(typeof(IOptionsMonitor<CustomAuthOptions>));
-        if (optionsMonitor is not null)
+        var options = optionsMonitor?.CurrentValue ?? new CustomAuthOptions();
+
+        if (options.MapDefaultLoginEndpoint)
         {
-            var policyName = optionsMonitor.CurrentValue.LoginRateLimitingPolicyName;
+            var loginGetRoute = endpoints.MapGet(options.LoginPath, (HttpContext context, LoginEndpointService service) => service.Render(context));
+
+            var loginPostRoute = endpoints.MapPost(options.LoginPath, (
+                HttpContext context,
+                LoginEndpointService service,
+                CancellationToken cancellationToken) => service.HandleAsync(context, cancellationToken));
+
+            var policyName = options.LoginRateLimitingPolicyName;
             if (!string.IsNullOrEmpty(policyName))
             {
                 loginGetRoute.RequireRateLimiting(policyName);
@@ -83,15 +85,18 @@ public static class CustomAuthEndpointRouteExtensions
             }
         }
 
-        endpoints.MapGet("/connect/logout", (
-            HttpContext context,
-            LogoutEndpointService service,
-            CancellationToken cancellationToken) => service.HandleAsync(context, cancellationToken));
+        if (options.MapDefaultLogoutEndpoint)
+        {
+            endpoints.MapGet("/connect/logout", (
+                HttpContext context,
+                LogoutEndpointService service,
+                CancellationToken cancellationToken) => service.HandleAsync(context, cancellationToken));
 
-        endpoints.MapPost("/connect/logout", (
-            HttpContext context,
-            LogoutEndpointService service,
-            CancellationToken cancellationToken) => service.HandleAsync(context, cancellationToken));
+            endpoints.MapPost("/connect/logout", (
+                HttpContext context,
+                LogoutEndpointService service,
+                CancellationToken cancellationToken) => service.HandleAsync(context, cancellationToken));
+        }
 
         endpoints.MapGet("/connect/userinfo", (
             HttpContext context,

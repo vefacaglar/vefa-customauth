@@ -63,6 +63,18 @@ public sealed class CustomAuthOptions
     public string? LoginRateLimitingPolicyName { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether to register the default library login endpoints (/login GET and POST).
+    /// Set to false if you want to implement your own custom login UI (e.g., via Razor Pages, MVC, or Blazor).
+    /// </summary>
+    public bool MapDefaultLoginEndpoint { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to register the default library logout endpoints (/connect/logout GET and POST).
+    /// Set to false if you want to implement your own custom logout UI/flow.
+    /// </summary>
+    public bool MapDefaultLogoutEndpoint { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets a value indicating whether HTTPS is required for the issuer URI.
     /// </summary>
     public bool RequireHttps { get; set; } = true;

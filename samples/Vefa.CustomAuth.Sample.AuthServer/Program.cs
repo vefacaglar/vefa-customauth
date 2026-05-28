@@ -25,11 +25,14 @@ builder.Services.AddVefaCustomAuthEntityFrameworkCore(options =>
     options.UseSqlite("Data Source=customauth-sample.db");
 });
 
+builder.Services.AddRazorPages();
+
 builder.Services
     .AddVefaCustomAuth(options =>
     {
         options.Issuer = "http://localhost:5175";
         options.RequireHttps = false;
+        options.MapDefaultLoginEndpoint = false; // Disable built-in login UI to use Razor Pages!
     })
     .AddJwtTokenSigning();
 
@@ -39,6 +42,7 @@ await EnsureDatabaseSeededAsync(app.Services);
 
 app.MapGet("/", () => "Vefa.CustomAuth sample auth server. Sign in with demo / demo.");
 app.MapVefaCustomAuthEndpoints();
+app.MapRazorPages();
 
 app.Run();
 
