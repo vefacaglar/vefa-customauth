@@ -16,6 +16,19 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="8.0.10" />
+    <!--
+      OpenIdConnect 8.0.10 pulls Microsoft.IdentityModel.Protocols(.OpenIdConnect) 7.1.2,
+      which is binary-incompatible with the 8.x Microsoft.IdentityModel.Tokens /
+      JsonWebTokens we already use in Vefa.CustomAuth.Tokens. The mismatch silently
+      breaks discovery parsing (AuthorizationEndpoint comes back empty). Pin both to
+      8.x explicitly so the whole graph aligns.
+    -->
+    <PackageReference Include="Microsoft.IdentityModel.Protocols" Version="8.18.0" />
+    <PackageReference Include="Microsoft.IdentityModel.Protocols.OpenIdConnect" Version="8.18.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Vefa.CustomAuth.Core\Vefa.CustomAuth.Core.csproj" />
     <ProjectReference Include="..\Vefa.CustomAuth.Tokens\Vefa.CustomAuth.Tokens.csproj" />
   </ItemGroup>

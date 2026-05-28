@@ -56,45 +56,45 @@ public sealed class V02EndpointTests
         Assert.Equal(HttpStatusCode.Redirect, loginResponse.StatusCode);
         var cookie = GetCookie(loginResponse, ".Vefa.CustomAuth.Session");
 
-        // 2. Perform GET logout - should render confirmation page and NOT revoke session/clear cookie immediately
+        // 2. GET /connect/logout without id_token_hint redirects the user to the
+        //    host-owned LogoutPath (the library no longer renders confirmation HTML).
         using var logoutRequest = new HttpRequestMessage(HttpMethod.Get, "/connect/logout");
         logoutRequest.Headers.Add("Cookie", cookie);
         var logoutResponse = await client.SendAsync(logoutRequest);
 
-        Assert.Equal(HttpStatusCode.OK, logoutResponse.StatusCode);
-        var responseHtml = await logoutResponse.Content.ReadAsStringAsync();
-        Assert.Contains("Confirm Log Out", responseHtml);
-        Assert.Contains("Log Out?", responseHtml);
-        Assert.DoesNotContain("Logged Out Successfully", responseHtml);
+        Assert.Equal(HttpStatusCode.Redirect, logoutResponse.StatusCode);
+        Assert.NotNull(logoutResponse.Headers.Location);
+        var logoutRedirect = logoutResponse.Headers.Location!.OriginalString;
+        Assert.StartsWith("/logout", logoutRedirect);
 
-        // Extract Antiforgery token and cookie from GET response
-        var tokenMarker = "name=\"__RequestVerificationToken\" value=\"";
-        var tokenIdx = responseHtml.IndexOf(tokenMarker, StringComparison.Ordinal);
-        Assert.True(tokenIdx >= 0);
-        var tokenStart = tokenIdx + tokenMarker.Length;
-        var tokenEnd = responseHtml.IndexOf('"', tokenStart);
-        var requestToken = responseHtml[tokenStart..tokenEnd];
+        // No session work has been done yet — the user has only been redirected.
+        var sessionStorePre = app.Services.GetRequiredService<ICustomAuthSessionStore>();
+        var dataProtection = app.Services.GetRequiredService<IDataProtectionProvider>();
+        var protector = dataProtection.CreateProtector("Vefa.CustomAuth.SessionCookie");
+        var rawCookieValue = cookie.Split('=', 2)[1].Split(';', 2)[0];
+        var decryptedSessionId = protector.Unprotect(rawCookieValue);
+        var sessionId = Guid.Parse(decryptedSessionId);
+        var preSession = await sessionStorePre.FindAsync(sessionId);
+        Assert.NotNull(preSession);
+        Assert.Null(preSession!.RevokedAt);
 
-        var setCookieHeadersGet = logoutResponse.Headers.GetValues("Set-Cookie");
-        var antiforgeryCookie = setCookieHeadersGet.Single(c => c.Contains(".AspNetCore.Antiforgery")).Split(';', 2)[0];
-
-        // 3. Post to logout with the extracted antiforgery token and cookie
+        // 3. Host's logout page posts back to /connect/logout once the user confirms.
+        //    Reuse the antiforgery cookie+token issued earlier by the stub.
         using var postRequest = new HttpRequestMessage(HttpMethod.Post, "/connect/logout")
         {
             Content = new FormUrlEncodedContent(new Dictionary<string, string>
             {
-                ["__RequestVerificationToken"] = requestToken,
+                [antiforgery.FormFieldName] = antiforgery.RequestToken,
                 ["post_logout_redirect_uri"] = "",
                 ["state"] = "",
-                ["client_id"] = ""
-            })
+                ["client_id"] = "",
+            }),
         };
-        postRequest.Headers.Add("Cookie", $"{cookie}; {antiforgeryCookie}");
+        postRequest.Headers.Add("Cookie", $"{cookie}; {antiforgery.Cookie}");
         var postResponse = await client.SendAsync(postRequest);
 
-        Assert.Equal(HttpStatusCode.OK, postResponse.StatusCode);
-        var postResponseHtml = await postResponse.Content.ReadAsStringAsync();
-        Assert.Contains("Logged Out Successfully", postResponseHtml);
+        Assert.Equal(HttpStatusCode.Redirect, postResponse.StatusCode);
+        Assert.Equal("/", postResponse.Headers.Location!.OriginalString);
 
         // 4. Verify cookie is cleared in response
         var setCookieHeaders = postResponse.Headers.GetValues("Set-Cookie");
@@ -102,11 +102,6 @@ public sealed class V02EndpointTests
 
         // 5. Verify session is revoked in database
         var sessionStore = app.Services.GetRequiredService<ICustomAuthSessionStore>();
-        var dataProtection = app.Services.GetRequiredService<IDataProtectionProvider>();
-        var protector = dataProtection.CreateProtector("Vefa.CustomAuth.SessionCookie");
-        var rawCookieValue = cookie.Split('=', 2)[1].Split(';', 2)[0];
-        var decryptedSessionId = protector.Unprotect(rawCookieValue);
-        var sessionId = Guid.Parse(decryptedSessionId);
         var session = await sessionStore.FindAsync(sessionId);
         Assert.NotNull(session);
         Assert.NotNull(session!.RevokedAt);
@@ -139,7 +134,7 @@ public sealed class V02EndpointTests
     }
 
     [Fact]
-    public async Task LogoutWithInvalidRedirectUriDisplaysConfirmation()
+    public async Task LogoutWithInvalidRedirectUriFallsBackToPostLogoutRedirectUri()
     {
         await using var app = await CreateAppAsync();
         using var client = app.GetTestClient();
@@ -149,17 +144,15 @@ public sealed class V02EndpointTests
         var tokenResponse = await ExchangeCodeAsync(client, code, verifier);
         var idToken = await ReadJsonPropertyAsync(tokenResponse, "id_token");
 
-        // Invalid redirect URI
+        // Invalid redirect URI (not registered for the client)
         var logoutUrl = "/connect/logout?id_token_hint=" + Uri.EscapeDataString(idToken)
             + "&post_logout_redirect_uri=" + Uri.EscapeDataString("http://localhost/bad-callback")
             + "&state=logout-state";
 
         var response = await client.GetAsync(logoutUrl);
 
-        // Should NOT redirect, should display HTML page instead
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var responseHtml = await response.Content.ReadAsStringAsync();
-        Assert.Contains("Logged Out Successfully", responseHtml);
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/", response.Headers.Location!.OriginalString);
     }
 
     [Fact]
@@ -395,7 +388,8 @@ public sealed class V02EndpointTests
 
         using var client = app.GetTestClient();
 
-        // 1. Perform 3 failed login attempts
+        // 1. Perform 3 failed login attempts — each redirects back to LoginPath
+        //    with ?error=invalid_credentials so the host can render a message.
         var antiforgery = await GetAntiforgeryAsync(client);
         for (int i = 0; i < 3; i++)
         {
@@ -411,7 +405,8 @@ public sealed class V02EndpointTests
             };
             failedRequest.Headers.Add("Cookie", antiforgery.Cookie);
             var failedResponse = await client.SendAsync(failedRequest);
-            Assert.Equal(HttpStatusCode.Unauthorized, failedResponse.StatusCode);
+            Assert.Equal(HttpStatusCode.Redirect, failedResponse.StatusCode);
+            Assert.Contains("error=invalid_credentials", failedResponse.Headers.Location!.OriginalString);
         }
 
         // 2. Perform a 4th attempt (which should be blocked even with correct password)
@@ -428,9 +423,8 @@ public sealed class V02EndpointTests
         blockedRequest.Headers.Add("Cookie", antiforgery.Cookie);
         var blockedResponse = await client.SendAsync(blockedRequest);
 
-        Assert.Equal(HttpStatusCode.Locked, blockedResponse.StatusCode);
-        var content = await blockedResponse.Content.ReadAsStringAsync();
-        Assert.Contains("This account is temporarily locked due to too many failed login attempts.", content);
+        Assert.Equal(HttpStatusCode.Redirect, blockedResponse.StatusCode);
+        Assert.Contains("error=account_locked", blockedResponse.Headers.Location!.OriginalString);
     }
 
     [Fact]
@@ -827,6 +821,7 @@ public sealed class V02EndpointTests
         configureServices?.Invoke(builder.Services);
 
         var app = builder.Build();
+        app.MapAntiforgeryStub();
         app.MapVefaCustomAuthEndpoints();
         await app.StartAsync();
         return app;

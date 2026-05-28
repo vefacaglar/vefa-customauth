@@ -220,6 +220,7 @@ public sealed class SessionCookieAndValidationTests
             });
 
         var app = builder.Build();
+        app.MapAntiforgeryStub();
         app.MapVefaCustomAuthEndpoints();
 
         await app.StartAsync();

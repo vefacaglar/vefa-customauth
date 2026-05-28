@@ -42,9 +42,28 @@ public sealed class CustomAuthOptions
     public bool DetectRefreshTokenReuse { get; set; } = true;
 
     /// <summary>
-    /// Gets or sets the login path used when an authorization request requires interactive sign-in.
+    /// Gets or sets the path to the host-provided login page. The authorization endpoint
+    /// redirects unauthenticated users here with a <c>returnUrl</c> query parameter.
+    /// The host owns this page (Razor Pages, MVC, Blazor, etc.) and is expected to
+    /// call <see cref="Vefa.CustomAuth.AspNetCore.Extensions.CustomAuthHttpContextExtensions.SignInCustomAuthAsync"/>
+    /// once the user has authenticated.
     /// </summary>
     public string LoginPath { get; set; } = "/login";
+
+    /// <summary>
+    /// Gets or sets the path to the host-provided logout confirmation page. The
+    /// <c>/connect/logout</c> endpoint redirects here when an end-session request
+    /// arrives without a cryptographically valid <c>id_token_hint</c>, so the host
+    /// can confirm user intent before terminating the session.
+    /// </summary>
+    public string LogoutPath { get; set; } = "/logout";
+
+    /// <summary>
+    /// Gets or sets the fallback redirect target the library uses after a successful logout
+    /// when no <c>post_logout_redirect_uri</c> was supplied (or the supplied one is not registered).
+    /// The host owns this page if it wants to render a "you have been signed out" screen.
+    /// </summary>
+    public string PostLogoutRedirectUri { get; set; } = "/";
 
     /// <summary>
     /// Gets or sets the SSO session cookie name.
@@ -55,12 +74,6 @@ public sealed class CustomAuthOptions
     /// Gets or sets a value indicating whether PKCE is required for authorization code requests.
     /// </summary>
     public bool RequirePkce { get; set; } = true;
-
-    /// <summary>
-    /// Gets or sets the name of the rate limiting policy to apply to the login endpoint.
-    /// If null or empty, rate limiting is not applied at the routing level.
-    /// </summary>
-    public string? LoginRateLimitingPolicyName { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether HTTPS is required for the issuer URI.

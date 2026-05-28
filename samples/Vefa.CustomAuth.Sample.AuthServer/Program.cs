@@ -25,11 +25,16 @@ builder.Services.AddVefaCustomAuthEntityFrameworkCore(options =>
     options.UseSqlite("Data Source=customauth-sample.db");
 });
 
+builder.Services.AddRazorPages();
+
 builder.Services
     .AddVefaCustomAuth(options =>
     {
         options.Issuer = "http://localhost:5175";
         options.RequireHttps = false;
+        // LoginPath / LogoutPath point at this host's Razor Pages; the library only
+        // handles POST /login (credential validation) and /connect/logout (RP-initiated
+        // logout). UI rendering is fully owned by the host.
     })
     .AddJwtTokenSigning();
 
@@ -39,6 +44,7 @@ await EnsureDatabaseSeededAsync(app.Services);
 
 app.MapGet("/", () => "Vefa.CustomAuth sample auth server. Sign in with demo / demo.");
 app.MapVefaCustomAuthEndpoints();
+app.MapRazorPages();
 
 app.Run();
 
@@ -61,6 +67,7 @@ static async Task EnsureDatabaseSeededAsync(IServiceProvider services)
         RedirectUris = { "http://localhost:5043/signin-oidc" },
         PostLogoutRedirectUris = { "http://localhost:5043/" },
         AllowedScopes = { "openid", "profile", "email", "offline_access", "sample-api" },
+        AllowRefreshTokens = true,
     });
 
     await context.SaveChangesAsync();

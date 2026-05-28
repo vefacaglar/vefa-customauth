@@ -8,8 +8,19 @@ using Vefa.CustomAuth.Tokens.Signing;
 
 namespace Vefa.CustomAuth.AspNetCore.Extensions;
 
+/// <summary>
+/// Maps the Vefa.CustomAuth OAuth2 / OIDC protocol endpoints onto an
+/// <see cref="IEndpointRouteBuilder"/>. The library deliberately does not ship a
+/// rendered login or logout UI — the host owns those pages and points at them via
+/// <see cref="CustomAuthOptions.LoginPath"/> and <see cref="CustomAuthOptions.LogoutPath"/>.
+/// </summary>
 public static class CustomAuthEndpointRouteExtensions
 {
+    /// <summary>
+    /// Maps the protocol endpoints: discovery, JWKS, authorize, token, userinfo,
+    /// revoke, RP-initiated logout, and the credential-validation POST handler for
+    /// <see cref="CustomAuthOptions.LoginPath"/>.
+    /// </summary>
     public static IEndpointRouteBuilder MapVefaCustomAuthEndpoints(this IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
@@ -65,23 +76,13 @@ public static class CustomAuthEndpointRouteExtensions
             TokenEndpointService service,
             CancellationToken cancellationToken) => service.HandleAsync(request, cancellationToken));
 
-        var loginGetRoute = endpoints.MapGet("/login", (HttpContext context, LoginEndpointService service) => service.Render(context));
+        var optionsMonitor = (IOptionsMonitor<CustomAuthOptions>?)endpoints.ServiceProvider.GetService(typeof(IOptionsMonitor<CustomAuthOptions>));
+        var options = optionsMonitor?.CurrentValue ?? new CustomAuthOptions();
 
-        var loginPostRoute = endpoints.MapPost("/login", (
+        endpoints.MapPost(options.LoginPath, (
             HttpContext context,
             LoginEndpointService service,
             CancellationToken cancellationToken) => service.HandleAsync(context, cancellationToken));
-
-        var optionsMonitor = (IOptionsMonitor<CustomAuthOptions>?)endpoints.ServiceProvider.GetService(typeof(IOptionsMonitor<CustomAuthOptions>));
-        if (optionsMonitor is not null)
-        {
-            var policyName = optionsMonitor.CurrentValue.LoginRateLimitingPolicyName;
-            if (!string.IsNullOrEmpty(policyName))
-            {
-                loginGetRoute.RequireRateLimiting(policyName);
-                loginPostRoute.RequireRateLimiting(policyName);
-            }
-        }
 
         endpoints.MapGet("/connect/logout", (
             HttpContext context,

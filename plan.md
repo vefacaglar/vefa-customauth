@@ -99,8 +99,7 @@ GET  /connect/authorize
 POST /connect/token
 GET  /.well-known/openid-configuration
 GET  /.well-known/jwks.json
-GET  /login
-POST /login
+POST /login   (credential validation only — host owns the GET / sign-in UI)
 ```
 
 ### v0.2

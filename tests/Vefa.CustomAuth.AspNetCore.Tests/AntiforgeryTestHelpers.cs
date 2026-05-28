@@ -4,6 +4,10 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Xunit;
 
 namespace Vefa.CustomAuth.AspNetCore.Tests;
@@ -12,6 +16,23 @@ internal sealed record AntiforgeryTokens(string Cookie, string FormFieldName, st
 
 internal static class AntiforgeryTestHelpers
 {
+    /// <summary>
+    /// Maps a minimal GET stub at <paramref name="path"/> that issues an antiforgery
+    /// cookie and emits the request token inside a hidden form field. Tests use this
+    /// to obtain credentials for POSTing to <c>/login</c> now that the library no
+    /// longer ships a rendered login page.
+    /// </summary>
+    public static IEndpointRouteBuilder MapAntiforgeryStub(this IEndpointRouteBuilder endpoints, string path = "/login")
+    {
+        endpoints.MapGet(path, (HttpContext context, IAntiforgery antiforgery) =>
+        {
+            var tokens = antiforgery.GetAndStoreTokens(context);
+            var html = $"<!doctype html><form method=\"post\" action=\"{path}\"><input type=\"hidden\" name=\"{tokens.FormFieldName}\" value=\"{tokens.RequestToken}\" /></form>";
+            return Results.Content(html, "text/html");
+        });
+        return endpoints;
+    }
+
     public static async Task<AntiforgeryTokens> GetAntiforgeryAsync(HttpClient client)
     {
         var response = await client.GetAsync("/login");
