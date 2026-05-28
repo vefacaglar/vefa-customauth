@@ -129,9 +129,9 @@ builder.Services
     {
         options.Issuer = "http://localhost:5175";
         options.RequireHttps = false;
-        // LoginPath / LogoutPath point at this host's Razor Pages; the library only
-        // handles POST /login (credential validation) and /connect/logout (RP-initiated
-        // logout). UI rendering is fully owned by the host.
+        options.MapDefaultLoginEndpoint = false;
+        // LoginPath / LogoutPath point at this host's Razor Pages. UI rendering and 
+        // credential-validation POST are fully owned by the host application.
     })
     .AddJwtTokenSigning();
 

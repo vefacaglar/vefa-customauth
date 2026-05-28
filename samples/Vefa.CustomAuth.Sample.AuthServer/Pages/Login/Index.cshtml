@@ -50,7 +50,7 @@
         </div>
     }
 
-    <form method="post" action="/login">
+    <form method="post">
         @Html.AntiForgeryToken()
         <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
 

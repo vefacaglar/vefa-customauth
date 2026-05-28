@@ -80,10 +80,13 @@ public static class CustomAuthEndpointRouteExtensions
         var optionsMonitor = (IOptionsMonitor<CustomAuthOptions>?)endpoints.ServiceProvider.GetService(typeof(IOptionsMonitor<CustomAuthOptions>));
         var options = optionsMonitor?.CurrentValue ?? new CustomAuthOptions();
 
-        endpoints.MapPost(options.LoginPath, (
-            HttpContext context,
-            LoginEndpointService service,
-            CancellationToken cancellationToken) => service.HandleAsync(context, cancellationToken));
+        if (options.MapDefaultLoginEndpoint)
+        {
+            endpoints.MapPost(options.LoginPath, (
+                HttpContext context,
+                LoginEndpointService service,
+                CancellationToken cancellationToken) => service.HandleAsync(context, cancellationToken));
+        }
 
         endpoints.MapGet("/connect/logout", (
             HttpContext context,

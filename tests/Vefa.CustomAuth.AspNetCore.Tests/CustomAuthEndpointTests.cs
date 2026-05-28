@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
@@ -504,6 +505,95 @@ public sealed class CustomAuthEndpointTests
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         var authHeader = response.Headers.WwwAuthenticate.ToString();
         Assert.Equal("Basic realm=\"Vefa.CustomAuth\"", authHeader);
+    }
+
+    [Fact]
+    public async Task CustomHostLoginEndpointWorks()
+    {
+        // 1. Create app with MapDefaultLoginEndpoint = false
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        builder.Services
+            .AddCustomAuth(options =>
+            {
+                options.Issuer = "http://localhost";
+                options.RequireHttps = false;
+                options.MapDefaultLoginEndpoint = false; // Disable default /login POST
+            })
+            .AddJwtTokenSigning()
+            .AddInMemoryStores(stores =>
+            {
+                stores.Clients.Add(new CustomAuthClient
+                {
+                    ClientId = ClientId,
+                    DisplayName = "Test Client",
+                    RedirectUris = { RedirectUri },
+                    AllowedScopes = { "openid", "profile", "email", "offline_access", "test-api" },
+                });
+                stores.Users.Add(new InMemoryUserStore.SeedUser
+                {
+                    UserId = "user-1",
+                    UserName = UserName,
+                    Password = Password,
+                    Email = "demo@example.com",
+                });
+            });
+
+        await using var app = builder.Build();
+
+        // 2. Map a custom host-side POST login endpoint that verifies credentials and calls SignInCustomAuthAsync
+        app.MapPost("/login", async (HttpContext context, ICustomAuthUserStore userStore) =>
+        {
+            var form = await context.Request.ReadFormAsync();
+            var user = await userStore.ValidateCredentialsAsync(form["userName"].ToString(), form["password"].ToString());
+            if (user is not null)
+            {
+                // Call the SignInCustomAuthAsync extension method to simulate custom login page
+                await context.SignInCustomAuthAsync(user.UserId);
+                return Results.Redirect(form["returnUrl"].ToString());
+            }
+            return Results.BadRequest("Invalid credentials");
+        });
+
+        app.MapCustomAuthEndpoints();
+        await app.StartAsync();
+
+        using var client = app.GetTestClient();
+
+        // 3. Perform authorization code flow
+        var verifier = CreateVerifier();
+        var authorizeUrl = BuildAuthorizeUrl(verifier);
+
+        // POST to our custom host login endpoint
+        using var loginResponse = await client.PostAsync(
+            "/login",
+            new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["userName"] = UserName,
+                ["password"] = Password,
+                ["returnUrl"] = authorizeUrl,
+            }));
+
+        Assert.Equal(HttpStatusCode.Redirect, loginResponse.StatusCode);
+        var cookie = GetCookie(loginResponse, ".Vefa.CustomAuth.Session");
+
+        // Request /connect/authorize with the session cookie
+        using var authorizeRequest = new HttpRequestMessage(HttpMethod.Get, authorizeUrl);
+        authorizeRequest.Headers.Add("Cookie", cookie);
+        var authorizeResponse = await client.SendAsync(authorizeRequest);
+
+        Assert.Equal(HttpStatusCode.Redirect, authorizeResponse.StatusCode);
+        var location = authorizeResponse.Headers.Location;
+        Assert.NotNull(location);
+        var code = QueryHelpers.ParseQuery(location!.Query)["code"].ToString();
+        Assert.False(string.IsNullOrWhiteSpace(code));
+
+        // Exchange code for tokens
+        var tokenResponse = await ExchangeCodeAsync(client, code, verifier);
+        Assert.Equal(HttpStatusCode.OK, tokenResponse.StatusCode);
+
+        var accessToken = await ReadJsonPropertyAsync(tokenResponse, "access_token");
+        Assert.False(string.IsNullOrWhiteSpace(accessToken));
     }
 
     private static async Task<WebApplication> CreateAppAsync(

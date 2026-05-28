@@ -91,4 +91,13 @@ public sealed class CustomAuthOptions
     /// should be included in the issued JWT Access Token.
     /// </summary>
     public bool IncludeAdditionalClaimsInAccessToken { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the default credential-validation POST handler
+    /// is automatically mapped to the <see cref="LoginPath"/>.
+    /// Set this to <c>false</c> if the host application completely owns the login POST process
+    /// (e.g., custom credential check, MFA, or external logins) and calls
+    /// <see cref="Extensions.CustomAuthHttpContextExtensions.SignInCustomAuthAsync"/> manually.
+    /// </summary>
+    public bool MapDefaultLoginEndpoint { get; set; } = true;
 }
