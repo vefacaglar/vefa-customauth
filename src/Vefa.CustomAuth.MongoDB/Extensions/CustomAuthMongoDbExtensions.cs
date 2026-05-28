@@ -22,7 +22,7 @@ public static class CustomAuthMongoDbExtensions
     /// <param name="services">The service collection.</param>
     /// <param name="configure">An action to configure <see cref="CustomAuthMongoDbOptions"/>.</param>
     /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddVefaCustomAuthMongoDbStores(
+    public static IServiceCollection AddCustomAuthMongoDbStores(
         this IServiceCollection services,
         Action<CustomAuthMongoDbOptions> configure)
     {

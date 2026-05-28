@@ -29,10 +29,10 @@ public static class AdminUIEndpointRouteExtensions
     /// that satisfies the application's default authorization policy. Opt out via
     /// <see cref="CustomAuthAdminUIOptions.AllowAnonymous"/> only for local development or trusted networks.
     /// </remarks>
-    public static RouteGroupBuilder MapVefaCustomAuthAdminUI(
+    public static RouteGroupBuilder MapCustomAuthAdminUI(
         this IEndpointRouteBuilder endpoints,
         string pathPrefix = "/customauth")
-        => endpoints.MapVefaCustomAuthAdminUI(options => options.PathPrefix = pathPrefix);
+        => endpoints.MapCustomAuthAdminUI(options => options.PathPrefix = pathPrefix);
 
     /// <summary>
     /// Maps the embedded Vefa.CustomAuth Admin UI dashboard and administrative CRUD API endpoints.
@@ -45,7 +45,7 @@ public static class AdminUIEndpointRouteExtensions
     /// that satisfies the application's default authorization policy. Opt out via
     /// <see cref="CustomAuthAdminUIOptions.AllowAnonymous"/> only for local development or trusted networks.
     /// </remarks>
-    public static RouteGroupBuilder MapVefaCustomAuthAdminUI(
+    public static RouteGroupBuilder MapCustomAuthAdminUI(
         this IEndpointRouteBuilder endpoints,
         Action<CustomAuthAdminUIOptions> configure)
     {

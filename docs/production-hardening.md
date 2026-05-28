@@ -47,7 +47,7 @@ Use this checklist before publishing or deploying a Vefa.CustomAuth server outsi
 ## Admin UI
 
 - Do not expose the Admin UI anonymously.
-- Require host application authorization on `MapVefaCustomAuthAdminUI`.
+- Require host application authorization on `MapCustomAuthAdminUI`.
 - Restrict Admin UI access to a small operational role.
 - Put the Admin UI behind network controls when possible.
 - Review audit logs after client, scope, session, refresh token, or signing key changes.

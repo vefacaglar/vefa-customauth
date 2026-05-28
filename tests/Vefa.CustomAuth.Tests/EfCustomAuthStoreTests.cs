@@ -23,7 +23,7 @@ public sealed class EfCustomAuthStoreTests
     {
         var services = new ServiceCollection();
         var databaseName = Guid.NewGuid().ToString("N");
-        services.AddVefaCustomAuthEntityFrameworkCore(options => options.UseInMemoryDatabase(databaseName));
+        services.AddCustomAuthEntityFrameworkCore(options => options.UseInMemoryDatabase(databaseName));
         services.AddSingleton(TimeProvider.System);
 
         await using var provider = services.BuildServiceProvider();
@@ -496,7 +496,7 @@ public sealed class EfCustomAuthStoreTests
     {
         var services = new ServiceCollection();
         var databaseName = Guid.NewGuid().ToString("N");
-        services.AddVefaCustomAuthEntityFrameworkCore(options => options.UseInMemoryDatabase(databaseName));
+        services.AddCustomAuthEntityFrameworkCore(options => options.UseInMemoryDatabase(databaseName));
         services.AddSingleton<TimeProvider>(TimeProvider.System);
         return services.BuildServiceProvider();
     }
@@ -512,7 +512,7 @@ public sealed class EfCustomAuthStoreTests
         var connection = new SqliteConnection("DataSource=:memory:");
         connection.Open();
         services.AddSingleton(connection);
-        services.AddVefaCustomAuthEntityFrameworkCore(options => options.UseSqlite(connection));
+        services.AddCustomAuthEntityFrameworkCore(options => options.UseSqlite(connection));
         services.AddSingleton<TimeProvider>(TimeProvider.System);
         var provider = services.BuildServiceProvider();
         using (var scope = provider.CreateScope())

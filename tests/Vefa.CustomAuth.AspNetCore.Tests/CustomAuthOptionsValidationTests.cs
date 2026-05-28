@@ -159,7 +159,7 @@ public sealed class CustomAuthOptionsValidationTests
     public async Task ValidateOnStart_ThrowsOptionsValidationException_WhenOptionsAreInvalid()
     {
         var builder = WebApplication.CreateBuilder();
-        builder.Services.AddVefaCustomAuth(options =>
+        builder.Services.AddCustomAuth(options =>
         {
             // Invalid options
             options.Issuer = "";

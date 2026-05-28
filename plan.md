@@ -65,15 +65,15 @@ A developer should be able to add the library to an ASP.NET Core project like th
 
 ```csharp
 builder.Services
-    .AddVefaCustomAuth(options =>
+    .AddCustomAuth(options =>
     {
         options.Issuer = "https://auth.local";
     })
     .AddJwtTokenSigning();
 
-builder.Services.AddVefaCustomAuthStores<AppDbContext>();
+builder.Services.AddCustomAuthStores<AppDbContext>();
 
-app.MapVefaCustomAuthEndpoints();
+app.MapCustomAuthEndpoints();
 ```
 
 A protected API should be able to validate access tokens using the standard JWT bearer authentication flow:
@@ -379,8 +379,8 @@ Status: completed
 Main extension methods:
 
 ```csharp
-AddVefaCustomAuth(...)
-MapVefaCustomAuthEndpoints()
+AddCustomAuth(...)
+MapCustomAuthEndpoints()
 ```
 
 Endpoint handlers should live here:
@@ -420,7 +420,7 @@ EfCustomAuthSigningKeyStore
 Possible usage:
 
 ```csharp
-builder.Services.AddVefaCustomAuthEntityFrameworkCore(options =>
+builder.Services.AddCustomAuthEntityFrameworkCore(options =>
 {
     options.UseNpgsql(connectionString);
 });
@@ -429,7 +429,7 @@ builder.Services.AddVefaCustomAuthEntityFrameworkCore(options =>
 A more flexible option:
 
 ```csharp
-builder.Services.AddVefaCustomAuthStores<AppDbContext>();
+builder.Services.AddCustomAuthStores<AppDbContext>();
 ```
 
 The second approach is probably better in the long term because it lets the consumer keep the auth tables inside their own application DbContext.

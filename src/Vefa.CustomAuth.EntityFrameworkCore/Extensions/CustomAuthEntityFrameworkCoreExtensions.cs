@@ -14,7 +14,7 @@ public static class CustomAuthEntityFrameworkCoreExtensions
     /// <summary>
     /// Registers <see cref="CustomAuthDbContext"/> and the EF-backed store implementations.
     /// </summary>
-    public static IServiceCollection AddVefaCustomAuthEntityFrameworkCore(
+    public static IServiceCollection AddCustomAuthEntityFrameworkCore(
         this IServiceCollection services,
         Action<DbContextOptionsBuilder> optionsAction)
     {
@@ -22,14 +22,14 @@ public static class CustomAuthEntityFrameworkCoreExtensions
         ArgumentNullException.ThrowIfNull(optionsAction);
 
         services.AddDbContext<CustomAuthDbContext>(optionsAction);
-        return services.AddVefaCustomAuthStores<CustomAuthDbContext>();
+        return services.AddCustomAuthStores<CustomAuthDbContext>();
     }
 
     /// <summary>
     /// Registers EF-backed store implementations using the specified DbContext type.
     /// The context must include the Vefa.CustomAuth model configuration.
     /// </summary>
-    public static IServiceCollection AddVefaCustomAuthStores<TContext>(this IServiceCollection services)
+    public static IServiceCollection AddCustomAuthStores<TContext>(this IServiceCollection services)
         where TContext : DbContext
     {
         ArgumentNullException.ThrowIfNull(services);

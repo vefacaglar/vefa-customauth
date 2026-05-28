@@ -8,13 +8,13 @@ This package maps OAuth2 and OpenID Connect endpoints and registers the runtime 
 
 ```csharp
 builder.Services
-    .AddVefaCustomAuth(options =>
+    .AddCustomAuth(options =>
     {
         options.Issuer = "https://auth.example.com";
     })
     .AddJwtTokenSigning();
 
-app.MapVefaCustomAuthEndpoints();
+app.MapCustomAuthEndpoints();
 ```
 
 Register a persistence provider separately, such as `Vefa.CustomAuth.EntityFrameworkCore` or `Vefa.CustomAuth.MongoDB`.

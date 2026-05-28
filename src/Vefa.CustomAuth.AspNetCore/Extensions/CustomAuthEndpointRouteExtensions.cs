@@ -21,7 +21,7 @@ public static class CustomAuthEndpointRouteExtensions
     /// revoke, RP-initiated logout, and the credential-validation POST handler for
     /// <see cref="CustomAuthOptions.LoginPath"/>.
     /// </summary>
-    public static IEndpointRouteBuilder MapVefaCustomAuthEndpoints(this IEndpointRouteBuilder endpoints)
+    public static IEndpointRouteBuilder MapCustomAuthEndpoints(this IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 

@@ -27,7 +27,7 @@ public sealed class MongoCustomAuthStoreTests : IAsyncLifetime
         await _container.StartAsync();
 
         var services = new ServiceCollection();
-        services.AddVefaCustomAuthMongoDbStores(options =>
+        services.AddCustomAuthMongoDbStores(options =>
         {
             options.ConnectionString = _container.GetConnectionString();
             options.DatabaseName = "customauth_test_" + Guid.NewGuid().ToString("N")[..8];

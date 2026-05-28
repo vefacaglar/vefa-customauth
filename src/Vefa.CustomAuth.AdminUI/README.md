@@ -7,14 +7,14 @@ This package maps a small browser-based administration surface for clients, scop
 ## Typical Usage
 
 ```csharp
-app.MapVefaCustomAuthAdminUI("/customauth")
+app.MapCustomAuthAdminUI("/customauth")
     .RequireAuthorization();
 ```
 
 The Admin UI can also be configured with options:
 
 ```csharp
-app.MapVefaCustomAuthAdminUI(options =>
+app.MapCustomAuthAdminUI(options =>
 {
     options.PathPrefix = "/customauth";
     options.DefaultPageSize = 20;

@@ -7,7 +7,7 @@ This package provides MongoDB-backed implementations of the Vefa.CustomAuth stor
 ## Typical Usage
 
 ```csharp
-builder.Services.AddVefaCustomAuthMongoDbStores(options =>
+builder.Services.AddCustomAuthMongoDbStores(options =>
 {
     options.ConnectionString = "mongodb://localhost:27017";
     options.DatabaseName = "customauth";

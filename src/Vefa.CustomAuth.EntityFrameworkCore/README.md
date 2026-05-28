@@ -7,7 +7,7 @@ This package provides `CustomAuthDbContext`, EF Core entity configuration, store
 ## Typical Usage
 
 ```csharp
-builder.Services.AddVefaCustomAuthEntityFrameworkCore(options =>
+builder.Services.AddCustomAuthEntityFrameworkCore(options =>
 {
     options.UseSqlite(connectionString);
 });
@@ -16,7 +16,7 @@ builder.Services.AddVefaCustomAuthEntityFrameworkCore(options =>
 If the host application owns the `DbContext`, apply the CustomAuth model configuration and register stores for that context:
 
 ```csharp
-builder.Services.AddVefaCustomAuthStores<AppDbContext>();
+builder.Services.AddCustomAuthStores<AppDbContext>();
 ```
 
 ## Notes

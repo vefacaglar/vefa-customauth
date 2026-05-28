@@ -514,7 +514,7 @@ public sealed class CustomAuthEndpointTests
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Services
-            .AddVefaCustomAuth(options =>
+            .AddCustomAuth(options =>
             {
                 options.Issuer = "http://localhost";
                 options.RequireHttps = false;
@@ -549,7 +549,7 @@ public sealed class CustomAuthEndpointTests
 
         var app = builder.Build();
         app.MapAntiforgeryStub();
-        app.MapVefaCustomAuthEndpoints();
+        app.MapCustomAuthEndpoints();
         await app.StartAsync();
         return app;
     }

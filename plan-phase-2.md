@@ -356,16 +356,16 @@ Example usage:
 
 ```csharp
 builder.Services
-    .AddVefaCustomAuth(options =>
+    .AddCustomAuth(options =>
     {
         options.Issuer = "https://auth.local";
     })
     .AddEntityFrameworkStores<AppDbContext>()
     .AddAdminUI();
 
-app.MapVefaCustomAuthEndpoints();
+app.MapCustomAuthEndpoints();
 
-app.MapVefaCustomAuthAdminUI("/customauth")
+app.MapCustomAuthAdminUI("/customauth")
    .RequireAuthorization("CustomAuthAdmin");
 ```
 
@@ -424,7 +424,7 @@ Admin UI should be easy to disable in production.
 The recommended default is:
 
 ```text
-Do not map Admin UI unless the host application explicitly calls MapVefaCustomAuthAdminUI.
+Do not map Admin UI unless the host application explicitly calls MapCustomAuthAdminUI.
 ```
 
 ---
@@ -437,7 +437,7 @@ EF Core example:
 
 ```csharp
 builder.Services
-    .AddVefaCustomAuth(options =>
+    .AddCustomAuth(options =>
     {
         options.Issuer = "https://auth.local";
     })
@@ -448,7 +448,7 @@ MongoDB example:
 
 ```csharp
 builder.Services
-    .AddVefaCustomAuth(options =>
+    .AddCustomAuth(options =>
     {
         options.Issuer = "https://auth.local";
     })
@@ -463,7 +463,7 @@ Custom provider example:
 
 ```csharp
 builder.Services
-    .AddVefaCustomAuth(options =>
+    .AddCustomAuth(options =>
     {
         options.Issuer = "https://auth.local";
     })

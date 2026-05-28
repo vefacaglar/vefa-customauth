@@ -280,7 +280,7 @@ public sealed class AdminUIEndpointTests
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Services
-            .AddVefaCustomAuth(options =>
+            .AddCustomAuth(options =>
             {
                 options.Issuer = "http://localhost";
                 options.RequireHttps = false;
@@ -298,8 +298,8 @@ public sealed class AdminUIEndpointTests
             });
 
         var app = builder.Build();
-        app.MapVefaCustomAuthEndpoints();
-        app.MapVefaCustomAuthAdminUI(options => options.AllowAnonymous = true);
+        app.MapCustomAuthEndpoints();
+        app.MapCustomAuthAdminUI(options => options.AllowAnonymous = true);
 
         await app.StartAsync();
         return app;
@@ -310,7 +310,7 @@ public sealed class AdminUIEndpointTests
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
         builder.Services
-            .AddVefaCustomAuth(options =>
+            .AddCustomAuth(options =>
             {
                 options.Issuer = "http://localhost";
                 options.RequireHttps = false;
@@ -335,8 +335,8 @@ public sealed class AdminUIEndpointTests
         var app = builder.Build();
         app.UseAuthentication();
         app.UseAuthorization();
-        app.MapVefaCustomAuthEndpoints();
-        app.MapVefaCustomAuthAdminUI();
+        app.MapCustomAuthEndpoints();
+        app.MapCustomAuthAdminUI();
 
         await app.StartAsync();
         return app;

@@ -20,7 +20,7 @@ builder.Services.TryAddSingleton<ICustomAuthUserStore>(_ => new InMemoryUserStor
     },
 }));
 
-builder.Services.AddVefaCustomAuthEntityFrameworkCore(options =>
+builder.Services.AddCustomAuthEntityFrameworkCore(options =>
 {
     options.UseSqlite("Data Source=customauth-sample.db");
 });
@@ -43,7 +43,7 @@ var app = builder.Build();
 await EnsureDatabaseSeededAsync(app.Services);
 
 app.MapGet("/", () => "Vefa.CustomAuth sample auth server. Sign in with demo / demo.");
-app.MapVefaCustomAuthEndpoints();
+app.MapCustomAuthEndpoints();
 app.MapRazorPages();
 
 app.Run();

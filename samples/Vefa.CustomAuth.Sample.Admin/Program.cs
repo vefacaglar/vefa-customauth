@@ -26,7 +26,7 @@ builder.Services.TryAddSingleton<ICustomAuthUserStore>(_ => new InMemoryUserStor
 
 // Register CustomAuth and seed a default client app
 builder.Services
-    .AddVefaCustomAuth(options =>
+    .AddCustomAuth(options =>
     {
         options.Issuer = "http://localhost:5220";
         options.RequireHttps = false;
@@ -53,7 +53,7 @@ app.MapGet("/", () => Results.Redirect("/customauth"));
 // AllowAnonymous is enabled here for the local sample only; production deployments
 // must either wire RequireAuthorization through CustomAuthAdminUIOptions.AuthorizationPolicyName
 // or rely on the application's default authorization policy.
-app.MapVefaCustomAuthEndpoints();
-app.MapVefaCustomAuthAdminUI(options => options.AllowAnonymous = true);
+app.MapCustomAuthEndpoints();
+app.MapCustomAuthAdminUI(options => options.AllowAnonymous = true);
 
 app.Run();

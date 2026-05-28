@@ -10,18 +10,18 @@ Use this package when building an authorization server with the default ASP.NET 
 
 ```csharp
 builder.Services
-    .AddVefaCustomAuth(options =>
+    .AddCustomAuth(options =>
     {
         options.Issuer = "https://auth.example.com";
     })
     .AddJwtTokenSigning();
 
-builder.Services.AddVefaCustomAuthEntityFrameworkCore(options =>
+builder.Services.AddCustomAuthEntityFrameworkCore(options =>
 {
     options.UseSqlite(connectionString);
 });
 
-app.MapVefaCustomAuthEndpoints();
+app.MapCustomAuthEndpoints();
 ```
 
 ## Notes

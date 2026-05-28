@@ -107,7 +107,7 @@ The sample WebApp uses the standard ASP.NET Core OpenID Connect handler:
 
 ```csharp
 builder.Services
-    .AddVefaCustomAuth(options =>
+    .AddCustomAuth(options =>
     {
         options.Issuer = "http://localhost:5175";
         options.RequireHttps = false;
@@ -124,7 +124,7 @@ builder.Services
         });
     });
 
-app.MapVefaCustomAuthEndpoints();
+app.MapCustomAuthEndpoints();
 ```
 
 `RequireHttps = false` is only for the local HTTP sample.
@@ -132,7 +132,7 @@ app.MapVefaCustomAuthEndpoints();
 ## EF Core Store Setup
 
 ```csharp
-builder.Services.AddVefaCustomAuthEntityFrameworkCore(options =>
+builder.Services.AddCustomAuthEntityFrameworkCore(options =>
 {
     options.UseSqlite(connectionString);
 });
@@ -141,13 +141,13 @@ builder.Services.AddVefaCustomAuthEntityFrameworkCore(options =>
 For applications that own their own `DbContext`, register the CustomAuth model configuration on that context and then register the stores:
 
 ```csharp
-builder.Services.AddVefaCustomAuthStores<AppDbContext>();
+builder.Services.AddCustomAuthStores<AppDbContext>();
 ```
 
 ## MongoDB Store Setup
 
 ```csharp
-builder.Services.AddVefaCustomAuthMongoDbStores(options =>
+builder.Services.AddCustomAuthMongoDbStores(options =>
 {
     options.ConnectionString = connectionString;
     options.DatabaseName = "customauth";
@@ -157,7 +157,7 @@ builder.Services.AddVefaCustomAuthMongoDbStores(options =>
 ## Admin UI
 
 ```csharp
-app.MapVefaCustomAuthAdminUI("/customauth")
+app.MapCustomAuthAdminUI("/customauth")
     .RequireAuthorization();
 ```
 

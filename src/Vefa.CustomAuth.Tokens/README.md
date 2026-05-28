@@ -8,7 +8,7 @@ This package issues JWT access tokens, JWT ID tokens, and opaque refresh token v
 
 ```csharp
 builder.Services
-    .AddVefaCustomAuth(options =>
+    .AddCustomAuth(options =>
     {
         options.Issuer = "https://auth.example.com";
     })
