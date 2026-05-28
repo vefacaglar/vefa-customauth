@@ -2,10 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Vefa.CustomAuth.AspNetCore.Extensions;
 using Vefa.CustomAuth.AspNetCore.Stores.InMemory;
-using Vefa.CustomAuth.Core.Models;
 using Vefa.CustomAuth.Core.Stores;
-using Vefa.CustomAuth.EntityFrameworkCore;
 using Vefa.CustomAuth.EntityFrameworkCore.Extensions;
+using Vefa.CustomAuth.Sample.AuthServer.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -53,7 +52,7 @@ var app = builder.Build();
 app.UseCors();
 app.UseStaticFiles();
 
-await Vefa.CustomAuth.Sample.AuthServer.Data.DatabaseSeeder.EnsureDatabaseSeededAsync(app.Services);
+await DatabaseSeeder.EnsureDatabaseSeededAsync(app.Services);
 
 app.MapGet("/", () => "Vefa.CustomAuth sample auth server. Sign in with demo / demo.");
 app.MapCustomAuthEndpoints();
