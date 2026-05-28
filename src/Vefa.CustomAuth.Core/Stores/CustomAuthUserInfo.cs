@@ -23,5 +23,5 @@ public sealed class CustomAuthUserInfo
     /// <summary>
     /// Gets or sets optional additional claims to include in issued tokens and userinfo responses.
     /// </summary>
-    public IReadOnlyDictionary<string, string>? AdditionalClaims { get; set; }
+    public IReadOnlyDictionary<string, object>? AdditionalClaims { get; set; }
 }

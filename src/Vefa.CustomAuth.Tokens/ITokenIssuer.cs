@@ -34,7 +34,7 @@ public sealed class TokenIssueRequest
     /// <summary>
     /// Gets or sets optional additional claims to include in user-facing tokens.
     /// </summary>
-    public IReadOnlyDictionary<string, string>? AdditionalClaims { get; set; }
+    public IReadOnlyDictionary<string, object>? AdditionalClaims { get; set; }
 }
 
 /// <summary>

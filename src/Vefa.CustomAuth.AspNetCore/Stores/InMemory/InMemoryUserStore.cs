@@ -16,7 +16,7 @@ public sealed class InMemoryUserStore : ICustomAuthUserStore
         public string UserName { get; set; } = default!;
         public string Password { get; set; } = default!;
         public string? Email { get; set; }
-        public IReadOnlyDictionary<string, string>? AdditionalClaims { get; set; }
+        public IReadOnlyDictionary<string, object>? AdditionalClaims { get; set; }
     }
 
     private readonly ConcurrentDictionary<string, SeedUser> _byUserName;

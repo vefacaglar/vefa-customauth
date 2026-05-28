@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using Vefa.CustomAuth.Core.Managers;
 using Vefa.CustomAuth.Core.Models;
 using Vefa.CustomAuth.Core.Options;
+using Vefa.CustomAuth.Core.Services;
 using Vefa.CustomAuth.Core.Stores;
 using Vefa.CustomAuth.Tokens;
 
@@ -14,6 +15,7 @@ internal sealed class TokenEndpointService
     private readonly ICustomAuthTokenManager _tokenManager;
     private readonly ICustomAuthUserStore _userStore;
     private readonly ITokenIssuer _tokenIssuer;
+    private readonly ICustomAuthProfileService _profileService;
     private readonly IOptionsMonitor<CustomAuthOptions> _options;
     private readonly TimeProvider _timeProvider;
 
@@ -22,6 +24,7 @@ internal sealed class TokenEndpointService
         ICustomAuthTokenManager tokenManager,
         ICustomAuthUserStore userStore,
         ITokenIssuer tokenIssuer,
+        ICustomAuthProfileService profileService,
         IOptionsMonitor<CustomAuthOptions> options,
         TimeProvider timeProvider)
     {
@@ -29,6 +32,7 @@ internal sealed class TokenEndpointService
         _tokenManager = tokenManager ?? throw new ArgumentNullException(nameof(tokenManager));
         _userStore = userStore ?? throw new ArgumentNullException(nameof(userStore));
         _tokenIssuer = tokenIssuer ?? throw new ArgumentNullException(nameof(tokenIssuer));
+        _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
@@ -96,11 +100,20 @@ internal sealed class TokenEndpointService
             return EndpointResults.OAuthError("invalid_grant", "The authorization code is invalid.");
         }
 
+        var isActive = await _profileService.IsUserActiveAsync(user.UserId, cancellationToken).ConfigureAwait(false);
+        if (!isActive)
+        {
+            return EndpointResults.OAuthError("invalid_grant", "The user is no longer active.");
+        }
+
         var consumed = await _tokenManager.MarkAuthorizationCodeConsumedAsync(code.Id, now, cancellationToken).ConfigureAwait(false);
         if (!consumed)
         {
             return EndpointResults.OAuthError("invalid_grant", "The authorization code is invalid.");
         }
+
+        var profileContext = new CustomAuthProfileContext(user.UserId, client, code.Scope);
+        await _profileService.GetProfileDataAsync(profileContext, cancellationToken).ConfigureAwait(false);
 
         var issued = await _tokenIssuer.IssueAsync(
             new TokenIssueRequest
@@ -110,7 +123,7 @@ internal sealed class TokenEndpointService
                 Scope = code.Scope,
                 AuthTime = code.CreatedAt,
                 Nonce = code.Nonce,
-                AdditionalClaims = GetAdditionalClaims(user),
+                AdditionalClaims = profileContext.Claims.Count > 0 ? profileContext.Claims : null,
             },
             cancellationToken).ConfigureAwait(false);
 
@@ -187,6 +200,12 @@ internal sealed class TokenEndpointService
             return EndpointResults.OAuthError("invalid_grant", "The refresh token is invalid.");
         }
 
+        var isActive = await _profileService.IsUserActiveAsync(user.UserId, cancellationToken).ConfigureAwait(false);
+        if (!isActive)
+        {
+            return EndpointResults.OAuthError("invalid_grant", "The user is no longer active.");
+        }
+
         var consumed = await _tokenManager.MarkRefreshTokenConsumedAsync(refreshToken.Id, now, cancellationToken).ConfigureAwait(false);
         if (!consumed)
         {
@@ -200,13 +219,16 @@ internal sealed class TokenEndpointService
             return EndpointResults.OAuthError("invalid_grant", "The refresh token is invalid.");
         }
 
+        var profileContext = new CustomAuthProfileContext(user.UserId, client, refreshToken.Scope);
+        await _profileService.GetProfileDataAsync(profileContext, cancellationToken).ConfigureAwait(false);
+
         var issued = await _tokenIssuer.IssueAsync(
             new TokenIssueRequest
             {
                 Subject = user.UserId,
                 ClientId = clientId,
                 Scope = refreshToken.Scope,
-                AdditionalClaims = GetAdditionalClaims(user),
+                AdditionalClaims = profileContext.Claims.Count > 0 ? profileContext.Claims : null,
             },
             cancellationToken).ConfigureAwait(false);
 
@@ -283,30 +305,6 @@ internal sealed class TokenEndpointService
     private static bool HasOfflineAccess(string scope)
         => scope.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Contains("offline_access", StringComparer.Ordinal);
-
-    private static IReadOnlyDictionary<string, string>? GetAdditionalClaims(CustomAuthUserInfo user)
-    {
-        var claims = new Dictionary<string, string>(StringComparer.Ordinal);
-        if (!string.IsNullOrWhiteSpace(user.UserName))
-        {
-            claims["name"] = user.UserName;
-        }
-
-        if (!string.IsNullOrWhiteSpace(user.Email))
-        {
-            claims["email"] = user.Email;
-        }
-
-        if (user.AdditionalClaims is not null)
-        {
-            foreach (var claim in user.AdditionalClaims)
-            {
-                claims.TryAdd(claim.Key, claim.Value);
-            }
-        }
-
-        return claims.Count == 0 ? null : claims;
-    }
 
     private static object CreateTokenResponse(IssuedTokens issued, string scope, bool includeRefreshToken)
     {

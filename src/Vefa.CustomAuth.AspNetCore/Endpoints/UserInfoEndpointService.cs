@@ -3,7 +3,9 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using System.Net.Http.Headers;
+using Vefa.CustomAuth.Core.Managers;
 using Vefa.CustomAuth.Core.Options;
+using Vefa.CustomAuth.Core.Services;
 using Vefa.CustomAuth.Core.Stores;
 using Vefa.CustomAuth.Tokens.Signing;
 
@@ -13,15 +15,21 @@ internal sealed class UserInfoEndpointService
 {
     private readonly ICustomAuthUserStore _userStore;
     private readonly ISigningCredentialsProvider _signingCredentialsProvider;
+    private readonly ICustomAuthProfileService _profileService;
+    private readonly ICustomAuthClientManager _clientManager;
     private readonly IOptionsMonitor<CustomAuthOptions> _options;
 
     public UserInfoEndpointService(
         ICustomAuthUserStore userStore,
         ISigningCredentialsProvider signingCredentialsProvider,
+        ICustomAuthProfileService profileService,
+        ICustomAuthClientManager clientManager,
         IOptionsMonitor<CustomAuthOptions> options)
     {
         _userStore = userStore ?? throw new ArgumentNullException(nameof(userStore));
         _signingCredentialsProvider = signingCredentialsProvider ?? throw new ArgumentNullException(nameof(signingCredentialsProvider));
+        _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
+        _clientManager = clientManager ?? throw new ArgumentNullException(nameof(clientManager));
         _options = options ?? throw new ArgumentNullException(nameof(options));
     }
 
@@ -82,122 +90,123 @@ internal sealed class UserInfoEndpointService
 
             userId = validationResult.ClaimsIdentity.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
             scopeClaim = validationResult.ClaimsIdentity.FindFirst("scope")?.Value;
+            var clientId = validationResult.ClaimsIdentity.FindFirst("client_id")?.Value;
+
+            if (string.IsNullOrWhiteSpace(clientId))
+            {
+                context.Response.Headers.Append("WWW-Authenticate", "Bearer error=\"invalid_token\", error_description=\"client_id claim not found in token.\"");
+                return Results.Unauthorized();
+            }
+
+            var client = await _clientManager.FindByClientIdAsync(clientId, cancellationToken).ConfigureAwait(false);
+            if (client is null)
+            {
+                context.Response.Headers.Append("WWW-Authenticate", "Bearer error=\"invalid_token\", error_description=\"Client associated with token not found.\"");
+                return Results.Unauthorized();
+            }
+
+            // 3. Resolve user details from user store
+            var user = await _userStore.FindByIdAsync(userId!, cancellationToken).ConfigureAwait(false);
+            if (user is null)
+            {
+                context.Response.Headers.Append("WWW-Authenticate", "Bearer error=\"invalid_token\", error_description=\"User associated with token not found.\"");
+                return Results.Unauthorized();
+            }
+
+            var isActive = await _profileService.IsUserActiveAsync(user.UserId, cancellationToken).ConfigureAwait(false);
+            if (!isActive)
+            {
+                context.Response.Headers.Append("WWW-Authenticate", "Bearer error=\"invalid_token\", error_description=\"The user is no longer active.\"");
+                return Results.Unauthorized();
+            }
+
+            var profileContext = new CustomAuthProfileContext(user.UserId, client, scopeClaim ?? string.Empty);
+            await _profileService.GetProfileDataAsync(profileContext, cancellationToken).ConfigureAwait(false);
+
+            // 4. Build standard OIDC UserInfo response claims filtered by scope
+            var scopes = (scopeClaim ?? string.Empty)
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var responseClaims = new Dictionary<string, object>
+            {
+                ["sub"] = user.UserId,
+            };
+
+            if (profileContext.Claims.Count > 0)
+            {
+                // Standard OIDC claim names mapping to scopes
+                var profileClaims = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "name", "given_name", "family_name", "middle_name", "nickname", 
+                    "preferred_username", "profile", "picture", "website", "gender", 
+                    "birthdate", "zoneinfo", "locale", "updated_at"
+                };
+
+                var emailClaims = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "email", "email_verified"
+                };
+
+                var phoneClaims = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "phone_number", "phone_number_verified"
+                };
+
+                var addressClaims = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "address"
+                };
+
+                foreach (var (key, value) in profileContext.Claims)
+                {
+                    if (responseClaims.ContainsKey(key))
+                    {
+                        continue;
+                    }
+
+                    if (profileClaims.Contains(key))
+                    {
+                        if (scopes.Contains("profile"))
+                        {
+                            responseClaims[key] = value;
+                        }
+                    }
+                    else if (emailClaims.Contains(key))
+                    {
+                        if (scopes.Contains("email"))
+                        {
+                            responseClaims[key] = value;
+                        }
+                    }
+                    else if (phoneClaims.Contains(key))
+                    {
+                        if (scopes.Contains("phone"))
+                        {
+                            responseClaims[key] = value;
+                        }
+                    }
+                    else if (addressClaims.Contains(key))
+                    {
+                        if (scopes.Contains("address"))
+                        {
+                            responseClaims[key] = value;
+                        }
+                    }
+                    else
+                    {
+                        // Non-standard custom claims are returned by default
+                        responseClaims[key] = value;
+                    }
+                }
+            }
+
+            return Results.Json(responseClaims);
         }
         catch (Exception ex)
         {
             context.Response.Headers.Append("WWW-Authenticate", $"Bearer error=\"invalid_token\", error_description=\"{ex.Message}\"");
             return Results.Unauthorized();
         }
-
-        if (string.IsNullOrWhiteSpace(userId))
-        {
-            context.Response.Headers.Append("WWW-Authenticate", "Bearer error=\"invalid_token\", error_description=\"Subject (sub) claim not found in token.\"");
-            return Results.Unauthorized();
-        }
-
-        // 3. Resolve user details from user store
-        var user = await _userStore.FindByIdAsync(userId, cancellationToken).ConfigureAwait(false);
-        if (user is null)
-        {
-            context.Response.Headers.Append("WWW-Authenticate", "Bearer error=\"invalid_token\", error_description=\"User associated with token not found.\"");
-            return Results.Unauthorized();
-        }
-
-        // 4. Build standard OIDC UserInfo response claims filtered by scope
-        var scopes = (scopeClaim ?? string.Empty)
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        var responseClaims = new Dictionary<string, object>
-        {
-            ["sub"] = user.UserId,
-        };
-
-        if (scopes.Contains("profile"))
-        {
-            if (!string.IsNullOrWhiteSpace(user.UserName))
-            {
-                responseClaims["name"] = user.UserName;
-                responseClaims["preferred_username"] = user.UserName;
-            }
-        }
-
-        if (scopes.Contains("email"))
-        {
-            if (!string.IsNullOrWhiteSpace(user.Email))
-            {
-                responseClaims["email"] = user.Email;
-            }
-        }
-
-        // Standard OIDC claim names mapping to scopes
-        var profileClaims = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "name", "given_name", "family_name", "middle_name", "nickname", 
-            "preferred_username", "profile", "picture", "website", "gender", 
-            "birthdate", "zoneinfo", "locale", "updated_at"
-        };
-
-        var emailClaims = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "email", "email_verified"
-        };
-
-        var phoneClaims = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "phone_number", "phone_number_verified"
-        };
-
-        var addressClaims = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "address"
-        };
-
-        if (user.AdditionalClaims is not null)
-        {
-            foreach (var (key, value) in user.AdditionalClaims)
-            {
-                if (responseClaims.ContainsKey(key))
-                {
-                    continue;
-                }
-
-                if (profileClaims.Contains(key))
-                {
-                    if (scopes.Contains("profile"))
-                    {
-                        responseClaims[key] = value;
-                    }
-                }
-                else if (emailClaims.Contains(key))
-                {
-                    if (scopes.Contains("email"))
-                    {
-                        responseClaims[key] = value;
-                    }
-                }
-                else if (phoneClaims.Contains(key))
-                {
-                    if (scopes.Contains("phone"))
-                    {
-                        responseClaims[key] = value;
-                    }
-                }
-                else if (addressClaims.Contains(key))
-                {
-                    if (scopes.Contains("address"))
-                    {
-                        responseClaims[key] = value;
-                    }
-                }
-                else
-                {
-                    // Non-standard custom claims are returned by default
-                    responseClaims[key] = value;
-                }
-            }
-        }
-
-        return Results.Json(responseClaims);
     }
 }

@@ -66,6 +66,17 @@ public sealed class JwtTokenIssuer : ITokenIssuer
             ["client_id"] = request.ClientId,
         };
 
+        if (opts.IncludeAdditionalClaimsInAccessToken && request.AdditionalClaims is not null)
+        {
+            foreach (var (key, value) in request.AdditionalClaims)
+            {
+                if (!claims.ContainsKey(key))
+                {
+                    claims[key] = value;
+                }
+            }
+        }
+
         var descriptor = new SecurityTokenDescriptor
         {
             Issuer = opts.Issuer,

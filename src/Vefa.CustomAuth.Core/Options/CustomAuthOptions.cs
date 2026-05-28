@@ -79,4 +79,10 @@ public sealed class CustomAuthOptions
     /// Gets or sets a value indicating whether HTTPS is required for the issuer URI.
     /// </summary>
     public bool RequireHttps { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether <see cref="Stores.CustomAuthUserInfo.AdditionalClaims"/>
+    /// should be included in the issued JWT Access Token.
+    /// </summary>
+    public bool IncludeAdditionalClaimsInAccessToken { get; set; } = true;
 }

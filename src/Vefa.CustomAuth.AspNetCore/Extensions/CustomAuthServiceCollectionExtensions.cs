@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Vefa.CustomAuth.AspNetCore.Endpoints;
+using Vefa.CustomAuth.AspNetCore.Services;
 using Vefa.CustomAuth.AspNetCore.Validation;
 using Vefa.CustomAuth.Core.Options;
 using Vefa.CustomAuth.Core.Services;
@@ -39,6 +40,7 @@ public static class CustomAuthServiceCollectionExtensions
         services.TryAddScoped<UserInfoEndpointService>();
         services.TryAddScoped<RevocationEndpointService>();
         services.TryAddScoped<ICustomAuthLoginAttemptTracker, DefaultLoginAttemptTracker>();
+        services.TryAddScoped<ICustomAuthProfileService, DefaultProfileService>();
 
         // Register Managers as Scoped
         services.TryAddScoped<Core.Managers.ICustomAuthClientManager, Core.Managers.CustomAuthClientManager>();

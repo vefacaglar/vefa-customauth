@@ -809,7 +809,7 @@ public sealed class V02EndpointTests
                     UserName = UserName,
                     Password = Password,
                     Email = "demo@example.com",
-                    AdditionalClaims = new Dictionary<string, string>
+                    AdditionalClaims = new Dictionary<string, object>
                     {
                         ["custom-claim"] = "custom-val"
                     }
