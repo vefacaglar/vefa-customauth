@@ -2,11 +2,11 @@ namespace Vefa.CustomAuth.AspNetCore.Client;
 
 /// <summary>
 /// Configures the OIDC client integration installed by
-/// <see cref="VefaCustomAuthClientExtensions.AddCustomAuthClient"/>. Properties not
+/// <see cref="CustomAuthClientExtensions.AddCustomAuthClient"/>. Properties not
 /// touched here keep their library defaults (PKCE on, response_type=code, refresh
 /// tokens saved, <c>name</c> claim mapping, etc.).
 /// </summary>
-public sealed class VefaCustomAuthClientOptions
+public sealed class CustomAuthClientOptions
 {
     /// <summary>
     /// Gets or sets the issuer URI of the Vefa.CustomAuth authorization server

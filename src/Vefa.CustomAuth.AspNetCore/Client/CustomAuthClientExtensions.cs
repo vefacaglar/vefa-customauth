@@ -14,32 +14,32 @@ namespace Vefa.CustomAuth.AspNetCore.Client;
 /// ASP.NET Core application with sensible defaults (PKCE, code flow, cookie
 /// session, name claim mapped, refresh tokens persisted).
 /// </summary>
-public static class VefaCustomAuthClientExtensions
+public static class CustomAuthClientExtensions
 {
     /// <summary>
     /// Registers cookie + OpenID Connect authentication configured against a
-    /// Vefa.CustomAuth authorization server. Only <see cref="VefaCustomAuthClientOptions.Authority"/>
-    /// and <see cref="VefaCustomAuthClientOptions.ClientId"/> are required; the rest
+    /// Vefa.CustomAuth authorization server. Only <see cref="CustomAuthClientOptions.Authority"/>
+    /// and <see cref="CustomAuthClientOptions.ClientId"/> are required; the rest
     /// keep secure defaults unless overridden.
     /// </summary>
     public static AuthenticationBuilder AddCustomAuthClient(
         this IServiceCollection services,
-        Action<VefaCustomAuthClientOptions> configure)
+        Action<CustomAuthClientOptions> configure)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configure);
 
-        var options = new VefaCustomAuthClientOptions();
+        var options = new CustomAuthClientOptions();
         configure(options);
 
         if (string.IsNullOrWhiteSpace(options.Authority))
         {
-            throw new ArgumentException($"{nameof(VefaCustomAuthClientOptions.Authority)} must be specified.", nameof(configure));
+            throw new ArgumentException($"{nameof(CustomAuthClientOptions.Authority)} must be specified.", nameof(configure));
         }
 
         if (string.IsNullOrWhiteSpace(options.ClientId))
         {
-            throw new ArgumentException($"{nameof(VefaCustomAuthClientOptions.ClientId)} must be specified.", nameof(configure));
+            throw new ArgumentException($"{nameof(CustomAuthClientOptions.ClientId)} must be specified.", nameof(configure));
         }
 
         return services
