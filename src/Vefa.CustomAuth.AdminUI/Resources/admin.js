@@ -44,8 +44,8 @@ window.adminApp = function() {
             isEdit: false,
             clientId: '',
             displayName: '',
-            redirectUrisRaw: '',
-            postLogoutRedirectUrisRaw: '',
+            redirectUris: [],
+            postLogoutRedirectUris: [],
             allowedScopes: [],
             accessTokenLifetimeSeconds: 3600,
             refreshTokenLifetimeSeconds: 2592000,
@@ -112,8 +112,8 @@ window.adminApp = function() {
                 isEdit: false,
                 clientId: '',
                 displayName: '',
-                redirectUrisRaw: '',
-                postLogoutRedirectUrisRaw: '',
+                redirectUris: [''],
+                postLogoutRedirectUris: [],
                 allowedScopes: ['openid', 'profile'],
                 accessTokenLifetimeSeconds: 3600,
                 refreshTokenLifetimeSeconds: 2592000,
@@ -130,8 +130,8 @@ window.adminApp = function() {
                 isEdit: true,
                 clientId: client.clientId,
                 displayName: client.displayName || '',
-                redirectUrisRaw: (client.redirectUris || []).join('\n'),
-                postLogoutRedirectUrisRaw: (client.postLogoutRedirectUris || []).join('\n'),
+                redirectUris: (client.redirectUris && client.redirectUris.length > 0) ? [...client.redirectUris] : [''],
+                postLogoutRedirectUris: [...(client.postLogoutRedirectUris || [])],
                 allowedScopes: [...(client.allowedScopes || [])],
                 accessTokenLifetimeSeconds: client.accessTokenLifetimeSeconds,
                 refreshTokenLifetimeSeconds: client.refreshTokenLifetimeSeconds,
@@ -145,6 +145,27 @@ window.adminApp = function() {
 
         closeModal() {
             this.modalOpen = false;
+        },
+
+        addRedirectUri() {
+            this.form.redirectUris.push('');
+        },
+
+        removeRedirectUri(index) {
+            if (this.form.redirectUris.length === 1) {
+                this.form.redirectUris = [''];
+                return;
+            }
+
+            this.form.redirectUris.splice(index, 1);
+        },
+
+        addPostLogoutRedirectUri() {
+            this.form.postLogoutRedirectUris.push('');
+        },
+
+        removePostLogoutRedirectUri(index) {
+            this.form.postLogoutRedirectUris.splice(index, 1);
         },
 
         // Interactive Scope Picker Grid Toggles
@@ -177,9 +198,9 @@ window.adminApp = function() {
             const clientData = {
                 clientId: this.form.clientId.trim(),
                 displayName: this.form.displayName.trim(),
-                redirectUris: this.form.redirectUrisRaw.split('\n').map(u => u.trim()).filter(u => u !== ''),
-                postLogoutRedirectUris: this.form.postLogoutRedirectUrisRaw.split('\n').map(u => u.trim()).filter(u => u !== ''),
-                allowedScopes: this.form.allowedScopes,
+                redirectUris: this.normalizeList(this.form.redirectUris),
+                postLogoutRedirectUris: this.normalizeList(this.form.postLogoutRedirectUris),
+                allowedScopes: this.normalizeList(this.form.allowedScopes),
                 accessTokenLifetimeSeconds: this.form.accessTokenLifetimeSeconds,
                 refreshTokenLifetimeSeconds: this.form.refreshTokenLifetimeSeconds,
                 requirePkce: this.form.requirePkce,
@@ -212,6 +233,10 @@ window.adminApp = function() {
             } catch (error) {
                 this.showToast(error.message, 'danger');
             }
+        },
+
+        normalizeList(values) {
+            return [...new Set((values || []).map(v => (v || '').trim()).filter(v => v !== ''))];
         },
 
         // Delete Client

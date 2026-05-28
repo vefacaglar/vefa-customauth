@@ -437,15 +437,36 @@
                 </div>
 
                 <div class="space-y-1">
-                    <label class="text-[11px] font-semibold text-slate-400" for="redirectUris">Redirect URIs <span class="text-red-500">*</span></label>
-                    <textarea id="redirectUris" x-model="form.redirectUrisRaw" placeholder="http://localhost:5043/signin-oidc&#10;https://myapp.com/callback" required class="w-full bg-[#030406]/50 border border-white/[0.05] text-slate-200 px-3.5 py-2.5 rounded-xl text-xs focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all min-h-[70px] resize-y font-mono"></textarea>
-                    <span class="text-[9px] text-slate-500 block">Strict exact match authorization callback targets. One per line.</span>
+                    <div class="flex items-center justify-between">
+                        <label class="text-[11px] font-semibold text-slate-400">Redirect URIs <span class="text-red-500">*</span></label>
+                        <button type="button" @click="addRedirectUri()" class="text-[10px] font-semibold text-indigo-400 hover:text-indigo-300 cursor-pointer">+ Add URI</button>
+                    </div>
+                    <div class="space-y-2">
+                        <template x-for="(redirectUri, index) in form.redirectUris" :key="index">
+                            <div class="flex gap-2">
+                                <input type="url" x-model="form.redirectUris[index]" placeholder="http://localhost:5043/signin-oidc" required class="flex-1 bg-[#030406]/50 border border-white/[0.05] text-slate-200 px-3.5 py-2.5 rounded-xl text-xs focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all font-mono">
+                                <button type="button" @click="removeRedirectUri(index)" class="px-3 py-2 text-[10px] font-semibold text-slate-400 bg-white/[0.02] border border-white/[0.05] rounded-xl hover:bg-white/[0.05] transition-all cursor-pointer">Remove</button>
+                            </div>
+                        </template>
+                    </div>
+                    <span class="text-[9px] text-slate-500 block">Strict exact match authorization callback targets. Each row is stored as a separate client redirect URI.</span>
                 </div>
 
                 <div class="space-y-1">
-                    <label class="text-[11px] font-semibold text-slate-400" for="postLogoutRedirectUris">Post-Logout Redirect URIs</label>
-                    <textarea id="postLogoutRedirectUris" x-model="form.postLogoutRedirectUrisRaw" placeholder="http://localhost:5043/&#10;https://myapp.com/" class="w-full bg-[#030406]/50 border border-white/[0.05] text-slate-200 px-3.5 py-2.5 rounded-xl text-xs focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all min-h-[60px] resize-y font-mono"></textarea>
-                    <span class="text-[9px] text-slate-500 block">Allowed destinations after secure logout. One per line.</span>
+                    <div class="flex items-center justify-between">
+                        <label class="text-[11px] font-semibold text-slate-400">Post-Logout Redirect URIs</label>
+                        <button type="button" @click="addPostLogoutRedirectUri()" class="text-[10px] font-semibold text-indigo-400 hover:text-indigo-300 cursor-pointer">+ Add URI</button>
+                    </div>
+                    <div class="space-y-2" x-show="form.postLogoutRedirectUris.length > 0">
+                        <template x-for="(postLogoutRedirectUri, index) in form.postLogoutRedirectUris" :key="index">
+                            <div class="flex gap-2">
+                                <input type="url" x-model="form.postLogoutRedirectUris[index]" placeholder="http://localhost:5043/" class="flex-1 bg-[#030406]/50 border border-white/[0.05] text-slate-200 px-3.5 py-2.5 rounded-xl text-xs focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all font-mono">
+                                <button type="button" @click="removePostLogoutRedirectUri(index)" class="px-3 py-2 text-[10px] font-semibold text-slate-400 bg-white/[0.02] border border-white/[0.05] rounded-xl hover:bg-white/[0.05] transition-all cursor-pointer">Remove</button>
+                            </div>
+                        </template>
+                    </div>
+                    <span x-show="form.postLogoutRedirectUris.length === 0" class="text-[10px] text-slate-600 block">No post-logout redirect URI registered.</span>
+                    <span class="text-[9px] text-slate-500 block">Allowed destinations after secure logout. Each row is stored as a separate client post-logout URI.</span>
                 </div>
 
                 <!-- Interactive Scope Picker Grid -->
