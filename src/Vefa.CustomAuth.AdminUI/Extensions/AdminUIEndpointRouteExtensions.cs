@@ -60,9 +60,12 @@ public static class AdminUIEndpointRouteExtensions
         var assembly = typeof(AdminUIEndpointRouteExtensions).Assembly;
 
         var group = endpoints.MapGroup(normalizedPrefix);
+        group.AddEndpointFilter<AdminUIAntiforgeryFilter>();
 
         // 1. Serve embedded static SPA resources
-        group.MapGet("", async (HttpContext context) =>
+        group.MapGet("", async (
+            HttpContext context, 
+            [FromServices] Microsoft.AspNetCore.Antiforgery.IAntiforgery antiforgery) =>
         {
             if (!context.Request.Path.Value!.EndsWith("/", StringComparison.Ordinal))
             {
@@ -77,6 +80,13 @@ public static class AdminUIEndpointRouteExtensions
 
             using var reader = new StreamReader(stream, Encoding.UTF8);
             var html = await reader.ReadToEndAsync().ConfigureAwait(false);
+
+            var tokens = antiforgery.GetAndStoreTokens(context);
+            if (tokens.RequestToken is not null)
+            {
+                html = html.Replace("__RequestVerificationToken__", tokens.RequestToken);
+            }
+
             return Results.Content(html, "text/html", Encoding.UTF8);
         });
 
@@ -374,6 +384,34 @@ public static class AdminUIEndpointRouteExtensions
         if (options.MaxPageSize < options.DefaultPageSize)
         {
             throw new ArgumentOutOfRangeException(nameof(options), "Maximum page size must be greater than or equal to the default page size.");
+        }
+    }
+
+    private sealed class AdminUIAntiforgeryFilter : IEndpointFilter
+    {
+        private readonly Microsoft.AspNetCore.Antiforgery.IAntiforgery _antiforgery;
+
+        public AdminUIAntiforgeryFilter(Microsoft.AspNetCore.Antiforgery.IAntiforgery antiforgery)
+        {
+            _antiforgery = antiforgery ?? throw new ArgumentNullException(nameof(antiforgery));
+        }
+
+        public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+        {
+            var method = context.HttpContext.Request.Method;
+            if (HttpMethods.IsPost(method) || HttpMethods.IsPut(method) || HttpMethods.IsDelete(method))
+            {
+                try
+                {
+                    await _antiforgery.ValidateRequestAsync(context.HttpContext).ConfigureAwait(false);
+                }
+                catch (Microsoft.AspNetCore.Antiforgery.AntiforgeryValidationException)
+                {
+                    return Results.BadRequest("Antiforgery token validation failed.");
+                }
+            }
+
+            return await next(context).ConfigureAwait(false);
         }
     }
 }

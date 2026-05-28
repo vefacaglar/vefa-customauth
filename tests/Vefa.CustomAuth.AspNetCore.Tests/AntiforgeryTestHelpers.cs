@@ -79,4 +79,25 @@ internal static class AntiforgeryTestHelpers
         var end = html.IndexOf('"', start);
         return html[start..end];
     }
+
+    public static async Task<AntiforgeryTokens> GetAdminUiAntiforgeryAsync(HttpClient client, string prefix = "/customauth")
+    {
+        var response = await client.GetAsync(prefix + "/");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var html = await response.Content.ReadAsStringAsync();
+        var setCookieHeaders = response.Headers.GetValues("Set-Cookie");
+        var cookieHeader = setCookieHeaders.Single(c => c.StartsWith(".AspNetCore.Antiforgery", StringComparison.Ordinal));
+        var cookie = cookieHeader.Split(';', 2)[0];
+
+        const string marker = "<meta name=\"csrf-token\" content=\"";
+        var idx = html.IndexOf(marker, StringComparison.Ordinal);
+        if (idx < 0)
+        {
+            throw new InvalidOperationException("No csrf-token meta tag found in Admin UI.");
+        }
+        var start = idx + marker.Length;
+        var end = html.IndexOf('"', start);
+        var token = html[start..end];
+        return new AntiforgeryTokens(cookie, "RequestVerificationToken", token);
+    }
 }

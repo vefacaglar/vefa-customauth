@@ -62,6 +62,9 @@ public sealed class AdminUIEndpointTests
         Assert.Single(result!.Items);
         Assert.Equal(ClientId, result.Items[0].ClientId);
 
+        // Fetch Antiforgery token
+        var antiforgery = await AntiforgeryTestHelpers.GetAdminUiAntiforgeryAsync(client);
+
         // 2. Create client (POST)
         var newClient = new CustomAuthClient
         {
@@ -71,7 +74,13 @@ public sealed class AdminUIEndpointTests
             AllowedScopes = new List<string> { "openid" },
             AllowRefreshTokens = false
         };
-        var createResponse = await client.PostAsJsonAsync("/customauth/api/clients", newClient);
+        using var createRequest = new HttpRequestMessage(HttpMethod.Post, "/customauth/api/clients")
+        {
+            Content = JsonContent.Create(newClient)
+        };
+        createRequest.Headers.Add("Cookie", antiforgery.Cookie);
+        createRequest.Headers.Add("RequestVerificationToken", antiforgery.RequestToken);
+        var createResponse = await client.SendAsync(createRequest);
         Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
 
         // 3. Verify created client in list (GET)
@@ -81,11 +90,20 @@ public sealed class AdminUIEndpointTests
 
         // 4. Update client (PUT)
         newClient.DisplayName = "Updated Application Name";
-        var updateResponse = await client.PutAsJsonAsync($"/customauth/api/clients/{newClient.ClientId}", newClient);
+        using var updateRequest = new HttpRequestMessage(HttpMethod.Put, $"/customauth/api/clients/{newClient.ClientId}")
+        {
+            Content = JsonContent.Create(newClient)
+        };
+        updateRequest.Headers.Add("Cookie", antiforgery.Cookie);
+        updateRequest.Headers.Add("RequestVerificationToken", antiforgery.RequestToken);
+        var updateResponse = await client.SendAsync(updateRequest);
         Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
 
         // 5. Delete client (DELETE)
-        var deleteResponse = await client.DeleteAsync($"/customauth/api/clients/{newClient.ClientId}");
+        using var deleteRequest = new HttpRequestMessage(HttpMethod.Delete, $"/customauth/api/clients/{newClient.ClientId}");
+        deleteRequest.Headers.Add("Cookie", antiforgery.Cookie);
+        deleteRequest.Headers.Add("RequestVerificationToken", antiforgery.RequestToken);
+        var deleteResponse = await client.SendAsync(deleteRequest);
         Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
 
         // 6. Verify deleted (GET)
@@ -106,6 +124,9 @@ public sealed class AdminUIEndpointTests
         var scopes = await listResponse.Content.ReadFromJsonAsync<List<CustomAuthScope>>();
         Assert.NotNull(scopes);
 
+        // Fetch Antiforgery token
+        var antiforgery = await AntiforgeryTestHelpers.GetAdminUiAntiforgeryAsync(client);
+
         // 2. Create scope (POST)
         var newScope = new CustomAuthScope
         {
@@ -115,7 +136,13 @@ public sealed class AdminUIEndpointTests
             Required = false,
             Emphasize = true
         };
-        var createResponse = await client.PostAsJsonAsync("/customauth/api/scopes", newScope);
+        using var createRequest = new HttpRequestMessage(HttpMethod.Post, "/customauth/api/scopes")
+        {
+            Content = JsonContent.Create(newScope)
+        };
+        createRequest.Headers.Add("Cookie", antiforgery.Cookie);
+        createRequest.Headers.Add("RequestVerificationToken", antiforgery.RequestToken);
+        var createResponse = await client.SendAsync(createRequest);
         Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
 
         // 3. Verify created scope in list
@@ -125,11 +152,20 @@ public sealed class AdminUIEndpointTests
 
         // 4. Update scope (PUT)
         newScope.Description = "Updated description";
-        var updateResponse = await client.PutAsJsonAsync($"/customauth/api/scopes/{newScope.Name}", newScope);
+        using var updateRequest = new HttpRequestMessage(HttpMethod.Put, $"/customauth/api/scopes/{newScope.Name}")
+        {
+            Content = JsonContent.Create(newScope)
+        };
+        updateRequest.Headers.Add("Cookie", antiforgery.Cookie);
+        updateRequest.Headers.Add("RequestVerificationToken", antiforgery.RequestToken);
+        var updateResponse = await client.SendAsync(updateRequest);
         Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
 
         // 5. Delete scope (DELETE)
-        var deleteResponse = await client.DeleteAsync($"/customauth/api/scopes/{newScope.Name}");
+        using var deleteRequest = new HttpRequestMessage(HttpMethod.Delete, $"/customauth/api/scopes/{newScope.Name}");
+        deleteRequest.Headers.Add("Cookie", antiforgery.Cookie);
+        deleteRequest.Headers.Add("RequestVerificationToken", antiforgery.RequestToken);
+        var deleteResponse = await client.SendAsync(deleteRequest);
         Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
     }
 
@@ -170,6 +206,27 @@ public sealed class AdminUIEndpointTests
         Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
         var content = await listResponse.Content.ReadAsStringAsync();
         Assert.NotNull(content);
+    }
+
+    [Fact]
+    public async Task AdminUiMutatingEndpointsEnforceAntiforgery()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        var newClient = new CustomAuthClient
+        {
+            ClientId = "csrf-fail-app",
+            DisplayName = "CSRF Fail App",
+            RedirectUris = new List<string> { "https://localhost/callback" },
+            AllowedScopes = new List<string> { "openid" },
+            AllowRefreshTokens = false
+        };
+
+        var response = await client.PostAsJsonAsync("/customauth/api/clients", newClient);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.Contains("Antiforgery token validation failed", content);
     }
 
     [Fact]

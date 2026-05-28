@@ -55,20 +55,51 @@ public sealed class V02EndpointTests
         Assert.Equal(HttpStatusCode.Redirect, loginResponse.StatusCode);
         var cookie = GetCookie(loginResponse, ".Vefa.CustomAuth.Session");
 
-        // 2. Perform logout
+        // 2. Perform GET logout - should render confirmation page and NOT revoke session/clear cookie immediately
         using var logoutRequest = new HttpRequestMessage(HttpMethod.Get, "/connect/logout");
         logoutRequest.Headers.Add("Cookie", cookie);
         var logoutResponse = await client.SendAsync(logoutRequest);
 
         Assert.Equal(HttpStatusCode.OK, logoutResponse.StatusCode);
         var responseHtml = await logoutResponse.Content.ReadAsStringAsync();
-        Assert.Contains("Logged Out Successfully", responseHtml);
+        Assert.Contains("Confirm Log Out", responseHtml);
+        Assert.Contains("Log Out?", responseHtml);
+        Assert.DoesNotContain("Logged Out Successfully", responseHtml);
 
-        // 3. Verify cookie is cleared in response
-        var setCookieHeaders = logoutResponse.Headers.GetValues("Set-Cookie");
+        // Extract Antiforgery token and cookie from GET response
+        var tokenMarker = "name=\"__RequestVerificationToken\" value=\"";
+        var tokenIdx = responseHtml.IndexOf(tokenMarker, StringComparison.Ordinal);
+        Assert.True(tokenIdx >= 0);
+        var tokenStart = tokenIdx + tokenMarker.Length;
+        var tokenEnd = responseHtml.IndexOf('"', tokenStart);
+        var requestToken = responseHtml[tokenStart..tokenEnd];
+
+        var setCookieHeadersGet = logoutResponse.Headers.GetValues("Set-Cookie");
+        var antiforgeryCookie = setCookieHeadersGet.Single(c => c.Contains(".AspNetCore.Antiforgery")).Split(';', 2)[0];
+
+        // 3. Post to logout with the extracted antiforgery token and cookie
+        using var postRequest = new HttpRequestMessage(HttpMethod.Post, "/connect/logout")
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["__RequestVerificationToken"] = requestToken,
+                ["post_logout_redirect_uri"] = "",
+                ["state"] = "",
+                ["client_id"] = ""
+            })
+        };
+        postRequest.Headers.Add("Cookie", $"{cookie}; {antiforgeryCookie}");
+        var postResponse = await client.SendAsync(postRequest);
+
+        Assert.Equal(HttpStatusCode.OK, postResponse.StatusCode);
+        var postResponseHtml = await postResponse.Content.ReadAsStringAsync();
+        Assert.Contains("Logged Out Successfully", postResponseHtml);
+
+        // 4. Verify cookie is cleared in response
+        var setCookieHeaders = postResponse.Headers.GetValues("Set-Cookie");
         Assert.Contains(setCookieHeaders, h => h.Contains(".Vefa.CustomAuth.Session=;") || h.Contains(".Vefa.CustomAuth.Session= "));
 
-        // 4. Verify session is revoked in database
+        // 5. Verify session is revoked in database
         var sessionStore = app.Services.GetRequiredService<ICustomAuthSessionStore>();
         var sessionId = Guid.Parse(cookie.Split('=', 2)[1].Split(';', 2)[0]);
         var session = await sessionStore.FindAsync(sessionId);
