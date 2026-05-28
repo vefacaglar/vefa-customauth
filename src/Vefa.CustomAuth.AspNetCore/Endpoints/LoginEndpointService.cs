@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Vefa.CustomAuth.Core.Managers;
 using Vefa.CustomAuth.Core.Models;
@@ -15,7 +16,7 @@ namespace Vefa.CustomAuth.AspNetCore.Endpoints;
 /// responsibility; this service consumes a POST submission, validates antiforgery,
 /// authenticates the user, opens an SSO session, and redirects.
 /// </summary>
-internal sealed class LoginEndpointService
+internal sealed partial class LoginEndpointService
 {
     private readonly ICustomAuthUserStore _userStore;
     private readonly ICustomAuthSessionManager _sessionManager;
@@ -24,6 +25,7 @@ internal sealed class LoginEndpointService
     private readonly ICustomAuthLoginAttemptTracker _loginAttemptTracker;
     private readonly IOptionsMonitor<CustomAuthOptions> _options;
     private readonly TimeProvider _timeProvider;
+    private readonly ILogger<LoginEndpointService> _logger;
 
     public LoginEndpointService(
         ICustomAuthUserStore userStore,
@@ -32,7 +34,8 @@ internal sealed class LoginEndpointService
         IAntiforgery antiforgery,
         ICustomAuthLoginAttemptTracker loginAttemptTracker,
         IOptionsMonitor<CustomAuthOptions> options,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        ILogger<LoginEndpointService> logger)
     {
         _userStore = userStore ?? throw new ArgumentNullException(nameof(userStore));
         _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
@@ -41,6 +44,7 @@ internal sealed class LoginEndpointService
         _loginAttemptTracker = loginAttemptTracker ?? throw new ArgumentNullException(nameof(loginAttemptTracker));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     public async Task<IResult> HandleAsync(HttpContext context, CancellationToken cancellationToken = default)
@@ -56,18 +60,29 @@ internal sealed class LoginEndpointService
         {
             await _antiforgery.ValidateRequestAsync(context).ConfigureAwait(false);
         }
-        catch (AntiforgeryValidationException)
+        catch (AntiforgeryValidationException ex)
         {
+            LogAntiforgeryFailed(returnUrl, ex);
             return RedirectToLoginPage(returnUrl, "antiforgery_failed");
         }
 
-        if (string.IsNullOrWhiteSpace(userName) || string.IsNullOrWhiteSpace(password))
+        var hasUserName = !string.IsNullOrWhiteSpace(userName);
+        var hasPassword = !string.IsNullOrWhiteSpace(password);
+        if (!hasUserName || !hasPassword)
         {
+            var missingField = (hasUserName, hasPassword) switch
+            {
+                (false, false) => "userName and password",
+                (false, true) => "userName",
+                _ => "password",
+            };
+            LogMissingCredentials(missingField);
             return RedirectToLoginPage(returnUrl, "missing_credentials");
         }
 
         if (await _loginAttemptTracker.IsBlockedAsync(userName, cancellationToken).ConfigureAwait(false))
         {
+            LogAccountLocked(userName);
             return RedirectToLoginPage(returnUrl, "account_locked");
         }
 
@@ -75,6 +90,7 @@ internal sealed class LoginEndpointService
         if (user is null)
         {
             await _loginAttemptTracker.RecordFailureAsync(userName, cancellationToken).ConfigureAwait(false);
+            LogInvalidCredentials(userName);
             return RedirectToLoginPage(returnUrl, "invalid_credentials");
         }
 
@@ -92,8 +108,39 @@ internal sealed class LoginEndpointService
         await _sessionManager.CreateAsync(session, cancellationToken).ConfigureAwait(false);
         _sessionCookieService.SignIn(context, session);
 
+        LogLoginSucceeded(userName, session.Id);
         return Results.Redirect(IsLocalReturnUrl(returnUrl) ? returnUrl : "/");
     }
+
+    [LoggerMessage(
+        EventId = 1001,
+        Level = LogLevel.Warning,
+        Message = "Login rejected: antiforgery validation failed (returnUrl: {ReturnUrl}).")]
+    private partial void LogAntiforgeryFailed(string returnUrl, Exception exception);
+
+    [LoggerMessage(
+        EventId = 1002,
+        Level = LogLevel.Warning,
+        Message = "Login rejected: missing credentials ({MissingField} not supplied).")]
+    private partial void LogMissingCredentials(string missingField);
+
+    [LoggerMessage(
+        EventId = 1003,
+        Level = LogLevel.Warning,
+        Message = "Login rejected: account is locked out due to too many failed attempts (userName: {UserName}).")]
+    private partial void LogAccountLocked(string userName);
+
+    [LoggerMessage(
+        EventId = 1004,
+        Level = LogLevel.Warning,
+        Message = "Login rejected: invalid credentials, the user name does not exist or the password is incorrect (userName: {UserName}).")]
+    private partial void LogInvalidCredentials(string userName);
+
+    [LoggerMessage(
+        EventId = 1005,
+        Level = LogLevel.Information,
+        Message = "Login succeeded and SSO session opened (userName: {UserName}, sessionId: {SessionId}).")]
+    private partial void LogLoginSucceeded(string userName, Guid sessionId);
 
     private IResult RedirectToLoginPage(string returnUrl, string errorCode)
     {
