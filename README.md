@@ -103,6 +103,15 @@ The sample WebApp uses the standard ASP.NET Core OpenID Connect handler:
 6. The WebApp calls the protected API with the access token.
 7. The API validates the JWT access token with `JwtBearer`.
 
+## SSO Session Architecture
+
+Vefa.CustomAuth separates UI rendering from endpoint processing to give you full control over your design while maintaining strict security inside the library.
+
+1. **Host-Owned UI**: The login screen (`/login`) and logout confirmation screen (`/logout`) are standard Razor Pages or MVC views owned entirely by your host application.
+2. **Library-Owned Endpoints**: When the login form submits to `POST /login`, it is intercepted by `Vefa.CustomAuth`'s internal `LoginEndpointService` (mapped via `app.MapCustomAuthEndpoints()`).
+3. **SSO Cookie**: Instead of relying on standard ASP.NET Core `CookieAuthentication`, Vefa.CustomAuth manages its own highly secure, encrypted SSO Session cookie (`CustomAuth.Session` or `__Host-CustomAuth.Session` when HTTPS is enforced) using `IDataProtectionProvider`.
+4. **Seamless Redirects**: When a user navigates to a new client app and is redirected to the AuthServer, the library's `/connect/authorize` endpoint reads the `CustomAuth.Session` cookie. If valid, it silently issues an authorization code and redirects the user back to the client application without ever showing the login screen.
+
 ## Minimal Auth Server Setup
 
 ```csharp
