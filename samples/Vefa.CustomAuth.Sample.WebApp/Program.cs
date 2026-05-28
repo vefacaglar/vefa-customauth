@@ -30,6 +30,7 @@ builder.Services.AddHttpClient("auth-server", client =>
 
 var app = builder.Build();
 
+app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -39,4 +40,3 @@ app.MapControllers();
 app.MapCustomAuthSignOut("/logout");
 
 app.Run();
-

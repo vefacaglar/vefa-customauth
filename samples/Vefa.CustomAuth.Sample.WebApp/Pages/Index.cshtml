@@ -6,77 +6,58 @@
 
 @if (!Model.IsAuthenticated)
 {
-    <div class="bg-gray-800 rounded-2xl p-12 text-center ring-1 ring-gray-700 shadow-2xl">
-        <div class="w-20 h-20 bg-gray-700/50 rounded-full flex items-center justify-center mx-auto mb-6">
-            <svg class="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-        </div>
-        <h2 class="text-2xl font-semibold mb-4">Welcome to the Sample App</h2>
-        <p class="text-gray-400 mb-8 max-w-md mx-auto">This application demonstrates how to integrate a relying party with Vefa.CustomAuth using OpenID Connect.</p>
-        <a href="/login" class="inline-flex items-center justify-center px-6 py-3 bg-brand-600 hover:bg-brand-500 text-white rounded-xl font-medium transition-all transform hover:-translate-y-0.5 shadow-lg shadow-brand-500/25">
-            Sign In with Vefa.CustomAuth
-            <svg class="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
-        </a>
+    <div class="intro-panel">
+        <h2>Welcome to the Sample App</h2>
+        <p>This application demonstrates how to integrate a relying party with Vefa.CustomAuth using OpenID Connect.</p>
+        <a href="/login" class="button button-primary">Sign In with Vefa.CustomAuth</a>
     </div>
 }
 else
 {
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8" x-data="appData()">
-        <div class="lg:col-span-1 space-y-8">
-            <!-- Profile Card -->
-            <div class="bg-gray-800 rounded-2xl p-6 ring-1 ring-gray-700">
-                <div class="flex items-center mb-6">
-                    <div class="w-12 h-12 rounded-full bg-gradient-to-br from-brand-500 to-teal-500 flex items-center justify-center text-white font-bold text-xl uppercase">
-                        @Model.Initials
-                    </div>
-                    <div class="ml-4">
-                        <h3 class="font-semibold text-lg">@Model.Name</h3>
-                        <p class="text-sm text-gray-400">Authenticated User</p>
-                    </div>
-                </div>
-                
-                <div class="space-y-4">
-                    <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Actions</h4>
-                    <button @@click="testApi" :disabled="loadingApi" class="w-full flex items-center justify-center px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed group">
-                        <svg x-show="loadingApi" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" x-cloak><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                        <svg x-show="!loadingApi" class="w-4 h-4 mr-2 text-gray-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                        Test API Request
-                    </button>
-                    <button @@click="refreshToken" :disabled="loadingRefresh" class="w-full flex items-center justify-center px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed group">
-                        <svg x-show="loadingRefresh" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" x-cloak><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                        <svg x-show="!loadingRefresh" class="w-4 h-4 mr-2 text-gray-400 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                        Refresh Token
-                    </button>
+    <div class="dashboard-grid" x-data="appData()">
+        <aside class="profile-panel">
+            <div class="profile-summary">
+                <div class="profile-initials">@Model.Initials</div>
+                <div>
+                    <h3>@Model.Name</h3>
+                    <p>Authenticated User</p>
                 </div>
             </div>
-        </div>
 
-        <div class="lg:col-span-2 space-y-8">
-            <!-- Console Output -->
-            <div class="bg-gray-800 rounded-2xl ring-1 ring-gray-700 overflow-hidden flex flex-col h-[500px]">
-                <div class="bg-gray-900/50 px-4 py-3 border-b border-gray-700 flex items-center justify-between">
-                    <h3 class="text-sm font-medium text-gray-300 flex items-center">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                        Console Output
-                    </h3>
-                    <button @@click="clearConsole" class="text-xs text-gray-500 hover:text-gray-300">Clear</button>
-                </div>
-                <div class="p-4 font-mono text-sm overflow-y-auto flex-1" id="console-container">
-                    <template x-for="(log, index) in logs" :key="index">
-                        <div class="mb-2">
-                            <span class="text-gray-500">[<span x-text="log.time"></span>]</span>
-                            <span :class="{
-                                'text-blue-400': log.type === 'info',
-                                'text-green-400': log.type === 'success',
-                                'text-red-400': log.type === 'error'
-                            }" x-text="log.message"></span>
-                            <template x-if="log.data">
-                                <pre class="mt-1 p-2 bg-gray-900 rounded text-xs text-gray-300 overflow-x-auto whitespace-pre-wrap break-all" x-text="JSON.stringify(log.data, null, 2)"></pre>
-                            </template>
-                        </div>
-                    </template>
-                </div>
+            <div class="action-list">
+                <h4>Actions</h4>
+                <button @@click="testApi" :disabled="loadingApi" class="button button-secondary full-width">
+                    <span x-show="loadingApi" x-cloak>...</span>
+                    Test API Request
+                </button>
+                <button @@click="refreshToken" :disabled="loadingRefresh" class="button button-secondary full-width">
+                    <span x-show="loadingRefresh" x-cloak>...</span>
+                    Refresh Token
+                </button>
             </div>
-        </div>
+        </aside>
+
+        <section class="console-panel">
+            <div class="console-header">
+                <h3>Console Output</h3>
+                <button @@click="clearConsole" class="link-button">Clear</button>
+            </div>
+            <div class="console-body" id="console-container">
+                <template x-for="(log, index) in logs" :key="index">
+                    <div class="log-entry">
+                        <span class="log-time">[<span x-text="log.time"></span>]</span>
+                        <span :class="{
+                            'log-info': log.type === 'info',
+                            'log-success': log.type === 'success',
+                            'log-error': log.type === 'error'
+                        }" x-text="log.message"></span>
+                        <template x-if="log.data">
+                            <pre x-text="JSON.stringify(log.data, null, 2)"></pre>
+                        </template>
+                    </div>
+                </template>
+            </div>
+        </section>
     </div>
 }
 
@@ -87,36 +68,38 @@ else
                 logs: [],
                 loadingApi: false,
                 loadingRefresh: false,
-                
+
                 init() {
                     this.addLog('info', 'Application loaded.');
                 },
-                
+
                 addLog(type, message, data = null) {
                     const now = new Date();
                     const timeString = now.toLocaleTimeString('en-US', { hour12: false }) + '.' + String(now.getMilliseconds()).padStart(3, '0');
                     this.logs.push({ type, message, data, time: timeString });
                     this.$nextTick(() => {
                         const container = document.getElementById('console-container');
-                        if(container) container.scrollTop = container.scrollHeight;
+                        if (container) {
+                            container.scrollTop = container.scrollHeight;
+                        }
                     });
                 },
-                
+
                 clearConsole() {
                     this.logs = [];
                     this.addLog('info', 'Console cleared.');
                 },
-                
+
                 async testApi() {
                     this.loadingApi = true;
                     this.addLog('info', 'Calling Sample API /weather...');
-                    
+
                     try {
                         const response = await fetch('/api/test-api');
                         if (!response.ok) {
                             throw new Error(`HTTP error! status: ${response.status}`);
                         }
-                        
+
                         const data = await response.json();
                         this.addLog('success', 'API Request Successful', data);
                     } catch (error) {
@@ -125,19 +108,19 @@ else
                         this.loadingApi = false;
                     }
                 },
-                
+
                 async refreshToken() {
                     this.loadingRefresh = true;
                     this.addLog('info', 'Attempting to refresh token...');
-                    
+
                     try {
                         const response = await fetch('/api/refresh', { method: 'POST' });
-                        
+
                         if (!response.ok) {
                             const errorText = await response.text();
                             throw new Error(`Status ${response.status}: ${errorText}`);
                         }
-                        
+
                         const data = await response.json();
                         this.addLog('success', 'Token refreshed successfully!', data);
                     } catch (error) {

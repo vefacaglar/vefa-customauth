@@ -7,12 +7,12 @@
     --accent-color: #b5a897;
     --accent-hover: #eae4d9;
     --muted-bg: #1a1816;
-    --error-bg: rgba(185, 28, 28, 0.14);
-    --error-border: rgba(248, 113, 113, 0.28);
-    --error-text: #fca5a5;
-    --success-bg: rgba(4, 120, 87, 0.16);
-    --success-border: rgba(52, 211, 153, 0.28);
-    --success-text: #6ee7b7;
+    --error-bg: #1a1816;
+    --error-border: #5c544a;
+    --error-text: #b3a799;
+    --success-bg: #1a1816;
+    --success-border: #5c544a;
+    --success-text: #b5a897;
 }
 
 body {
@@ -123,6 +123,7 @@ h1 {
 .btn-submit {
     display: block;
     width: 100%;
+    box-sizing: border-box;
     background: var(--text-primary);
     color: var(--bg-color);
     border: 1px solid var(--text-primary);
