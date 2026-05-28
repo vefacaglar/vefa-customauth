@@ -16,6 +16,17 @@
         <div class="subtitle">to continue to your application</div>
     </div>
 
+    @if (Model.Registered == true)
+    {
+        <div class="alert-success">
+            <svg viewBox="0 0 24 24">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+            <span>Registration successful! You can now sign in below.</span>
+        </div>
+    }
+
     @if (!string.IsNullOrEmpty(Model.ErrorMessage))
     {
         <div class="alert-error">
@@ -48,6 +59,10 @@
 
         <button type="submit" class="btn-submit">Sign In</button>
     </form>
+
+    <div class="auth-footer">
+        Don't have an account? <a href="/Register?ReturnUrl=@System.Net.WebUtility.UrlEncode(Model.ReturnUrl ?? "")" class="auth-link">Sign up</a>
+    </div>
 
     <div class="divider"></div>
 

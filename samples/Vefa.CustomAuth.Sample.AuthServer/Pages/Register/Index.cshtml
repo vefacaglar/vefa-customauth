@@ -1,0 +1,91 @@
+@page
+@model Vefa.CustomAuth.Sample.AuthServer.Pages.Register.IndexModel
+@{
+    ViewData["Title"] = "Create Account";
+}
+
+<div class="container">
+    <div class="header">
+        <div class="icon">
+            <svg viewBox="0 0 24 24">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="8.5" cy="7" r="4"></circle>
+                <line x1="20" y1="8" x2="20" y2="14"></line>
+                <line x1="23" y1="11" x2="17" y2="11"></line>
+            </svg>
+        </div>
+        <h1>Create Account</h1>
+        <div class="subtitle">to get started with your account</div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+    {
+        <div class="alert-error">
+            <svg viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+            <span>@Model.ErrorMessage</span>
+        </div>
+    }
+
+    @if (!Model.IsIdentityEnabled)
+    {
+        <div class="alert-error" style="text-align: center; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem;">
+            <svg viewBox="0 0 24 24" style="width: 32px; height: 32px;">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+            <strong style="font-weight: 600; color: #ffffff;">Registration Unavailable</strong>
+            <span style="font-size: 0.825rem; color: var(--text-secondary);">
+                ASP.NET Core Identity is disabled in this environment. Set <code>UseAspNetCoreIdentity</code> to <code>true</code> in configuration to enable user persistence.
+            </span>
+        </div>
+
+        <div class="auth-footer">
+            <a href="/Login?ReturnUrl=@System.Net.WebUtility.UrlEncode(Model.ReturnUrl ?? "")" class="auth-link">Go back to Sign In</a>
+        </div>
+    }
+    else
+    {
+        <form method="post">
+            <input type="hidden" name="returnUrl" value="@Model.ReturnUrl" />
+
+            <div class="form-group">
+                <label class="form-label" for="username">Username</label>
+                <div class="input-wrapper">
+                    <input class="input-control" id="username" name="Username" value="@Model.Username" placeholder="Choose a username" required autofocus />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="email">Email address</label>
+                <div class="input-wrapper">
+                    <input class="input-control" id="email" name="Email" type="email" value="@Model.Email" placeholder="Enter your email" required />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="password">Password</label>
+                <div class="input-wrapper">
+                    <input class="input-control" id="password" name="Password" type="password" placeholder="Min. 4 characters" required />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="confirmPassword">Confirm Password</label>
+                <div class="input-wrapper">
+                    <input class="input-control" id="confirmPassword" name="ConfirmPassword" type="password" placeholder="Confirm your password" required />
+                </div>
+            </div>
+
+            <button type="submit" class="btn-submit">Register</button>
+        </form>
+
+        <div class="auth-footer">
+            Already have an account? <a href="/Login?ReturnUrl=@System.Net.WebUtility.UrlEncode(Model.ReturnUrl ?? "")" class="auth-link">Sign in</a>
+        </div>
+    }
+</div>

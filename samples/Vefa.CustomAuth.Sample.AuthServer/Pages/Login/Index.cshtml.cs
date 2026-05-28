@@ -14,6 +14,9 @@ public sealed class IndexModel : PageModel
     [BindProperty(SupportsGet = true)]
     public string? ReturnUrl { get; set; }
 
+    [BindProperty(SupportsGet = true)]
+    public bool? Registered { get; set; }
+
     [BindProperty(SupportsGet = true, Name = "error")]
     public string? ErrorCode { get; set; }
 
