@@ -577,13 +577,63 @@ CI package build
 
 ### v1.0
 
-Status: partial — public API stabilization, documentation, and production hardening checklist are in progress.
+Status: partial — public API stabilization is mostly complete; the security audit's P0 protocol hardening items are shipped (see §19). P1 (at_hash, prompt/max_age, UserInfo scope filtering, rate limiting, constant-time compare, revocation hardening) and P2 hardening are still pending.
 
 ```text
 Security hardening
 Stable public API
 Migration strategy
 Package versioning policy
+```
+
+---
+
+## 19. Security Audit Remediation (RFC 6749 / 7009 / 7636 / 8414 / 9700 / OIDC Core)
+
+Full audit findings + 21-item severity-ordered remediation roadmap (P0/P1/P2) live at `/Users/vefa/.claude/plans/first-you-need-handover-federated-nygaard.md`. Read that file before changing protocol code.
+
+### P0 — must fix before any production deployment
+
+Status: completed (2026-05-28)
+
+```text
+P0-1  Admin UI authorization bypass closed (MapGroup + RequireAuthorization by default)
+P0-2  OIDC nonce parsed, persisted on the auth code, echoed into the ID token
+P0-3  Authorize errors after redirect_uri validation now redirect with error= and state=
+P0-4  Authorization code & refresh token consumption is atomic (CAS, returns bool)
+P0-5  CSRF protection on /login POST via IAntiforgery
+P0-6  Token endpoint sets Cache-Control: no-store and Pragma: no-cache
+```
+
+Test count after P0 work: **77** (26 store/manager + 51 AspNetCore). Build remains 0 warnings / 0 errors.
+
+### P1 — should fix before 1.1 release
+
+Status: pending — see audit plan §4.1 items 7–12.
+
+```text
+P1-7   Add at_hash to ID token (OIDC Core §3.1.3.6)
+P1-8   Implement prompt=none / prompt=login (and ideally max_age)
+P1-9   UserInfo: support POST + filter claims by scope (OIDC Core §5.3, §5.4)
+P1-10  Rate limiting / lockout extension point on /login
+P1-11  Constant-time hash compare in PkceVerifier (CryptographicOperations.FixedTimeEquals)
+P1-12  Revocation hardening: client binding, token_type_hint, chain revocation
+```
+
+### P2 — hardening
+
+Status: pending — see audit plan §4.1 items 13–21.
+
+```text
+P2-13  Drop PKCE plain method from PkceVerifier and discovery
+P2-14  Lower default AuthorizationCodeLifetime to 60s
+P2-15  CSRF tokens on Admin UI mutating endpoints
+P2-16  Restrict /connect/logout state changes to POST + anti-forgery
+P2-17  Token endpoint returns 401 + WWW-Authenticate for invalid_client
+P2-18  Use __Host- cookie prefix + Data Protection wrapper for session cookie
+P2-19  Client redirect URI format validation (RFC 8252 §7.3)
+P2-20  EF Core cleanup service parity with MongoCustomAuthCleanupService
+P2-21  /connect/introspect (deferred per §3 unless a real consumer needs it)
 ```
 
 ---
