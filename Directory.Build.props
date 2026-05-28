@@ -6,7 +6,6 @@
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <GenerateDocumentationFile Condition="'$(IsPackable)' == 'true'">true</GenerateDocumentationFile>
-    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup Label="Package">
@@ -19,7 +18,7 @@
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageTags>oauth2;oidc;sso;authentication;aspnetcore</PackageTags>
-    <Version>0.1.0</Version>
+    <Version>1.0.0</Version>
   </PropertyGroup>
 
 </Project>

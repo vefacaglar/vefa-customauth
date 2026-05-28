@@ -7,8 +7,17 @@ using Vefa.CustomAuth.Core.Options;
 
 namespace Vefa.CustomAuth.AspNetCore.Extensions;
 
+/// <summary>
+/// Dependency injection extension methods for Vefa.CustomAuth.
+/// </summary>
 public static class CustomAuthServiceCollectionExtensions
 {
+    /// <summary>
+    /// Registers the core Vefa.CustomAuth services and options.
+    /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configure">The options configuration callback.</param>
+    /// <returns>A builder that can be used to register token signing and stores.</returns>
     public static CustomAuthBuilder AddVefaCustomAuth(this IServiceCollection services, Action<CustomAuthOptions> configure)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -49,14 +58,4 @@ public static class CustomAuthServiceCollectionExtensions
 
         return new CustomAuthBuilder(services);
     }
-}
-
-public sealed class CustomAuthBuilder
-{
-    public CustomAuthBuilder(IServiceCollection services)
-    {
-        Services = services;
-    }
-
-    public IServiceCollection Services { get; }
 }

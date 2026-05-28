@@ -719,6 +719,8 @@ Add generated client configuration view
 
 ### v0.8 — MongoDB Provider
 
+Status: completed
+
 ```text
 Implement MongoDB stores
 Add MongoDB collection mappings
@@ -728,6 +730,8 @@ Run shared store contract tests against MongoDB
 ```
 
 ### v0.9 — Admin UI Extended Management
+
+Status: completed
 
 ```text
 Scope management
@@ -740,6 +744,8 @@ Test authorization flow screen
 ```
 
 ### v1.0 — Stable Provider API
+
+Status: partial — public API stabilization and production hardening documentation are in progress.
 
 ```text
 Stabilize public store interfaces

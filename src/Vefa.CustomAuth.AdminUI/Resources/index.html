@@ -38,7 +38,20 @@
         </div>
     </header>
 
-    <main class="max-w-7xl mx-auto px-8 py-8 relative z-10 grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <main class="max-w-7xl mx-auto px-8 py-8 relative z-10">
+        
+        <!-- Tab Navigation -->
+        <div class="flex items-center gap-1 mb-8 bg-white/[0.02] border border-white/[0.05] p-1.5 rounded-2xl">
+            <button @click="activeTab = 'clients'" :class="activeTab === 'clients' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'text-slate-400 hover:text-slate-200 border-transparent'" class="px-4 py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer">Clients</button>
+            <button @click="activeTab = 'scopes'; loadScopes()" :class="activeTab === 'scopes' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'text-slate-400 hover:text-slate-200 border-transparent'" class="px-4 py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer">Scopes</button>
+            <button @click="activeTab = 'sessions'; loadSessions()" :class="activeTab === 'sessions' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'text-slate-400 hover:text-slate-200 border-transparent'" class="px-4 py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer">Sessions</button>
+            <button @click="activeTab = 'tokens'; loadRefreshTokens()" :class="activeTab === 'tokens' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'text-slate-400 hover:text-slate-200 border-transparent'" class="px-4 py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer">Refresh Tokens</button>
+            <button @click="activeTab = 'keys'; loadSigningKeys()" :class="activeTab === 'keys' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'text-slate-400 hover:text-slate-200 border-transparent'" class="px-4 py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer">Signing Keys</button>
+            <button @click="activeTab = 'audit'; loadAuditLogs()" :class="activeTab === 'audit' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'text-slate-400 hover:text-slate-200 border-transparent'" class="px-4 py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer">Audit Logs</button>
+        </div>
+
+        <!-- Clients Tab -->
+        <div x-show="activeTab === 'clients'" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         <!-- Left 2 Columns: Client Management -->
         <div class="lg:col-span-2 space-y-6">
@@ -182,6 +195,220 @@
             </div>
         </div>
 
+        </div><!-- End Clients Tab -->
+
+        <!-- Scopes Tab -->
+        <div x-show="activeTab === 'scopes'" class="space-y-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-2xl font-bold tracking-tight">Scopes</h2>
+                    <p class="text-xs text-slate-400 mt-1">Manage OAuth2 scopes available to clients.</p>
+                </div>
+                <button @click="openScopeModal()" class="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all cursor-pointer">+ Create Scope</button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <template x-for="scope in scopes" :key="scope.name">
+                    <div class="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 space-y-3">
+                        <div class="flex justify-between items-start">
+                            <h3 class="font-bold text-sm text-indigo-400" x-text="scope.name"></h3>
+                            <span x-show="scope.required" class="text-[9px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">Required</span>
+                        </div>
+                        <p class="text-[11px] text-slate-400" x-text="scope.description || 'No description'"></p>
+                        <div class="flex justify-end gap-2 pt-2 border-t border-white/[0.03]">
+                            <button @click="openScopeModal(scope)" class="px-3 py-1.5 text-[10px] font-semibold text-slate-300 bg-white/[0.03] border border-white/[0.05] rounded-lg hover:bg-white/[0.07] transition-all cursor-pointer">Edit</button>
+                            <button @click="deleteScope(scope.name)" class="px-3 py-1.5 text-[10px] font-semibold text-red-400 bg-red-500/5 border border-red-500/10 rounded-lg hover:bg-red-500/10 transition-all cursor-pointer">Delete</button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Sessions Tab -->
+        <div x-show="activeTab === 'sessions'" class="space-y-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-2xl font-bold tracking-tight">Active Sessions</h2>
+                    <p class="text-xs text-slate-400 mt-1">View and manage user SSO sessions.</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-4 bg-white/[0.02] border border-white/[0.05] p-3 rounded-2xl">
+                <div class="relative flex-1">
+                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500 text-sm">🔍</span>
+                    <input type="text" x-model="sessionSearch" @input.debounce.300ms="loadSessions()" placeholder="Search by user ID..." class="w-full bg-[#030406]/50 border border-white/[0.05] text-slate-200 pl-10 pr-4 py-2.5 rounded-xl text-xs placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all">
+                </div>
+            </div>
+
+            <div class="bg-white/[0.02] border border-white/[0.05] rounded-2xl overflow-hidden">
+                <table class="w-full text-xs">
+                    <thead class="bg-white/[0.02] border-b border-white/[0.05]">
+                        <tr>
+                            <th class="text-left px-4 py-3 font-semibold text-slate-400">Session ID</th>
+                            <th class="text-left px-4 py-3 font-semibold text-slate-400">User ID</th>
+                            <th class="text-left px-4 py-3 font-semibold text-slate-400">Created</th>
+                            <th class="text-left px-4 py-3 font-semibold text-slate-400">Expires</th>
+                            <th class="text-left px-4 py-3 font-semibold text-slate-400">Status</th>
+                            <th class="text-right px-4 py-3 font-semibold text-slate-400">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="session in sessions" :key="session.id">
+                            <tr class="border-b border-white/[0.03] hover:bg-white/[0.02]">
+                                <td class="px-4 py-3 font-mono text-[10px] text-slate-300" x-text="session.id.substring(0, 8) + '...'"></td>
+                                <td class="px-4 py-3 text-slate-200" x-text="session.userId"></td>
+                                <td class="px-4 py-3 text-slate-400" x-text="formatDate(session.createdAt)"></td>
+                                <td class="px-4 py-3 text-slate-400" x-text="formatDate(session.expiresAt)"></td>
+                                <td class="px-4 py-3">
+                                    <span x-show="session.revokedAt" class="text-[9px] font-bold text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">Revoked</span>
+                                    <span x-show="!session.revokedAt && new Date(session.expiresAt) > new Date()" class="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">Active</span>
+                                    <span x-show="!session.revokedAt && new Date(session.expiresAt) <= new Date()" class="text-[9px] font-bold text-slate-500 bg-slate-500/10 px-1.5 py-0.5 rounded">Expired</span>
+                                </td>
+                                <td class="px-4 py-3 text-right">
+                                    <button x-show="!session.revokedAt" @click="revokeSession(session.id)" class="px-3 py-1.5 text-[10px] font-semibold text-red-400 bg-red-500/5 border border-red-500/10 rounded-lg hover:bg-red-500/10 transition-all cursor-pointer">Revoke</button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Refresh Tokens Tab -->
+        <div x-show="activeTab === 'tokens'" class="space-y-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-2xl font-bold tracking-tight">Refresh Tokens</h2>
+                    <p class="text-xs text-slate-400 mt-1">View and manage refresh tokens issued to clients.</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-4 bg-white/[0.02] border border-white/[0.05] p-3 rounded-2xl">
+                <div class="relative flex-1">
+                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500 text-sm">🔍</span>
+                    <input type="text" x-model="tokenSearch" @input.debounce.300ms="loadRefreshTokens()" placeholder="Search by client ID or user ID..." class="w-full bg-[#030406]/50 border border-white/[0.05] text-slate-200 pl-10 pr-4 py-2.5 rounded-xl text-xs placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all">
+                </div>
+            </div>
+
+            <div class="bg-white/[0.02] border border-white/[0.05] rounded-2xl overflow-hidden">
+                <table class="w-full text-xs">
+                    <thead class="bg-white/[0.02] border-b border-white/[0.05]">
+                        <tr>
+                            <th class="text-left px-4 py-3 font-semibold text-slate-400">Token ID</th>
+                            <th class="text-left px-4 py-3 font-semibold text-slate-400">Client ID</th>
+                            <th class="text-left px-4 py-3 font-semibold text-slate-400">User ID</th>
+                            <th class="text-left px-4 py-3 font-semibold text-slate-400">Session</th>
+                            <th class="text-left px-4 py-3 font-semibold text-slate-400">Parent</th>
+                            <th class="text-left px-4 py-3 font-semibold text-slate-400">Created</th>
+                            <th class="text-left px-4 py-3 font-semibold text-slate-400">Expires</th>
+                            <th class="text-left px-4 py-3 font-semibold text-slate-400">Absolute</th>
+                            <th class="text-left px-4 py-3 font-semibold text-slate-400">Status</th>
+                            <th class="text-right px-4 py-3 font-semibold text-slate-400">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="token in refreshTokens" :key="token.id">
+                            <tr class="border-b border-white/[0.03] hover:bg-white/[0.02]">
+                                <td class="px-4 py-3 font-mono text-[10px] text-slate-300" x-text="token.id.substring(0, 8) + '...'"></td>
+                                <td class="px-4 py-3 text-indigo-400" x-text="token.clientId"></td>
+                                <td class="px-4 py-3 text-slate-200" x-text="token.userId"></td>
+                                <td class="px-4 py-3 font-mono text-[10px] text-slate-400" x-text="token.sessionId ? token.sessionId.substring(0, 8) + '...' : '-'"></td>
+                                <td class="px-4 py-3 font-mono text-[10px] text-slate-500" x-text="token.parentTokenId ? token.parentTokenId.substring(0, 8) + '...' : '-'"></td>
+                                <td class="px-4 py-3 text-slate-400" x-text="formatDate(token.createdAt)"></td>
+                                <td class="px-4 py-3 text-slate-400" x-text="formatDate(token.expiresAt)"></td>
+                                <td class="px-4 py-3 text-slate-400" x-text="formatDate(token.absoluteExpiresAt)"></td>
+                                <td class="px-4 py-3">
+                                    <span x-show="token.revokedAt" class="text-[9px] font-bold text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">Revoked</span>
+                                    <span x-show="token.consumedAt && !token.revokedAt" class="text-[9px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">Consumed</span>
+                                    <span x-show="isRefreshTokenActive(token)" class="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">Active</span>
+                                    <span x-show="!token.revokedAt && !token.consumedAt && !isRefreshTokenActive(token)" class="text-[9px] font-bold text-slate-500 bg-slate-500/10 px-1.5 py-0.5 rounded">Expired</span>
+                                </td>
+                                <td class="px-4 py-3 text-right">
+                                    <button x-show="!token.revokedAt && !token.consumedAt" @click="revokeRefreshToken(token.id)" class="px-3 py-1.5 text-[10px] font-semibold text-red-400 bg-red-500/5 border border-red-500/10 rounded-lg hover:bg-red-500/10 transition-all cursor-pointer">Revoke</button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Signing Keys Tab -->
+        <div x-show="activeTab === 'keys'" class="space-y-6">
+            <div>
+                <h2 class="text-2xl font-bold tracking-tight">Signing Keys</h2>
+                <p class="text-xs text-slate-400 mt-1">View JWT signing keys used for token issuance.</p>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4">
+                <template x-for="key in signingKeys" :key="key.keyId">
+                    <div class="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-5 space-y-4">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="font-bold text-sm text-slate-100 flex items-center gap-2">
+                                    <span x-text="key.keyId"></span>
+                                    <span x-show="key.isActive" class="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">Active</span>
+                                    <span x-show="!key.isActive" class="text-[9px] font-bold text-slate-500 bg-slate-500/10 px-1.5 py-0.5 rounded">Retired</span>
+                                </h3>
+                                <p class="text-[11px] text-slate-400 mt-1">Algorithm: <span class="text-indigo-400 font-mono" x-text="key.algorithm"></span></p>
+                            </div>
+                            <div class="text-right text-[10px] text-slate-500">
+                                <div>Created: <span x-text="formatDate(key.createdAt)"></span></div>
+                                <div x-show="key.retiredAt">Retired: <span x-text="formatDate(key.retiredAt)"></span></div>
+                            </div>
+                        </div>
+                        <div class="space-y-1">
+                            <span class="block text-[9px] uppercase font-bold text-slate-600 tracking-wider">Public Key (PEM)</span>
+                            <pre class="bg-[#030406]/50 border border-white/[0.05] rounded-xl p-3 text-[10px] font-mono text-slate-300 overflow-x-auto max-h-[120px] overflow-y-auto scrollbar" x-text="key.publicKeyPem"></pre>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Audit Logs Tab -->
+        <div x-show="activeTab === 'audit'" class="space-y-6">
+            <div>
+                <h2 class="text-2xl font-bold tracking-tight">Audit Logs</h2>
+                <p class="text-xs text-slate-400 mt-1">View administrative actions and security events.</p>
+            </div>
+
+            <div class="flex items-center gap-4 bg-white/[0.02] border border-white/[0.05] p-3 rounded-2xl">
+                <div class="relative flex-1">
+                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-500 text-sm">🔍</span>
+                    <input type="text" x-model="auditSearch" @input.debounce.300ms="loadAuditLogs()" placeholder="Search by action, target, or actor..." class="w-full bg-[#030406]/50 border border-white/[0.05] text-slate-200 pl-10 pr-4 py-2.5 rounded-xl text-xs placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all">
+                </div>
+            </div>
+
+            <div class="bg-white/[0.02] border border-white/[0.05] rounded-2xl overflow-hidden">
+                <table class="w-full text-xs">
+                    <thead class="bg-white/[0.02] border-b border-white/[0.05]">
+                        <tr>
+                            <th class="text-left px-4 py-3 font-semibold text-slate-400">Timestamp</th>
+                            <th class="text-left px-4 py-3 font-semibold text-slate-400">Action</th>
+                            <th class="text-left px-4 py-3 font-semibold text-slate-400">Target</th>
+                            <th class="text-left px-4 py-3 font-semibold text-slate-400">Actor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="log in auditLogs" :key="log.id">
+                            <tr class="border-b border-white/[0.03] hover:bg-white/[0.02]">
+                                <td class="px-4 py-3 text-slate-400" x-text="formatDate(log.timestamp)"></td>
+                                <td class="px-4 py-3">
+                                    <span class="text-[10px] font-semibold text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded" x-text="log.action"></span>
+                                </td>
+                                <td class="px-4 py-3 text-slate-300">
+                                    <span class="text-[10px] text-slate-500" x-text="log.targetType"></span>
+                                    <span class="font-mono text-[10px] ml-1" x-text="log.targetId"></span>
+                                </td>
+                                <td class="px-4 py-3 text-slate-400" x-text="log.actorUserId || 'System'"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
     </main>
 
     <!-- Create/Edit Client Modal -->
@@ -263,6 +490,53 @@
                 <div class="flex justify-end gap-2 pt-6 border-t border-white/[0.05]">
                     <button type="button" @click="closeModal()" class="px-4 py-2 text-xs font-semibold text-slate-400 bg-white/[0.02] border border-white/[0.05] rounded-xl hover:bg-white/[0.05] transition-all cursor-pointer">Cancel</button>
                     <button type="submit" class="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 rounded-xl hover:bg-indigo-500 shadow-md shadow-indigo-600/20 transition-all cursor-pointer">Save Client</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Scope Modal -->
+    <div x-show="scopeModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto" style="display: none;">
+        <div class="fixed inset-0 bg-black/75 backdrop-blur-sm" @click="closeScopeModal()"></div>
+        
+        <div x-show="scopeModalOpen" x-transition class="bg-[#0b0e13] border border-white/[0.08] rounded-3xl w-full max-w-md shadow-2xl relative z-10 p-6 space-y-4">
+            <div class="flex justify-between items-center">
+                <h3 class="text-sm font-bold text-slate-100" x-text="scopeForm.isEdit ? 'Edit Scope' : 'Create Scope'"></h3>
+                <button @click="closeScopeModal()" class="text-slate-500 hover:text-white text-lg font-medium cursor-pointer">&times;</button>
+            </div>
+
+            <form @submit.prevent="submitScopeForm()" class="space-y-4">
+                <div class="space-y-1">
+                    <label class="text-[11px] font-semibold text-slate-400">Scope Name <span class="text-red-500">*</span></label>
+                    <input type="text" x-model="scopeForm.name" :disabled="scopeForm.isEdit" required class="w-full bg-[#030406]/50 border border-white/[0.05] text-slate-200 px-3.5 py-2.5 rounded-xl text-xs focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all disabled:opacity-50">
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-[11px] font-semibold text-slate-400">Display Name</label>
+                    <input type="text" x-model="scopeForm.displayName" class="w-full bg-[#030406]/50 border border-white/[0.05] text-slate-200 px-3.5 py-2.5 rounded-xl text-xs focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all">
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-[11px] font-semibold text-slate-400">Description</label>
+                    <textarea x-model="scopeForm.description" class="w-full bg-[#030406]/50 border border-white/[0.05] text-slate-200 px-3.5 py-2.5 rounded-xl text-xs focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all min-h-[60px] resize-y"></textarea>
+                </div>
+
+                <div class="flex gap-6">
+                    <label class="checkbox-container">
+                        <input type="checkbox" x-model="scopeForm.required">
+                        <span class="checkmark"></span>
+                        <span class="checkbox-label text-xs ml-6">Required</span>
+                    </label>
+                    <label class="checkbox-container">
+                        <input type="checkbox" x-model="scopeForm.emphasize">
+                        <span class="checkmark"></span>
+                        <span class="checkbox-label text-xs ml-6">Emphasize</span>
+                    </label>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-4 border-t border-white/[0.05]">
+                    <button type="button" @click="closeScopeModal()" class="px-4 py-2 text-xs font-semibold text-slate-400 bg-white/[0.02] border border-white/[0.05] rounded-xl hover:bg-white/[0.05] transition-all cursor-pointer">Cancel</button>
+                    <button type="submit" class="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 rounded-xl hover:bg-indigo-500 shadow-md shadow-indigo-600/20 transition-all cursor-pointer">Save Scope</button>
                 </div>
             </form>
         </div>

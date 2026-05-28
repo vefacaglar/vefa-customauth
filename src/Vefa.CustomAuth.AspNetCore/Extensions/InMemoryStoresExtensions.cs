@@ -7,22 +7,6 @@ using Vefa.CustomAuth.Core.Stores;
 namespace Vefa.CustomAuth.AspNetCore.Extensions;
 
 /// <summary>
-/// Builder for configuring seed data for in-memory stores.
-/// </summary>
-public sealed class InMemoryStoresBuilder
-{
-    /// <summary>
-    /// Gets the list of clients to seed.
-    /// </summary>
-    public List<CustomAuthClient> Clients { get; } = new();
-
-    /// <summary>
-    /// Gets the list of users to seed.
-    /// </summary>
-    public List<InMemoryUserStore.SeedUser> Users { get; } = new();
-}
-
-/// <summary>
 /// Dependency injection extension methods for registering in-memory stores.
 /// </summary>
 public static class InMemoryStoresExtensions

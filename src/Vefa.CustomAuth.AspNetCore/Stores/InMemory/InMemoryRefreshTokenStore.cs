@@ -28,6 +28,30 @@ public sealed class InMemoryRefreshTokenStore : ICustomAuthRefreshTokenStore
         return Task.FromResult(token);
     }
 
+    public Task<CustomAuthPagedResult<CustomAuthRefreshToken>> GetPagedAsync(CustomAuthPagedRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var query = _tokensByHash.Values.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var search = request.Search;
+            query = query.Where(t =>
+                t.ClientId.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                t.UserId.Contains(search, StringComparison.OrdinalIgnoreCase));
+        }
+
+        query = query.OrderByDescending(t => t.CreatedAt);
+
+        var totalCount = query.Count();
+        var page = request.Page > 0 ? request.Page : 1;
+        var pageSize = request.PageSize > 0 ? request.PageSize : 10;
+        var items = query.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+
+        return Task.FromResult(new CustomAuthPagedResult<CustomAuthRefreshToken> { Items = items, TotalCount = totalCount });
+    }
+
     public Task MarkConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default)
     {
         if (_tokensById.TryGetValue(id, out var token))
@@ -41,6 +65,16 @@ public sealed class InMemoryRefreshTokenStore : ICustomAuthRefreshTokenStore
     public Task RevokeAsync(Guid id, DateTimeOffset revokedAt, CancellationToken cancellationToken = default)
     {
         if (_tokensById.TryGetValue(id, out var token))
+        {
+            token.RevokedAt = revokedAt;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task RevokeBySessionIdAsync(Guid sessionId, DateTimeOffset revokedAt, CancellationToken cancellationToken = default)
+    {
+        foreach (var token in _tokensById.Values.Where(token => token.SessionId == sessionId && token.RevokedAt is null))
         {
             token.RevokedAt = revokedAt;
         }

@@ -27,6 +27,11 @@ public sealed class CustomAuthAuthorizationCode
     public string UserId { get; set; } = default!;
 
     /// <summary>
+    /// Gets or sets the unique identifier of the SSO session that issued this authorization code.
+    /// </summary>
+    public Guid? SessionId { get; set; }
+
+    /// <summary>
     /// Gets or sets the redirect URI provided in the initial authorization request.
     /// Must exactly match the redirect URI supplied during token exchange.
     /// </summary>

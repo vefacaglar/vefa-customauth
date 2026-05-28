@@ -96,6 +96,13 @@ public sealed class CustomAuthTokenManager : ICustomAuthTokenManager
     }
 
     /// <inheritdoc/>
+    public Task<CustomAuthPagedResult<CustomAuthRefreshToken>> GetRefreshTokensPagedAsync(CustomAuthPagedRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return _refreshTokenStore.GetPagedAsync(request, cancellationToken);
+    }
+
+    /// <inheritdoc/>
     public async Task MarkRefreshTokenConsumedAsync(Guid id, DateTimeOffset consumedAt, CancellationToken cancellationToken = default)
     {
         if (id == Guid.Empty)
@@ -132,6 +139,36 @@ public sealed class CustomAuthTokenManager : ICustomAuthTokenManager
             TargetType = "RefreshToken",
             TargetId = id.ToString(),
             Timestamp = _timeProvider.GetUtcNow()
+        }, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc/>
+    public async Task HandleRefreshTokenReuseAsync(CustomAuthRefreshToken token, DateTimeOffset detectedAt, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(token);
+        if (token.Id == Guid.Empty)
+        {
+            throw new ArgumentException("Token ID cannot be empty.", nameof(token));
+        }
+
+        if (token.SessionId is Guid sessionId)
+        {
+            await _refreshTokenStore.RevokeBySessionIdAsync(sessionId, detectedAt, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            await _refreshTokenStore.RevokeAsync(token.Id, detectedAt, cancellationToken).ConfigureAwait(false);
+        }
+
+        await _auditLogStore.StoreAsync(new CustomAuthAuditLog
+        {
+            Id = Guid.NewGuid(),
+            Action = "RefreshTokenReuseDetected",
+            TargetType = "RefreshToken",
+            TargetId = token.Id.ToString(),
+            ActorUserId = token.UserId,
+            Timestamp = detectedAt,
+            Metadata = token.SessionId is null ? null : $"{{\"SessionId\":\"{token.SessionId}\"}}"
         }, cancellationToken).ConfigureAwait(false);
     }
 }

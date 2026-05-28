@@ -59,7 +59,7 @@ Vefa.CustomAuth.EntityFrameworkCore
 
 ## 2. Intended Usage
 
-Status: partial — `AddVefaCustomAuth`, `MapVefaCustomAuthEndpoints`, `AddJwtTokenSigning`, and `AddInMemoryStores` extension methods exist; `AddEntityFrameworkStores<AppDbContext>` builder API is not implemented yet.
+Status: completed
 
 A developer should be able to add the library to an ASP.NET Core project like this:
 
@@ -69,8 +69,9 @@ builder.Services
     {
         options.Issuer = "https://auth.local";
     })
-    .AddEntityFrameworkStores<AppDbContext>()
     .AddJwtTokenSigning();
+
+builder.Services.AddVefaCustomAuthStores<AppDbContext>();
 
 app.MapVefaCustomAuthEndpoints();
 ```
@@ -89,7 +90,7 @@ Client applications should be able to connect to the auth server using a normal 
 
 ## 3. Supported Endpoints
 
-Status: partial — v0.1 and v0.2 routes (discovery, JWKS, authorize, token, login, logout, userinfo, revoke) are fully completed; v0.3+ (introspect, consent) remain pending.
+Status: partial — v0.1 and v0.2 routes (discovery, JWKS, authorize, token, login, logout, userinfo, revoke) are fully completed; introspection and consent are deferred beyond the current SSO-focused scope unless explicitly prioritized.
 
 ### v0.1
 
@@ -290,7 +291,7 @@ email
 
 ## 9. Refresh Token Requirements
 
-Status: partial — `CustomAuthRefreshToken` model, opaque token / hash helpers, and basic rotation at the token endpoint are implemented; reuse detection remains a later hardening step.
+Status: completed
 
 Refresh tokens must be:
 
@@ -302,7 +303,7 @@ bound to user_id
 optionally bound to session_id
 ```
 
-Reuse detection should be added after the basic rotation flow is working.
+Reuse detection is part of the refresh token lifecycle.
 
 Suggested model:
 
@@ -313,16 +314,18 @@ public sealed class CustomAuthRefreshToken
     public string TokenHash { get; set; }
     public string ClientId { get; set; }
     public string UserId { get; set; }
-    public string? SessionId { get; set; }
+    public Guid? SessionId { get; set; }
+    public Guid? ParentTokenId { get; set; }
     public string Scope { get; set; }
     public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset AbsoluteExpiresAt { get; set; }
     public DateTimeOffset? ConsumedAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 }
 ```
 
-For the first version, refresh token rotation is enough. Reuse detection can be added in v0.2 or later.
+Refresh tokens support rotation, session binding, parent-token tracking, absolute expiration, revocation, and reuse detection.
 
 ---
 
@@ -573,6 +576,8 @@ CI package build
 ```
 
 ### v1.0
+
+Status: partial — public API stabilization, documentation, and production hardening checklist are in progress.
 
 ```text
 Security hardening

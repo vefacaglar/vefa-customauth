@@ -10,6 +10,7 @@
     <Project Path="src/Vefa.CustomAuth.AspNetCore/Vefa.CustomAuth.AspNetCore.csproj" />
     <Project Path="src/Vefa.CustomAuth.Core/Vefa.CustomAuth.Core.csproj" />
     <Project Path="src/Vefa.CustomAuth.EntityFrameworkCore/Vefa.CustomAuth.EntityFrameworkCore.csproj" />
+    <Project Path="src/Vefa.CustomAuth.MongoDB/Vefa.CustomAuth.MongoDB.csproj" />
     <Project Path="src/Vefa.CustomAuth.Server/Vefa.CustomAuth.Server.csproj" />
     <Project Path="src/Vefa.CustomAuth.Tokens/Vefa.CustomAuth.Tokens.csproj" />
   </Folder>

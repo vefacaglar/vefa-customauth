@@ -19,6 +19,14 @@ public interface ICustomAuthSessionManager
     Task<CustomAuthSession?> FindAsync(Guid sessionId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Gets a paged list of sessions with optional search.
+    /// </summary>
+    /// <param name="request">The paged request parameters.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A paged result of sessions.</returns>
+    Task<CustomAuthPagedResult<CustomAuthSession>> GetPagedAsync(CustomAuthPagedRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Validates and registers a new user session.
     /// </summary>
     /// <param name="session">The session to store.</param>

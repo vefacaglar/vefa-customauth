@@ -1,9 +1,21 @@
 window.adminApp = function() {
-    const apiBase = window.location.pathname.replace(/\/$/, '') + '/api/clients';
+    const basePath = window.location.pathname.replace(/\/$/, '');
+    const apiBase = basePath + '/api/clients';
+    const scopesApiBase = basePath + '/api/scopes';
+    const sessionsApiBase = basePath + '/api/sessions';
+    const tokensApiBase = basePath + '/api/refresh-tokens';
+    const keysApiBase = basePath + '/api/signing-keys';
+    const auditApiBase = basePath + '/api/audit-logs';
 
     return {
         // App State
+        activeTab: 'clients',
         clients: [],
+        scopes: [],
+        sessions: [],
+        refreshTokens: [],
+        signingKeys: [],
+        auditLogs: [],
         availableScopes: [
             { name: 'openid', description: 'Access user identifier.' },
             { name: 'profile', description: 'Access user profile details.' },
@@ -11,9 +23,13 @@ window.adminApp = function() {
             { name: 'offline_access', description: 'Allow background refresh token exchange.' }
         ],
         searchQuery: '',
+        sessionSearch: '',
+        tokenSearch: '',
+        auditSearch: '',
         loading: false,
         configFormat: 'json',
         modalOpen: false,
+        scopeModalOpen: false,
         selectedClientId: null,
         
         // Toast Notification State
@@ -37,9 +53,20 @@ window.adminApp = function() {
             allowRefreshTokens: true
         },
 
+        // Scope Form State
+        scopeForm: {
+            isEdit: false,
+            name: '',
+            displayName: '',
+            description: '',
+            required: false,
+            emphasize: false
+        },
+
         // Initialize App
         init() {
             this.loadClients();
+            this.loadAvailableScopes();
         },
 
         // Fetch Clients from API
@@ -253,6 +280,201 @@ builder.Services
             if (hr < 24) return `${hr}h`;
             const day = Math.floor(hr / 24);
             return `${day}d`;
+        },
+
+        // Utility: Date formatter
+        formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const d = new Date(dateStr);
+            return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        },
+
+        isRefreshTokenActive(token) {
+            const now = new Date();
+            return !token.revokedAt
+                && !token.consumedAt
+                && new Date(token.expiresAt) > now
+                && new Date(token.absoluteExpiresAt) > now;
+        },
+
+        // Load available scopes for client form picker
+        async loadAvailableScopes() {
+            try {
+                const response = await fetch(scopesApiBase);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && data.length > 0) {
+                        this.availableScopes = data.map(s => ({ name: s.name, description: s.description || '' }));
+                    }
+                }
+            } catch (e) {
+                // Keep default scopes if API fails
+            }
+        },
+
+        // Scope Management
+        async loadScopes() {
+            try {
+                const response = await fetch(scopesApiBase);
+                if (!response.ok) throw new Error('Failed to load scopes.');
+                this.scopes = await response.json();
+            } catch (error) {
+                this.showToast(error.message, 'danger');
+            }
+        },
+
+        openScopeModal(scope = null) {
+            if (scope) {
+                this.scopeForm = {
+                    isEdit: true,
+                    name: scope.name,
+                    displayName: scope.displayName || '',
+                    description: scope.description || '',
+                    required: scope.required || false,
+                    emphasize: scope.emphasize || false
+                };
+            } else {
+                this.scopeForm = {
+                    isEdit: false,
+                    name: '',
+                    displayName: '',
+                    description: '',
+                    required: false,
+                    emphasize: false
+                };
+            }
+            this.scopeModalOpen = true;
+        },
+
+        closeScopeModal() {
+            this.scopeModalOpen = false;
+        },
+
+        async submitScopeForm() {
+            const isEdit = this.scopeForm.isEdit;
+            const scopeData = {
+                name: this.scopeForm.name.trim(),
+                displayName: this.scopeForm.displayName.trim(),
+                description: this.scopeForm.description.trim(),
+                required: this.scopeForm.required,
+                emphasize: this.scopeForm.emphasize
+            };
+
+            try {
+                const url = isEdit ? `${scopesApiBase}/${encodeURIComponent(scopeData.name)}` : scopesApiBase;
+                const method = isEdit ? 'PUT' : 'POST';
+
+                const response = await fetch(url, {
+                    method: method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(scopeData)
+                });
+
+                if (!response.ok) {
+                    const errText = await response.text();
+                    throw new Error(errText || 'Failed to save scope.');
+                }
+
+                this.closeScopeModal();
+                this.showToast(isEdit ? 'Scope updated.' : 'Scope created.');
+                await this.loadScopes();
+                await this.loadAvailableScopes();
+            } catch (error) {
+                this.showToast(error.message, 'danger');
+            }
+        },
+
+        async deleteScope(name) {
+            if (!confirm(`Are you sure you want to delete scope '${name}'?`)) return;
+
+            try {
+                const response = await fetch(`${scopesApiBase}/${encodeURIComponent(name)}`, { method: 'DELETE' });
+                if (!response.ok) throw new Error('Failed to delete scope.');
+                this.showToast('Scope deleted.');
+                await this.loadScopes();
+                await this.loadAvailableScopes();
+            } catch (error) {
+                this.showToast(error.message, 'danger');
+            }
+        },
+
+        // Session Management
+        async loadSessions() {
+            try {
+                const params = new URLSearchParams({ page: '1', pageSize: '50' });
+                if (this.sessionSearch) params.set('search', this.sessionSearch);
+                const response = await fetch(`${sessionsApiBase}?${params}`);
+                if (!response.ok) throw new Error('Failed to load sessions.');
+                const data = await response.json();
+                this.sessions = data.items || [];
+            } catch (error) {
+                this.showToast(error.message, 'danger');
+            }
+        },
+
+        async revokeSession(sessionId) {
+            if (!confirm('Are you sure you want to revoke this session?')) return;
+
+            try {
+                const response = await fetch(`${sessionsApiBase}/${sessionId}/revoke`, { method: 'POST' });
+                if (!response.ok) throw new Error('Failed to revoke session.');
+                this.showToast('Session revoked.');
+                await this.loadSessions();
+            } catch (error) {
+                this.showToast(error.message, 'danger');
+            }
+        },
+
+        // Refresh Token Management
+        async loadRefreshTokens() {
+            try {
+                const params = new URLSearchParams({ page: '1', pageSize: '50' });
+                if (this.tokenSearch) params.set('search', this.tokenSearch);
+                const response = await fetch(`${tokensApiBase}?${params}`);
+                if (!response.ok) throw new Error('Failed to load refresh tokens.');
+                const data = await response.json();
+                this.refreshTokens = data.items || [];
+            } catch (error) {
+                this.showToast(error.message, 'danger');
+            }
+        },
+
+        async revokeRefreshToken(tokenId) {
+            if (!confirm('Are you sure you want to revoke this refresh token?')) return;
+
+            try {
+                const response = await fetch(`${tokensApiBase}/${tokenId}/revoke`, { method: 'POST' });
+                if (!response.ok) throw new Error('Failed to revoke refresh token.');
+                this.showToast('Refresh token revoked.');
+                await this.loadRefreshTokens();
+            } catch (error) {
+                this.showToast(error.message, 'danger');
+            }
+        },
+
+        // Signing Key Management
+        async loadSigningKeys() {
+            try {
+                const response = await fetch(keysApiBase);
+                if (!response.ok) throw new Error('Failed to load signing keys.');
+                this.signingKeys = await response.json();
+            } catch (error) {
+                this.showToast(error.message, 'danger');
+            }
+        },
+
+        // Audit Log Management
+        async loadAuditLogs() {
+            try {
+                const params = new URLSearchParams({ page: '1', pageSize: '50' });
+                if (this.auditSearch) params.set('search', this.auditSearch);
+                const response = await fetch(`${auditApiBase}?${params}`);
+                if (!response.ok) throw new Error('Failed to load audit logs.');
+                const data = await response.json();
+                this.auditLogs = data.items || [];
+            } catch (error) {
+                this.showToast(error.message, 'danger');
+            }
         }
     };
 };

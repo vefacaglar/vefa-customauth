@@ -9,9 +9,17 @@ namespace Vefa.CustomAuth.Tokens.Signing;
 /// </summary>
 public static class RsaKeyGenerator
 {
+    /// <summary>
+    /// The default RSA signing algorithm.
+    /// </summary>
     public const string DefaultAlgorithm = "RS256";
     private const int KeySize = 2048;
 
+    /// <summary>
+    /// Generates a new RSA signing key.
+    /// </summary>
+    /// <param name="now">The key creation timestamp.</param>
+    /// <returns>The generated signing key.</returns>
     public static CustomAuthSigningKey Generate(DateTimeOffset now)
     {
         using var rsa = RSA.Create(KeySize);
@@ -27,6 +35,11 @@ public static class RsaKeyGenerator
         };
     }
 
+    /// <summary>
+    /// Imports the private RSA key material from a stored signing key.
+    /// </summary>
+    /// <param name="key">The signing key containing private key material.</param>
+    /// <returns>The imported RSA key.</returns>
     public static RSA ImportPrivateKey(CustomAuthSigningKey key)
     {
         ArgumentNullException.ThrowIfNull(key);
@@ -35,6 +48,11 @@ public static class RsaKeyGenerator
         return rsa;
     }
 
+    /// <summary>
+    /// Imports the public RSA key material from a stored signing key.
+    /// </summary>
+    /// <param name="key">The signing key containing public key material.</param>
+    /// <returns>The imported RSA key.</returns>
     public static RSA ImportPublicKey(CustomAuthSigningKey key)
     {
         ArgumentNullException.ThrowIfNull(key);

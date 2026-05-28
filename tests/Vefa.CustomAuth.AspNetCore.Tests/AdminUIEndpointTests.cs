@@ -93,6 +93,97 @@ public sealed class AdminUIEndpointTests
         Assert.Equal(1, finalResult!.TotalCount);
     }
 
+    [Fact]
+    public async Task AdminScopeEndpointsWorkCorrectly()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        // 1. List scopes (GET)
+        var listResponse = await client.GetAsync("/customauth/api/scopes");
+        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+        var scopes = await listResponse.Content.ReadFromJsonAsync<List<CustomAuthScope>>();
+        Assert.NotNull(scopes);
+
+        // 2. Create scope (POST)
+        var newScope = new CustomAuthScope
+        {
+            Name = "custom-scope",
+            DisplayName = "Custom Scope",
+            Description = "A custom test scope",
+            Required = false,
+            Emphasize = true
+        };
+        var createResponse = await client.PostAsJsonAsync("/customauth/api/scopes", newScope);
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+
+        // 3. Verify created scope in list
+        var updatedListResponse = await client.GetAsync("/customauth/api/scopes");
+        var updatedScopes = await updatedListResponse.Content.ReadFromJsonAsync<List<CustomAuthScope>>();
+        Assert.Contains(updatedScopes!, s => s.Name == "custom-scope");
+
+        // 4. Update scope (PUT)
+        newScope.Description = "Updated description";
+        var updateResponse = await client.PutAsJsonAsync($"/customauth/api/scopes/{newScope.Name}", newScope);
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+
+        // 5. Delete scope (DELETE)
+        var deleteResponse = await client.DeleteAsync($"/customauth/api/scopes/{newScope.Name}");
+        Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task AdminSessionEndpointsWorkCorrectly()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        // List sessions (GET)
+        var listResponse = await client.GetAsync("/customauth/api/sessions?page=1&pageSize=10");
+        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+        var result = await listResponse.Content.ReadFromJsonAsync<CustomAuthPagedResult<CustomAuthSession>>();
+        Assert.NotNull(result);
+    }
+
+    [Fact]
+    public async Task AdminRefreshTokenEndpointsWorkCorrectly()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        // List refresh tokens (GET)
+        var listResponse = await client.GetAsync("/customauth/api/refresh-tokens?page=1&pageSize=10");
+        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+        var result = await listResponse.Content.ReadFromJsonAsync<CustomAuthPagedResult<CustomAuthRefreshToken>>();
+        Assert.NotNull(result);
+    }
+
+    [Fact]
+    public async Task AdminSigningKeyEndpointsWorkCorrectly()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        // List signing keys (GET)
+        var listResponse = await client.GetAsync("/customauth/api/signing-keys");
+        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+        var content = await listResponse.Content.ReadAsStringAsync();
+        Assert.NotNull(content);
+    }
+
+    [Fact]
+    public async Task AdminAuditLogEndpointsWorkCorrectly()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        // List audit logs (GET)
+        var listResponse = await client.GetAsync("/customauth/api/audit-logs?page=1&pageSize=10");
+        Assert.Equal(HttpStatusCode.OK, listResponse.StatusCode);
+        var result = await listResponse.Content.ReadFromJsonAsync<CustomAuthPagedResult<CustomAuthAuditLog>>();
+        Assert.NotNull(result);
+    }
+
     private static async Task<WebApplication> CreateAppAsync()
     {
         var builder = WebApplication.CreateBuilder();

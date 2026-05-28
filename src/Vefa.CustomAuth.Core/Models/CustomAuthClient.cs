@@ -49,4 +49,10 @@ public sealed class CustomAuthClient
     /// Gets or sets the lifetime of issued refresh tokens in seconds. Defaults to 2592000 (30 days).
     /// </summary>
     public int RefreshTokenLifetimeSeconds { get; set; } = 2592000;
+
+    /// <summary>
+    /// Gets or sets the absolute lifetime of a refresh token chain in seconds. Defaults to 2592000 (30 days).
+    /// Rotation must not extend a refresh token chain beyond this lifetime.
+    /// </summary>
+    public int RefreshTokenAbsoluteLifetimeSeconds { get; set; } = 2592000;
 }

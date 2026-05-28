@@ -16,6 +16,7 @@ using Vefa.CustomAuth.Tokens;
 using Vefa.CustomAuth.AspNetCore.Extensions;
 using Vefa.CustomAuth.AspNetCore.Stores.InMemory;
 using Vefa.CustomAuth.Core.Models;
+using Vefa.CustomAuth.Core.Options;
 
 namespace Vefa.CustomAuth.AspNetCore.Tests;
 
@@ -109,6 +110,100 @@ public sealed class CustomAuthEndpointTests
     }
 
     [Fact]
+    public async Task RefreshTokenChainKeepsSessionParentAndAbsoluteExpiration()
+    {
+        var start = new DateTimeOffset(2026, 5, 28, 0, 0, 0, TimeSpan.Zero);
+        var timeProvider = new ManualTimeProvider(start);
+        await using var app = await CreateAppAsync(
+            timeProvider,
+            configureClient: client =>
+            {
+                client.RefreshTokenLifetimeSeconds = 600;
+                client.RefreshTokenAbsoluteLifetimeSeconds = 3600;
+            });
+        using var client = app.GetTestClient();
+
+        var verifier = CreateVerifier();
+        var code = await IssueAuthorizationCodeAsync(client, verifier);
+        var tokenResponse = await ExchangeCodeAsync(client, code, verifier);
+        var firstRefreshToken = await ReadJsonPropertyAsync(tokenResponse, "refresh_token");
+
+        var refreshTokenStore = app.Services.GetRequiredService<ICustomAuthRefreshTokenStore>();
+        var firstStoredToken = await refreshTokenStore.FindByHashAsync(TokenHasher.Hash(firstRefreshToken));
+        Assert.NotNull(firstStoredToken);
+        Assert.NotNull(firstStoredToken!.SessionId);
+        Assert.Null(firstStoredToken.ParentTokenId);
+        Assert.Equal(start.AddMinutes(10), firstStoredToken.ExpiresAt);
+        Assert.Equal(start.AddHours(1), firstStoredToken.AbsoluteExpiresAt);
+
+        timeProvider.Advance(TimeSpan.FromMinutes(5));
+        var refreshResponse = await ExchangeRefreshTokenAsync(client, firstRefreshToken);
+        Assert.Equal(HttpStatusCode.OK, refreshResponse.StatusCode);
+        var secondRefreshToken = await ReadJsonPropertyAsync(refreshResponse, "refresh_token");
+
+        var secondStoredToken = await refreshTokenStore.FindByHashAsync(TokenHasher.Hash(secondRefreshToken));
+        Assert.NotNull(secondStoredToken);
+        Assert.Equal(firstStoredToken.SessionId, secondStoredToken!.SessionId);
+        Assert.Equal(firstStoredToken.Id, secondStoredToken.ParentTokenId);
+        Assert.Equal(start.AddMinutes(15), secondStoredToken.ExpiresAt);
+        Assert.Equal(firstStoredToken.AbsoluteExpiresAt, secondStoredToken.AbsoluteExpiresAt);
+    }
+
+    [Fact]
+    public async Task RefreshTokenAbsoluteExpirationRejectsRotatedToken()
+    {
+        var start = new DateTimeOffset(2026, 5, 28, 0, 0, 0, TimeSpan.Zero);
+        var timeProvider = new ManualTimeProvider(start);
+        await using var app = await CreateAppAsync(
+            timeProvider,
+            configureClient: client =>
+            {
+                client.RefreshTokenLifetimeSeconds = 600;
+                client.RefreshTokenAbsoluteLifetimeSeconds = 600;
+            });
+        using var client = app.GetTestClient();
+
+        var verifier = CreateVerifier();
+        var code = await IssueAuthorizationCodeAsync(client, verifier);
+        var tokenResponse = await ExchangeCodeAsync(client, code, verifier);
+        var refreshToken = await ReadJsonPropertyAsync(tokenResponse, "refresh_token");
+
+        timeProvider.Advance(TimeSpan.FromMinutes(10));
+        var response = await ExchangeRefreshTokenAsync(client, refreshToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("invalid_grant", await ReadJsonPropertyAsync(response, "error"));
+    }
+
+    [Fact]
+    public async Task ReusedRefreshTokenCreatesAuditLogAndRevokesSessionTokenChain()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        var verifier = CreateVerifier();
+        var code = await IssueAuthorizationCodeAsync(client, verifier);
+        var tokenResponse = await ExchangeCodeAsync(client, code, verifier);
+        var firstRefreshToken = await ReadJsonPropertyAsync(tokenResponse, "refresh_token");
+
+        var refreshResponse = await ExchangeRefreshTokenAsync(client, firstRefreshToken);
+        Assert.Equal(HttpStatusCode.OK, refreshResponse.StatusCode);
+        var secondRefreshToken = await ReadJsonPropertyAsync(refreshResponse, "refresh_token");
+
+        var reuseResponse = await ExchangeRefreshTokenAsync(client, firstRefreshToken);
+        Assert.Equal(HttpStatusCode.BadRequest, reuseResponse.StatusCode);
+
+        var refreshTokenStore = app.Services.GetRequiredService<ICustomAuthRefreshTokenStore>();
+        var secondStoredToken = await refreshTokenStore.FindByHashAsync(TokenHasher.Hash(secondRefreshToken));
+        Assert.NotNull(secondStoredToken);
+        Assert.NotNull(secondStoredToken!.RevokedAt);
+
+        var auditLogStore = app.Services.GetRequiredService<ICustomAuthAuditLogStore>();
+        var auditLogs = await auditLogStore.GetPagedAsync(new CustomAuthPagedRequest { Page = 1, PageSize = 20 });
+        Assert.Contains(auditLogs.Items, log => log.Action == "RefreshTokenReuseDetected");
+    }
+
+    [Fact]
     public async Task RevokedRefreshTokenIsRejected()
     {
         var timeProvider = new ManualTimeProvider(new DateTimeOffset(2026, 5, 28, 0, 0, 0, TimeSpan.Zero));
@@ -178,7 +273,10 @@ public sealed class CustomAuthEndpointTests
         Assert.Equal("RS256", key.GetProperty("alg").GetString());
     }
 
-    private static async Task<WebApplication> CreateAppAsync(TimeProvider? timeProvider = null)
+    private static async Task<WebApplication> CreateAppAsync(
+        TimeProvider? timeProvider = null,
+        Action<CustomAuthOptions>? configureOptions = null,
+        Action<CustomAuthClient>? configureClient = null)
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -187,17 +285,20 @@ public sealed class CustomAuthEndpointTests
             {
                 options.Issuer = "http://localhost";
                 options.RequireHttps = false;
+                configureOptions?.Invoke(options);
             })
             .AddJwtTokenSigning()
             .AddInMemoryStores(stores =>
             {
-                stores.Clients.Add(new CustomAuthClient
+                var customAuthClient = new CustomAuthClient
                 {
                     ClientId = ClientId,
                     DisplayName = "Test Client",
                     RedirectUris = { RedirectUri },
                     AllowedScopes = { "openid", "profile", "email", "offline_access", "test-api" },
-                });
+                };
+                configureClient?.Invoke(customAuthClient);
+                stores.Clients.Add(customAuthClient);
 
                 stores.Users.Add(new InMemoryUserStore.SeedUser
                 {

@@ -52,6 +52,14 @@ public interface ICustomAuthTokenManager
     Task<CustomAuthRefreshToken?> FindRefreshTokenByHashAsync(string tokenHash, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Gets a paged list of refresh tokens with optional search.
+    /// </summary>
+    /// <param name="request">The paged request parameters.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A paged result of refresh tokens.</returns>
+    Task<CustomAuthPagedResult<CustomAuthRefreshToken>> GetRefreshTokensPagedAsync(CustomAuthPagedRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Marks a refresh token as consumed (rotated/exchanged).
     /// </summary>
     /// <param name="id">The unique identifier of the refresh token.</param>
@@ -68,4 +76,13 @@ public interface ICustomAuthTokenManager
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     Task RevokeRefreshTokenAsync(Guid id, DateTimeOffset revokedAt, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Records refresh token reuse and revokes the related refresh token chain when possible.
+    /// </summary>
+    /// <param name="token">The reused refresh token.</param>
+    /// <param name="detectedAt">The timestamp when reuse was detected.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    Task HandleRefreshTokenReuseAsync(CustomAuthRefreshToken token, DateTimeOffset detectedAt, CancellationToken cancellationToken = default);
 }
