@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sample Web App - @ViewData["Title"]</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            900: '#14532d',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen font-sans antialiased selection:bg-brand-500 selection:text-white">
+    <div class="max-w-5xl mx-auto px-4 py-12">
+        <header class="flex justify-between items-center mb-12">
+            <div>
+                <h1 class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-brand-500 to-teal-400">Sample Web App</h1>
+                <p class="text-gray-400 mt-2">Vefa.CustomAuth Integration Demo</p>
+            </div>
+            <div>
+                @if (User.Identity?.IsAuthenticated == true)
+                {
+                    <a href="/logout" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg text-sm font-medium transition-colors ring-1 ring-gray-700 hover:ring-gray-600">Sign Out</a>
+                }
+                else
+                {
+                    <a href="/login" class="px-4 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg text-sm font-medium transition-colors shadow-lg shadow-brand-500/20">Sign In</a>
+                }
+            </div>
+        </header>
+        
+        <main>
+            @RenderBody()
+        </main>
+    </div>
+
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

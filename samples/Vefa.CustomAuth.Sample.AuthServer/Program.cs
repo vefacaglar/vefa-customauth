@@ -76,7 +76,7 @@ static async Task EnsureDatabaseSeededAsync(IServiceProvider services)
             ClientId = "sample-webapp",
             DisplayName = "Sample Web App",
             RedirectUris = { "http://localhost:5043/signin-oidc" },
-            PostLogoutRedirectUris = { "http://localhost:5043/" },
+            PostLogoutRedirectUris = { "http://localhost:5043/signout-callback-oidc" },
             AllowedScopes = { "openid", "profile", "email", "offline_access", "sample-api" },
             AllowRefreshTokens = true,
         });
