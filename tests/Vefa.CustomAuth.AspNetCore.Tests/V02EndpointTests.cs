@@ -256,16 +256,15 @@ public sealed class V02EndpointTests
     [Fact]
     public async Task RevokeWithDifferentClientIdReturns400()
     {
-        await using var app = await CreateAppAsync(services =>
+        await using var app = await CreateAppAsync(configureStores: stores =>
         {
-            var store = services.BuildServiceProvider().GetRequiredService<ICustomAuthClientStore>() as InMemoryClientStore;
-            store?.StoreAsync(new CustomAuthClient
+            stores.Clients.Add(new CustomAuthClient
             {
                 ClientId = "other-client",
                 DisplayName = "Other Client",
                 RedirectUris = { RedirectUri },
                 AllowedScopes = { "openid" }
-            }).GetAwaiter().GetResult();
+            });
         });
         using var client = app.GetTestClient();
 
@@ -300,15 +299,19 @@ public sealed class V02EndpointTests
         var code = await IssueAuthorizationCodeAsync(client, verifier);
         var tokenResponse = await ExchangeCodeAsync(client, code, verifier);
 
-        var accessToken = await ReadJsonPropertyAsync(tokenResponse, "access_token");
-        var idToken = await ReadJsonPropertyAsync(tokenResponse, "id_token");
+        using var document = await JsonDocument.ParseAsync(await tokenResponse.Content.ReadAsStreamAsync());
+        var accessToken = document.RootElement.GetProperty("access_token").GetString();
+        var idToken = document.RootElement.GetProperty("id_token").GetString();
+
+        Assert.NotNull(accessToken);
+        Assert.NotNull(idToken);
 
         // 2. Decode ID token and check at_hash
         var handler = new JsonWebTokenHandler();
         var idJwt = handler.ReadJsonWebToken(idToken);
 
         Assert.True(idJwt.TryGetClaim("at_hash", out var atHashClaim));
-        var atHash = atHashClaim.ToString();
+        var atHash = atHashClaim.Value;
         Assert.False(string.IsNullOrWhiteSpace(atHash));
 
         // 3. Recompute expected at_hash and verify
@@ -394,7 +397,10 @@ public sealed class V02EndpointTests
         Assert.Contains("This account is temporarily locked due to too many failed login attempts.", content);
     }
 
-    private static async Task<WebApplication> CreateAppAsync(Action<IServiceCollection>? configureServices = null, Action<CustomAuthOptions>? configureOptions = null)
+    private static async Task<WebApplication> CreateAppAsync(
+        Action<IServiceCollection>? configureServices = null, 
+        Action<CustomAuthOptions>? configureOptions = null,
+        Action<InMemoryStoresBuilder>? configureStores = null)
     {
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -428,6 +434,8 @@ public sealed class V02EndpointTests
                         ["custom-claim"] = "custom-val"
                     }
                 });
+
+                configureStores?.Invoke(stores);
             });
 
         configureServices?.Invoke(builder.Services);

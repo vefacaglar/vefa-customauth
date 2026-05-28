@@ -609,15 +609,15 @@ Test count after P0 work: **77** (26 store/manager + 51 AspNetCore). Build remai
 
 ### P1 — should fix before 1.1 release
 
-Status: pending — see audit plan §4.1 items 7–12.
+Status: partial — P1-7 (at_hash), P1-10 (login rate limit / lockout tracker), P1-11 (constant-time PKCE verifier compare), and P1-12 (revocation client binding & chain revocation) are completed. P1-8 (prompt=none/login) and P1-9 (UserInfo POST and scope filtering) are pending.
 
 ```text
-P1-7   Add at_hash to ID token (OIDC Core §3.1.3.6)
-P1-8   Implement prompt=none / prompt=login (and ideally max_age)
-P1-9   UserInfo: support POST + filter claims by scope (OIDC Core §5.3, §5.4)
-P1-10  Rate limiting / lockout extension point on /login
-P1-11  Constant-time hash compare in PkceVerifier (CryptographicOperations.FixedTimeEquals)
-P1-12  Revocation hardening: client binding, token_type_hint, chain revocation
+[x] P1-7   Add at_hash to ID token (OIDC Core §3.1.3.6)
+[ ] P1-8   Implement prompt=none / prompt=login (and ideally max_age)
+[ ] P1-9   UserInfo: support POST + filter claims by scope (OIDC Core §5.3, §5.4)
+[x] P1-10  Rate limiting / lockout extension point on /login
+[x] P1-11  Constant-time hash compare in PkceVerifier (CryptographicOperations.FixedTimeEquals)
+[x] P1-12  Revocation hardening: client binding, token_type_hint, chain revocation
 ```
 
 ### P2 — hardening
