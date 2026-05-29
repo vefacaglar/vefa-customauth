@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Vefa.CustomAuth.AspNetCore.Endpoints;
+using Vefa.CustomAuth.AspNetCore.Endpoints.Grants;
 using Vefa.CustomAuth.AspNetCore.Services;
 using Vefa.CustomAuth.AspNetCore.Validation;
 using Vefa.CustomAuth.Core.Options;
@@ -39,6 +40,14 @@ public static class CustomAuthServiceCollectionExtensions
         services.TryAddScoped<LoginEndpointService>();
         services.TryAddScoped<ClientAuthenticationService>();
         services.TryAddScoped<TokenEndpointService>();
+
+        // Token-endpoint grant handlers. Hosts can register additional ICustomAuthGrantHandler
+        // implementations to support custom grants; a registration whose GrantType matches a
+        // built-in grant overrides it (last registration wins in the dispatcher).
+        services.AddScoped<ICustomAuthGrantHandler, AuthorizationCodeGrantHandler>();
+        services.AddScoped<ICustomAuthGrantHandler, RefreshTokenGrantHandler>();
+        services.AddScoped<ICustomAuthGrantHandler, ClientCredentialsGrantHandler>();
+
         services.TryAddScoped<SessionCookieService>();
         services.TryAddScoped<LogoutEndpointService>();
         services.TryAddScoped<UserInfoEndpointService>();

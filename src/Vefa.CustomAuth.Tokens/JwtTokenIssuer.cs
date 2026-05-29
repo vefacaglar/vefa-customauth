@@ -56,6 +56,26 @@ public sealed class JwtTokenIssuer : ITokenIssuer
         };
     }
 
+    public async Task<IssuedClientCredentialsToken> IssueClientCredentialsTokenAsync(TokenIssueRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var opts = _options.CurrentValue;
+        if (string.IsNullOrWhiteSpace(opts.Issuer))
+        {
+            throw new InvalidOperationException("CustomAuthOptions.Issuer is not configured.");
+        }
+
+        var now = _timeProvider.GetUtcNow();
+        var credentials = await _signingCredentialsProvider.GetActiveAsync(cancellationToken).ConfigureAwait(false);
+
+        return new IssuedClientCredentialsToken
+        {
+            AccessToken = CreateAccessToken(request, opts, now, credentials),
+            AccessTokenExpiresInSeconds = (int)opts.AccessTokenLifetime.TotalSeconds,
+        };
+    }
+
     private string CreateAccessToken(TokenIssueRequest request, CustomAuthOptions opts, DateTimeOffset now, SigningCredentials credentials)
     {
         var claims = new Dictionary<string, object>

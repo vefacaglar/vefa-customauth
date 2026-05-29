@@ -126,23 +126,32 @@ A consent screen is not required in the first version. For SSO between your own 
 
 Status: completed
 
-The first version should support only:
+Supported flows:
 
 ```text
 Authorization Code Flow + PKCE
+Client Credentials Grant (RFC 6749 §4.4)
 ```
 
-The following flows should not be supported initially:
+The following flows are still not supported:
 
 ```text
 Implicit Flow
 Password Grant
 Device Code
-Client Credentials
 Hybrid Flow
 ```
 
-`Client Credentials` can be added later, but it is not required for the first SSO use case.
+The token endpoint dispatches each request to a registered `ICustomAuthGrantHandler` keyed by
+`grant_type` (see `src/Vefa.CustomAuth.AspNetCore/Endpoints/Grants/`). Built-in handlers cover
+`authorization_code`, `refresh_token`, and `client_credentials`; hosts can register additional
+`ICustomAuthGrantHandler` implementations to add custom grants, and a registration whose
+`GrantType` matches a built-in grant overrides it (last registration wins).
+
+The client credentials grant is for confidential machine-to-machine clients: it requires a
+confidential `TokenEndpointAuthMethod` (currently `private_key_jwt`) and an explicit per-client
+opt-in via `CustomAuthClient.AllowClientCredentials`. It issues an access token only — `sub` is
+the client id, with no ID token and no refresh token.
 
 ---
 

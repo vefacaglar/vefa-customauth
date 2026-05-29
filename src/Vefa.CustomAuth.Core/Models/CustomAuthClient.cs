@@ -56,6 +56,14 @@ public sealed class CustomAuthClient
     public bool AllowRefreshTokens { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether this client may use the OAuth2 client credentials
+    /// grant (RFC 6749 §4.4) to obtain access tokens on its own behalf. Requires a confidential
+    /// authentication method (not <see cref="CustomAuthClientAuthenticationMethod.None"/>).
+    /// Defaults to <see langword="false"/>.
+    /// </summary>
+    public bool AllowClientCredentials { get; set; }
+
+    /// <summary>
     /// Gets or sets the lifetime of issued access tokens in seconds. Defaults to 3600 (1 hour).
     /// </summary>
     public int AccessTokenLifetimeSeconds { get; set; } = 3600;

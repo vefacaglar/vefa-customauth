@@ -64,6 +64,23 @@ public sealed class IssuedTokens
 }
 
 /// <summary>
+/// Represents the access token issued for a machine-to-machine grant such as client credentials.
+/// No ID token or refresh token is produced.
+/// </summary>
+public sealed class IssuedClientCredentialsToken
+{
+    /// <summary>
+    /// Gets or sets the JWT access token.
+    /// </summary>
+    public string AccessToken { get; set; } = default!;
+
+    /// <summary>
+    /// Gets or sets the access token lifetime in seconds.
+    /// </summary>
+    public int AccessTokenExpiresInSeconds { get; set; }
+}
+
+/// <summary>
 /// Issues access, ID, and refresh tokens.
 /// </summary>
 public interface ITokenIssuer
@@ -75,4 +92,15 @@ public interface ITokenIssuer
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The issued token set.</returns>
     Task<IssuedTokens> IssueAsync(TokenIssueRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Issues a standalone access token for the client credentials grant (RFC 6749 §4.4).
+    /// The token represents the client itself (no end user); no ID token or refresh token is produced.
+    /// The caller sets <see cref="TokenIssueRequest.Subject"/> and
+    /// <see cref="TokenIssueRequest.ClientId"/> to the client identifier.
+    /// </summary>
+    /// <param name="request">The token issue request.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The issued access token.</returns>
+    Task<IssuedClientCredentialsToken> IssueClientCredentialsTokenAsync(TokenIssueRequest request, CancellationToken cancellationToken = default);
 }

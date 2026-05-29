@@ -38,7 +38,7 @@ public static class CustomAuthEndpointRouteExtensions
                 userinfo_endpoint = $"{issuer}/connect/userinfo",
                 revocation_endpoint = $"{issuer}/connect/revoke",
                 response_types_supported = new[] { "code" },
-                grant_types_supported = new[] { "authorization_code", "refresh_token" },
+                grant_types_supported = new[] { "authorization_code", "refresh_token", "client_credentials" },
                 subject_types_supported = new[] { "public" },
                 id_token_signing_alg_values_supported = new[] { "RS256" },
                 scopes_supported = new[] { "openid", "profile", "email", "offline_access" },
