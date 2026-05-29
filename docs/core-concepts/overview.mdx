@@ -24,8 +24,11 @@ protocols — it explains *how this library models them*.
   redirect URIs, allowed scopes, token lifetimes, and a token-endpoint authentication method.
 - **[Scopes](/docs/core-concepts/scopes)** — named permissions a client may request
   (`openid`, `profile`, `email`, `offline_access`, plus your API scopes).
-- **Grants / flows** — the implemented grant types are `authorization_code` (with PKCE) and
-  `refresh_token`. See [OAuth2 flows](/docs/flows/authorization-code-pkce).
+- **Grants / flows** — the implemented grant types are `authorization_code` (with PKCE),
+  `refresh_token`, and `client_credentials` (machine-to-machine). The token endpoint dispatches
+  each request to a registered `ICustomAuthGrantHandler`, so custom grants can be added. See
+  [OAuth2 flows](/docs/flows/authorization-code-pkce) and
+  [Extensibility → custom grant types](/docs/extensibility#custom-grant-types).
 - **[Tokens](/docs/core-concepts/tokens)** — JWT access tokens, JWT ID tokens, and opaque
   refresh tokens.
 - **[Signing keys](/docs/core-concepts/signing-keys)** — RSA keys whose public half is published

@@ -90,6 +90,10 @@ generated docs from the packages.
 **Tokens** (`Vefa.CustomAuth.Tokens`): `ISigningCredentialsProvider`, `ITokenIssuer`,
 `IClientAssertionValidator`.
 
+**ASP.NET Core** (`Vefa.CustomAuth.AspNetCore.Endpoints.Grants`): `ICustomAuthGrantHandler` — one
+handler per token-endpoint `grant_type`; register additional implementations to add custom grants.
+See [Extensibility → custom grant types](/docs/extensibility#custom-grant-types).
+
 ## Endpoint summary
 
 | Method | Path | Auth | Purpose |

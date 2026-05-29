@@ -21,6 +21,7 @@ public sealed class CustomAuthClient
     public List<string> AllowedScopes { get; set; }       // scopes this client may request
     public bool RequirePkce { get; set; } = true;
     public bool AllowRefreshTokens { get; set; } = true;
+    public bool AllowClientCredentials { get; set; } = false; // opt-in M2M grant (RFC 6749 §4.4)
     public int AccessTokenLifetimeSeconds { get; set; } = 3600;      // 1 hour
     public int RefreshTokenLifetimeSeconds { get; set; } = 2592000;  // 30 days (sliding)
     public int RefreshTokenAbsoluteLifetimeSeconds { get; set; } = 2592000; // 30 days (ceiling)
@@ -81,6 +82,25 @@ rejected (`invalid_scope`). See [Scopes](/docs/core-concepts/scopes).
 > **Refresh token requirement.** If `AllowRefreshTokens = true`, the client **must** include
 > `offline_access` in `AllowedScopes`, and that scope must be granted on the request, for a
 > refresh token to be issued. Options validation and the Admin UI enforce/assist this pairing.
+
+## Machine-to-machine clients (client credentials)
+
+Set `AllowClientCredentials = true` to let a client use the
+[client credentials grant](/docs/flows/client-credentials) and obtain access tokens on its own
+behalf (no end user). This is **opt-in** and **off by default**, and it requires a **confidential**
+client — `TokenEndpointAuthMethod` must not be `None`. A public client cannot use this grant.
+
+```csharp
+new CustomAuthClient
+{
+    ClientId = "reporting-worker",
+    DisplayName = "Reporting worker",
+    AllowedScopes = { "reports.read", "reports.write" },
+    AllowClientCredentials = true,
+    TokenEndpointAuthMethod = CustomAuthClientAuthenticationMethod.PrivateKeyJwt,
+    JwksJson = "{ \"keys\": [ … ] }",
+}
+```
 
 ## Token lifetimes
 

@@ -44,6 +44,31 @@ credentials and look up users, then call `HttpContext.SignInCustomAuthAsync(user
 own login page. This is where you plug in ASP.NET Core Identity, an external IdP, MFA, or any
 credential scheme. See [Sessions & login](/docs/core-concepts/sessions-and-login).
 
+## Custom grant types
+
+The token endpoint dispatches each request to the registered `ICustomAuthGrantHandler` whose
+`GrantType` matches the request's `grant_type`. The built-in grants (`authorization_code`,
+`refresh_token`, `client_credentials`) are themselves handlers. Add a custom grant by implementing
+the interface and registering it:
+
+```csharp
+public sealed class MyGrantHandler : ICustomAuthGrantHandler
+{
+    public string GrantType => "urn:example:my-grant";
+
+    public Task<IResult> HandleAsync(IFormCollection form, CancellationToken cancellationToken = default)
+    {
+        // validate the request, issue tokens via ITokenIssuer, return EndpointResults.NoStoreJson(...)
+    }
+}
+
+builder.Services.AddScoped<ICustomAuthGrantHandler, MyGrantHandler>();
+```
+
+Registration order matters only for overrides: if your handler's `GrantType` equals a built-in
+grant, the **last** registration wins, so you can replace a built-in grant with your own
+implementation.
+
 ## Custom signing key source
 
 Two built-in sources cover most needs:

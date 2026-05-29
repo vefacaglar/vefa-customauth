@@ -2,7 +2,7 @@
 
 Vefa.CustomAuth is a lightweight OAuth2 / OpenID Connect SSO library for ASP.NET Core.
 
-The current version is an early reference implementation focused on Authorization Code Flow with PKCE, an SSO session cookie, JWT access tokens, ID tokens, opaque refresh tokens, JWKS-based signing key discovery, provider-backed persistence, and an embedded Admin UI.
+The current version is an early reference implementation focused on Authorization Code Flow with PKCE, the Client Credentials Flow for machine-to-machine clients, an SSO session cookie, JWT access tokens, ID tokens, opaque refresh tokens, JWKS-based signing key discovery, provider-backed persistence, and an embedded Admin UI.
 
 It is not production-ready yet. The API shape, persistence layer, and security hardening are still evolving.
 
@@ -29,6 +29,8 @@ tests/
 ## Current Features
 
 - Authorization Code Flow with PKCE.
+- Client Credentials Flow for confidential machine-to-machine clients (`AllowClientCredentials`).
+- Pluggable token-endpoint grant handlers (`ICustomAuthGrantHandler`) for adding custom grants.
 - Minimal API endpoint mapping for the auth server.
 - OpenID Connect discovery endpoint.
 - JWKS endpoint backed by RSA signing keys.

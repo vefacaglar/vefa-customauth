@@ -13,14 +13,16 @@ No. It is protocol-only. You implement `ICustomAuthUserStore` against your own i
 
 ### Which OAuth2 flows are supported?
 
-`authorization_code` (with PKCE) and `refresh_token`. **Client Credentials, Device, Implicit, and
-Resource Owner Password are not supported.** See
+`authorization_code` (with PKCE), `refresh_token`, and `client_credentials`. **Device, Implicit, and
+Resource Owner Password are not supported** (but custom grants can be added — see
+[Extensibility → custom grant types](/docs/extensibility#custom-grant-types)). See
 [Authorization Code + PKCE](/docs/flows/authorization-code-pkce).
 
 ### Is there a Client Credentials (machine-to-machine) flow?
 
-Not in v1.0. A service that needs to call APIs on behalf of a user can run the Authorization Code
-flow once and keep access alive with a refresh token (`offline_access` + `private_key_jwt`). See
+Yes. A confidential client with `AllowClientCredentials = true` can request an access token on its
+own behalf (no end user) — it receives an access token only (no ID/refresh token), with `sub` set to
+the client id. See [Client credentials flow](/docs/flows/client-credentials) and
 [Recipes](/docs/recipes#creating-a-machine-to-machine-client).
 
 ### How do clients authenticate at the token endpoint?

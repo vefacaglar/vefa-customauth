@@ -31,6 +31,7 @@
       "items": [
         { "label": "Authorization Code + PKCE", "slug": "flows/authorization-code-pkce" },
         { "label": "Refresh token", "slug": "flows/refresh-token" },
+        { "label": "Client credentials", "slug": "flows/client-credentials" },
         { "label": "Client authentication", "slug": "flows/client-authentication" },
         { "label": "Token validation & revocation", "slug": "flows/token-validation-and-revocation" }
       ]

@@ -50,28 +50,41 @@ app.Run();
 
 ## Creating a machine-to-machine client
 
-> **There is no Client Credentials grant.** A purely headless service that has no end user cannot
-> use a client-credentials flow here. If a service must call an API **on behalf of a user**,
-> register it as a confidential client and have it run the Authorization Code flow once, then keep
-> access alive with a refresh token (`offline_access` + `private_key_jwt`). See
-> [Client authentication](/docs/flows/client-authentication) and
-> [Refresh token flow](/docs/flows/refresh-token).
+A purely headless service (no end user) uses the
+[Client Credentials grant](/docs/flows/client-credentials). Register it as a **confidential**
+client and opt it in with `AllowClientCredentials = true`:
 
 ```csharp
 new CustomAuthClient
 {
-    ClientId = "backend-service",
-    DisplayName = "Backend service",
-    RedirectUris = { "https://service.example.com/signin-oidc" },
-    AllowedScopes = { "openid", "offline_access", "orders-api" },
-    AllowRefreshTokens = true,
+    ClientId = "orders-worker",
+    DisplayName = "Orders worker",
+    AllowedScopes = { "orders-api" },
+    AllowClientCredentials = true,
     TokenEndpointAuthMethod = CustomAuthClientAuthenticationMethod.PrivateKeyJwt,
     JwksJson = "{ \"keys\": [ /* the service's public keys */ ] }",
+    // No RedirectUris / refresh tokens — this client never uses the browser flow.
 };
 ```
 
-<!-- TODO: If a Client Credentials grant is added in a future version, replace this recipe with a
-direct machine-to-machine example. -->
+The service requests a token directly, authenticating with a `private_key_jwt` client assertion:
+
+```bash
+curl -X POST https://auth.example.com/connect/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=client_credentials" \
+  -d "client_id=orders-worker" \
+  -d "scope=orders-api" \
+  -d "client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer" \
+  -d "client_assertion=<signed JWT>"
+```
+
+The response is an access token only (no ID token, no refresh token); the token's `sub` is the
+client id. When it expires, request another. See [Client credentials flow](/docs/flows/client-credentials).
+
+> If a service must instead call an API **on behalf of a user**, run the Authorization Code flow
+> once and keep access alive with a refresh token (`offline_access` + `private_key_jwt`) — see
+> [Refresh token flow](/docs/flows/refresh-token).
 
 ## Creating a SPA or web client with PKCE
 

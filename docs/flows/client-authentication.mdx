@@ -30,7 +30,10 @@ No extra configuration is needed — `TokenEndpointAuthMethod` defaults to `None
 ## Confidential clients (`private_key_jwt`)
 
 A confidential client proves its identity by signing a JWT **client assertion** with its private
-key. The server verifies the signature against the client's registered public keys.
+key. The server verifies the signature against the client's registered public keys. The same
+assertion authenticates the client on the
+[client credentials grant](/docs/flows/client-credentials) as well as the authorization-code and
+refresh-token exchanges.
 
 ### Registering the client
 

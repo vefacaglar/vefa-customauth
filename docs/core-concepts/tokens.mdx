@@ -82,6 +82,19 @@ A successful `/connect/token` response is JSON with `Cache-Control: no-store`:
 `refresh_token` is present only when `offline_access` was granted to a client that allows it.
 `id_token` is present only when `openid` was granted.
 
+For the [client credentials grant](/docs/flows/client-credentials) the response contains the
+**access token only** — no `id_token` and no `refresh_token` — and the access token's `sub` is the
+client id rather than a user id:
+
+```json
+{
+  "access_token": "eyJ…",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "scope": "reports.read reports.write"
+}
+```
+
 ## Lifetime summary
 
 | Token | Default lifetime | Override | Revocable before expiry? |

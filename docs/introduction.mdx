@@ -20,7 +20,8 @@ At its core, the library turns a normal ASP.NET Core host into an authorization 
 - It maps OAuth2 / OIDC endpoints onto your `IEndpointRouteBuilder`:
   discovery, JWKS, `/connect/authorize`, `/connect/token`, `/connect/userinfo`,
   `/connect/logout`, and `/connect/revoke`.
-- It implements the **Authorization Code flow with PKCE** and the **Refresh Token flow**.
+- It implements the **Authorization Code flow with PKCE**, the **Refresh Token flow**, and the
+  **Client Credentials flow** (machine-to-machine).
 - It signs tokens with RSA keys (auto-generated and persisted, or a fixed X.509 certificate
   you supply).
 - It persists protocol state (clients, codes, refresh tokens, sessions, signing keys, scopes,
@@ -78,8 +79,9 @@ To set accurate expectations:
   signs users in via `HttpContext.SignInCustomAuthAsync(...)`. There is currently no built-in
   consent screen.
 - **It does not implement every OAuth2 flow.** Implemented grant types are
-  `authorization_code` and `refresh_token` only. The **Client Credentials**, **Device
-  Authorization**, **Implicit**, and **Resource Owner Password** flows are **not supported**.
+  `authorization_code`, `refresh_token`, and `client_credentials`. The **Device Authorization**,
+  **Implicit**, and **Resource Owner Password** flows are **not supported** (though custom grants
+  can be added — see [Extensibility → custom grant types](/docs/extensibility#custom-grant-types)).
 - **It does not expose a token introspection endpoint** (`/connect/introspect`) at this time.
   Resource servers validate JWT access tokens locally using the JWKS document. See
   [Token validation & revocation](/docs/flows/token-validation-and-revocation).
