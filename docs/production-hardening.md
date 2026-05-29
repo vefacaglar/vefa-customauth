@@ -99,6 +99,27 @@ ASP.NET Core / IdentityServer farm.
 - Rotate signing keys on a documented schedule.
 - Keep retired public keys available until all tokens signed by those keys have expired.
 - Never expose private key material through Admin UI, logs, API responses, or diagnostics.
+- Bootstrap the signing key once before scaling out. The auto-generated key is created on first use and
+  the per-instance bootstrap lock does not coordinate across instances, so two fresh instances hitting
+  an empty store simultaneously can each create a key.
+
+### Choosing the signing key source
+
+By default the signing key is auto-generated and persisted in the signing key store; every instance
+that shares the database shares the key, so a load-balanced farm is consistent without copying any
+file. Alternatively, supply your own certificate (e.g. the same PFX on every instance, or one loaded
+from a secret store) with `AddSigningCertificate`:
+
+```csharp
+builder.Services
+    .AddCustomAuth(options => { /* ... */ })
+    .AddJwtTokenSigning()                       // store-backed key (used when no certificate is set)
+    .AddSigningCertificate(certificate);        // or: .AddSigningCertificate("signing.pfx", password)
+```
+
+When a certificate is configured it is used for signing and published at the JWKS endpoint; otherwise
+signing falls back to the store-backed key. The certificate must contain an RSA private key, and must
+be identical across all instances behind a load balancer.
 
 ## Persistence
 

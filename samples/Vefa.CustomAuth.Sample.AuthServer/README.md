@@ -95,6 +95,23 @@ to recreate the demo database from scratch.
 
 Swap SQLite for SQL Server / PostgreSQL by changing the `UseSqlite(...)` call.
 
+## Signing key
+
+This sample uses the default store-backed signing key: `AddJwtTokenSigning()` auto-generates an RSA key
+on first use and persists it in the signing key store (the same database). Every instance sharing that
+database shares the key, so the JWKS stays consistent across a load-balanced farm without copying any
+file. To use your own certificate instead, chain `AddSigningCertificate`:
+
+```csharp
+builder.Services
+    .AddCustomAuth(/* ... */)
+    .AddJwtTokenSigning()
+    .AddSigningCertificate("signing.pfx", password);   // or pass an X509Certificate2
+```
+
+When a certificate is set it is used (and published at JWKS); otherwise the store-backed key is used.
+See the [production hardening guide](../../docs/production-hardening.md#choosing-the-signing-key-source).
+
 ## Seeded clients
 
 `DatabaseSeeder` registers three clients:
