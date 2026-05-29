@@ -97,20 +97,27 @@ Swap SQLite for SQL Server / PostgreSQL by changing the `UseSqlite(...)` call.
 
 ## Signing key
 
-This sample uses the default store-backed signing key: `AddJwtTokenSigning()` auto-generates an RSA key
-on first use and persists it in the signing key store (the same database). Every instance sharing that
-database shares the key, so the JWKS stays consistent across a load-balanced farm without copying any
-file. To use your own certificate instead, chain `AddSigningCertificate`:
+The sample chooses its signing key at startup: **if `Keys/signing.pfx` exists, it signs with that
+certificate** (`AddSigningCertificate`); otherwise it falls back to the auto-generated key in the
+signing key store (`AddJwtTokenSigning`).
 
 ```csharp
-builder.Services
-    .AddCustomAuth(/* ... */)
-    .AddJwtTokenSigning()
-    .AddSigningCertificate("signing.pfx", password);   // or pass an X509Certificate2
+var customAuthBuilder = builder.Services.AddCustomAuth(/* ... */).AddJwtTokenSigning();
+
+var signingCertificatePath = Path.Combine(builder.Environment.ContentRootPath, "Keys", "signing.pfx");
+if (File.Exists(signingCertificatePath))
+{
+    customAuthBuilder.AddSigningCertificate(
+        signingCertificatePath,
+        builder.Configuration["SigningCertificate:Password"]);
+}
 ```
 
-When a certificate is set it is used (and published at JWKS); otherwise the store-backed key is used.
-See the [production hardening guide](../../docs/production-hardening.md#choosing-the-signing-key-source).
+`signing.pfx` is **git-ignored** (it holds a private key), so a fresh clone uses the store-backed key.
+The dev password lives in `appsettings.Development.json`. To try the certificate path, generate a PFX
+as described in [`Keys/README.md`](Keys/README.md). Using the same certificate on every instance keeps
+the JWKS consistent across a load-balanced farm. See the
+[production hardening guide](../../docs/production-hardening.md#choosing-the-signing-key-source).
 
 ## Seeded clients
 

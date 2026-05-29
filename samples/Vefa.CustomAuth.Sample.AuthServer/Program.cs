@@ -126,16 +126,27 @@ builder.Services.AddDataProtection()
     .SetApplicationName("vefa-customauth-authserver")
     .PersistKeysToDbContext<SampleDataProtectionDbContext>();
 
-builder.Services
+var customAuthBuilder = builder.Services
     .AddCustomAuth(options =>
     {
         options.Issuer = "http://localhost:5175";
         options.RequireHttps = false;
         options.MapDefaultLoginEndpoint = false;
-        // LoginPath / LogoutPath point at this host's Razor Pages. UI rendering and 
+        // LoginPath / LogoutPath point at this host's Razor Pages. UI rendering and
         // credential-validation POST are fully owned by the host application.
     })
     .AddJwtTokenSigning();
+
+// Signing key source: if a PFX is present, sign with it (the same certificate on every instance keeps
+// the JWKS consistent across a load-balanced farm). Otherwise fall back to the auto-generated key in
+// the signing key store. The PFX is git-ignored, so a fresh clone uses the store-backed key.
+var signingCertificatePath = Path.Combine(builder.Environment.ContentRootPath, "Keys", "signing.pfx");
+if (File.Exists(signingCertificatePath))
+{
+    customAuthBuilder.AddSigningCertificate(
+        signingCertificatePath,
+        builder.Configuration["SigningCertificate:Password"]);
+}
 
 // Add our dynamic profile service that intercepts token requests
 builder.Services.AddScoped<Vefa.CustomAuth.Core.Services.ICustomAuthProfileService, MyProfileService>();

@@ -8,6 +8,8 @@ publish/
 # Private signing/client keys — never commit private key material
 *.key
 *.pem
+*.pfx
+*.p12
 
 # IDE
 .vs/
