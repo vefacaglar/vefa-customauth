@@ -1,0 +1,96 @@
+---
+title: Core concepts overview
+description: The terminology and building blocks Vefa.CustomAuth uses, and how the pieces fit together.
+---
+
+# Core concepts overview
+
+This page defines the terms used consistently across the documentation and shows how the moving
+parts relate. It assumes you know OAuth2/OIDC at a basic level; it does not re-teach the
+protocols — it explains *how this library models them*.
+
+## The roles
+
+| Role | What it is | In this library |
+| --- | --- | --- |
+| **Authorization server** | Issues tokens, authenticates the user, hosts the protocol endpoints. | *Your* ASP.NET Core host with `MapCustomAuthEndpoints()`. |
+| **Client** (relying party) | An application that requests tokens (SPA, web app, mobile). | A registered `CustomAuthClient`. Web apps can use `AddCustomAuthClient`. |
+| **Resource server** | An API that accepts access tokens. | A Web API using JWT bearer validation against the server's JWKS. |
+| **Resource owner** | The end user. | Authenticated by *your* `ICustomAuthUserStore`; never owned by the library. |
+
+## The building blocks
+
+- **[Clients](/docs/core-concepts/clients)** — registered applications, each with allowed
+  redirect URIs, allowed scopes, token lifetimes, and a token-endpoint authentication method.
+- **[Scopes](/docs/core-concepts/scopes)** — named permissions a client may request
+  (`openid`, `profile`, `email`, `offline_access`, plus your API scopes).
+- **Grants / flows** — the implemented grant types are `authorization_code` (with PKCE) and
+  `refresh_token`. See [OAuth2 flows](/docs/flows/authorization-code-pkce).
+- **[Tokens](/docs/core-concepts/tokens)** — JWT access tokens, JWT ID tokens, and opaque
+  refresh tokens.
+- **[Signing keys](/docs/core-concepts/signing-keys)** — RSA keys whose public half is published
+  as JWKS; the private half never leaves the server.
+- **[Sessions & login](/docs/core-concepts/sessions-and-login)** — the SSO session cookie that
+  links the authenticated user to the authorize endpoint.
+- **Claims** — assembled by the profile service and the user store; see
+  [OpenID Connect](/docs/openid-connect).
+- **[Storage providers](/docs/storage/entity-framework-core)** — where all of the above is
+  persisted: EF Core, MongoDB, or in-memory.
+
+## Stores and managers
+
+All protocol state lives behind store interfaces in `Vefa.CustomAuth.Core.Stores`:
+
+- `ICustomAuthClientStore`
+- `ICustomAuthAuthorizationCodeStore`
+- `ICustomAuthRefreshTokenStore`
+- `ICustomAuthSessionStore`
+- `ICustomAuthSigningKeyStore`
+- `ICustomAuthScopeStore`
+- `ICustomAuthAuditLogStore`
+- `ICustomAuthUserStore` — **host-implemented**; the library never provides a real one.
+
+A storage provider (EF Core, MongoDB, in-memory) implements all of these except the user store.
+On top of the stores sit **managers** (`ICustomAuthClientManager`, `ICustomAuthScopeManager`,
+`ICustomAuthSessionManager`, `ICustomAuthTokenManager`, `ICustomAuthSigningKeyManager`,
+`ICustomAuthAuditLogManager`) which the endpoints and the Admin UI use. Managers add validation
+and orchestration over the raw stores.
+
+## Request lifecycle (Authorization Code + PKCE)
+
+A simplified end-to-end path:
+
+```
+Browser → GET /connect/authorize
+            ├─ validate client_id + redirect_uri (exact match)
+            ├─ no SSO session?  → 302 to LoginPath?returnUrl=…
+            │                      (host page → SignInCustomAuthAsync → session cookie)
+            ├─ validate response_type / scope / PKCE
+            └─ create authorization code (hashed, single-use) → 302 redirect_uri?code=…&state=…
+
+Client  → POST /connect/token (grant_type=authorization_code)
+            ├─ authenticate client (none / private_key_jwt)
+            ├─ verify PKCE code_verifier (S256, constant-time)
+            ├─ atomically mark code consumed
+            ├─ run profile service (claims + IsUserActive)
+            └─ issue access (JWT) + id (JWT) + refresh (opaque) tokens
+
+Resource → validate JWT access token locally via JWKS
+server      (issuer, audience, signature, expiry)
+```
+
+Refresh and revocation paths build on the same stores; see the
+[flow pages](/docs/flows/authorization-code-pkce).
+
+## Configuration vs. per-client settings
+
+Two layers control behavior:
+
+1. **Server-wide:** `CustomAuthOptions` (issuer, default lifetimes, HTTPS/PKCE requirements,
+   login/logout paths). See [Configuration](/docs/getting-started/configuration).
+2. **Per-client:** `CustomAuthClient` (allowed redirect URIs and scopes, `RequirePkce`,
+   `AllowRefreshTokens`, per-client token lifetimes, `TokenEndpointAuthMethod`). See
+   [Clients](/docs/core-concepts/clients).
+
+When both apply (e.g. access token lifetime), the per-client value takes precedence over the
+server default.

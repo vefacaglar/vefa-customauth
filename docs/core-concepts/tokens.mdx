@@ -1,0 +1,92 @@
+---
+title: Tokens
+description: Access tokens, ID tokens, and refresh tokens — formats, lifetimes, and how the library issues and stores them.
+---
+
+# Tokens
+
+Vefa.CustomAuth issues three token types. Two are JWTs signed with the server's RSA key; the
+third is an opaque, hashed-at-rest refresh token.
+
+## Access token (JWT)
+
+- **Format:** signed JWT (`RS256` by default; the signing certificate path supports
+  `RS256/384/512` and others — see [Signing keys](/docs/core-concepts/signing-keys)).
+- **Purpose:** presented as a `Bearer` token to your resource servers.
+- **Lifetime:** `CustomAuthClient.AccessTokenLifetimeSeconds` (default 3600s), falling back to
+  `CustomAuthOptions.AccessTokenLifetime`.
+- **Claims:** subject (`sub`), issuer, audience, expiry, the granted `scope`, plus any claims the
+  profile service adds. When `IncludeAdditionalClaimsInAccessToken = true` (the default), the
+  user store's `AdditionalClaims` are embedded too.
+- **Validation:** resource servers validate it **locally** against the JWKS document — there is
+  no introspection round-trip. See
+  [Token validation & revocation](/docs/flows/token-validation-and-revocation).
+
+> Because access tokens are validated locally and are self-contained, **they cannot be revoked
+> before expiry**. Keep access token lifetimes short (15–60 minutes) and rely on refresh token
+> revocation to cut off access at the next refresh. See [Security](/docs/security).
+
+## ID token (JWT)
+
+- **Format:** signed JWT (`RS256`).
+- **Purpose:** authenticates the end user to the client (OIDC). Issued when `openid` is granted.
+- **Lifetime:** `CustomAuthOptions.IdTokenLifetime` (default 1h).
+- **Notable claims:**
+  - `nonce` — echoed from the authorize request when supplied (OIDC replay protection).
+  - `at_hash` — the leftmost-half hash of the access token, binding the two together.
+  - Identity claims gated by the granted scopes (`profile`, `email`).
+
+The ID token is for the client, not for calling APIs. Do not send it as a `Bearer` token to
+resource servers — send the access token.
+
+## Refresh token (opaque)
+
+- **Format:** an opaque, high-entropy string. **Only a hash is stored** server-side; the raw
+  value is never persisted or logged.
+- **Issued when:** the client has `AllowRefreshTokens = true` **and** `offline_access` was
+  granted.
+- **Rotation:** every use rotates the token — the old one is consumed and a new one is issued,
+  chained via `ParentTokenId`.
+- **Session-bound:** tied to the SSO session (`SessionId`); revoking the session revokes the
+  chain.
+- **Expiry:** a **sliding** `RefreshTokenLifetimeSeconds` plus a hard
+  `RefreshTokenAbsoluteLifetimeSeconds` ceiling that rotation cannot extend.
+- **Reuse detection:** if a consumed refresh token is replayed and
+  `DetectRefreshTokenReuse = true`, the entire chain is revoked and a `RefreshTokenReuseDetected`
+  audit log is written.
+
+See [Refresh token flow](/docs/flows/refresh-token) for the exchange details.
+
+## Authorization codes (not a token, but related)
+
+Authorization codes are short-lived (`AuthorizationCodeLifetime`, default 60s), **single-use**,
+and **hashed in storage**. Consumption is atomic: the code is marked consumed via a
+compare-and-swap before any token is issued, so a code cannot be redeemed twice even under
+concurrent requests.
+
+## Token endpoint response
+
+A successful `/connect/token` response is JSON with `Cache-Control: no-store`:
+
+```json
+{
+  "access_token": "eyJ…",
+  "id_token": "eyJ…",
+  "refresh_token": "<opaque>",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "scope": "openid profile email offline_access"
+}
+```
+
+`refresh_token` is present only when `offline_access` was granted to a client that allows it.
+`id_token` is present only when `openid` was granted.
+
+## Lifetime summary
+
+| Token | Default lifetime | Override | Revocable before expiry? |
+| --- | --- | --- | --- |
+| Authorization code | 60s | `CustomAuthOptions.AuthorizationCodeLifetime` | single-use only |
+| Access token (JWT) | 1h | `CustomAuthClient.AccessTokenLifetimeSeconds` | **No** (validated locally) |
+| ID token (JWT) | 1h | `CustomAuthOptions.IdTokenLifetime` | **No** |
+| Refresh token | 30d sliding / 30d absolute | `CustomAuthClient.RefreshTokenLifetimeSeconds` / `…AbsoluteLifetimeSeconds` | **Yes** (revoke / reuse detection) |

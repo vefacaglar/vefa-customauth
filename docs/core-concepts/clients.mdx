@@ -1,0 +1,113 @@
+---
+title: Clients
+description: The CustomAuthClient model — registration, redirect URIs, scopes, lifetimes, and token-endpoint authentication.
+---
+
+# Clients
+
+A **client** is an application registered with the authorization server. Every authorization and
+token request is made on behalf of a client identified by `client_id`. Clients are represented by
+`CustomAuthClient` (`Vefa.CustomAuth.Core.Models`) and persisted through `ICustomAuthClientStore`.
+
+## The CustomAuthClient model
+
+```csharp
+public sealed class CustomAuthClient
+{
+    public string ClientId { get; set; }                  // unique identifier
+    public string DisplayName { get; set; }               // human-readable name
+    public List<string> RedirectUris { get; set; }        // exact-match redirect URIs
+    public List<string> PostLogoutRedirectUris { get; set; }
+    public List<string> AllowedScopes { get; set; }       // scopes this client may request
+    public bool RequirePkce { get; set; } = true;
+    public bool AllowRefreshTokens { get; set; } = true;
+    public int AccessTokenLifetimeSeconds { get; set; } = 3600;      // 1 hour
+    public int RefreshTokenLifetimeSeconds { get; set; } = 2592000;  // 30 days (sliding)
+    public int RefreshTokenAbsoluteLifetimeSeconds { get; set; } = 2592000; // 30 days (ceiling)
+    public CustomAuthClientAuthenticationMethod TokenEndpointAuthMethod { get; set; }
+        = CustomAuthClientAuthenticationMethod.None;
+    public string? JwksJson { get; set; }                 // required for private_key_jwt
+}
+```
+
+> **Relational persistence note.** For relational providers the URI/scope collections are also
+> modeled as child rows via `RedirectUriEntries`, `PostLogoutRedirectUriEntries`, and
+> `AllowedScopeEntries`. When you create clients through the managers / Admin UI this is handled
+> for you. If you write clients directly to an EF `DbContext`, populate the entry collections.
+
+## Client types
+
+Vefa.CustomAuth distinguishes clients by their **token-endpoint authentication method**, not by a
+separate "client type" flag:
+
+| `TokenEndpointAuthMethod` | Meaning | Typical use |
+| --- | --- | --- |
+| `None` (default) | **Public client.** No client credential at the token endpoint; security comes entirely from PKCE + exact redirect URI matching. | SPAs, mobile apps, native apps. |
+| `PrivateKeyJwt` | **Confidential client.** Authenticates with a signed `private_key_jwt` client assertion. Requires `JwksJson` with the client's public keys. | Server-side web apps, machine-to-machine callers that hold a private key. |
+
+> There is **no shared-secret (`client_secret_basic` / `client_secret_post`) authentication** in
+> the current version. Confidential clients authenticate with `private_key_jwt`. See
+> [Client authentication](/docs/flows/client-authentication).
+
+## Redirect URIs (exact match)
+
+`RedirectUris` are matched **exactly** — no prefix matching, no wildcards, no normalization
+beyond what the validator enforces. The `redirect_uri` on an authorize request must be present in
+this list character-for-character.
+
+Redirect URIs are also validated for safety:
+
+- Must be **absolute** URIs.
+- Must **not** contain a fragment (`#`).
+- Must use **HTTPS**, except for loopback hosts (`localhost`, `127.0.0.1`, `[::1]`) which may use
+  HTTP for local development.
+
+```csharp
+new CustomAuthClient
+{
+    ClientId = "web-app",
+    DisplayName = "Marketing site",
+    RedirectUris = { "https://app.example.com/signin-oidc" },
+    PostLogoutRedirectUris = { "https://app.example.com/signout-callback-oidc" },
+    AllowedScopes = { "openid", "profile", "email", "offline_access" },
+}
+```
+
+## Allowed scopes
+
+A client may only request scopes in `AllowedScopes`. Requests for scopes outside this set are
+rejected (`invalid_scope`). See [Scopes](/docs/core-concepts/scopes).
+
+> **Refresh token requirement.** If `AllowRefreshTokens = true`, the client **must** include
+> `offline_access` in `AllowedScopes`, and that scope must be granted on the request, for a
+> refresh token to be issued. Options validation and the Admin UI enforce/assist this pairing.
+
+## Token lifetimes
+
+Per-client lifetimes override the server defaults from `CustomAuthOptions`:
+
+- `AccessTokenLifetimeSeconds` — overrides `CustomAuthOptions.AccessTokenLifetime`.
+- `RefreshTokenLifetimeSeconds` — sliding lifetime; extended on each rotation.
+- `RefreshTokenAbsoluteLifetimeSeconds` — hard ceiling; rotation never extends a chain beyond it.
+
+## Registering clients
+
+- **In-memory (dev):** seed via `AddInMemoryStores(stores => stores.Clients.Add(...))`.
+- **EF Core / MongoDB:** create through `ICustomAuthClientManager` (recommended — it handles the
+  relational child entries and validation) or seed in your database setup code.
+- **Admin UI:** create, edit, and delete clients interactively. See [Admin UI](/docs/admin-ui).
+
+```csharp
+public class ClientSeeder(ICustomAuthClientManager clients)
+{
+    public Task SeedAsync() => clients.CreateAsync(new CustomAuthClient
+    {
+        ClientId = "spa-client",
+        DisplayName = "Demo SPA",
+        RedirectUris = { "https://localhost:5003/callback" },
+        AllowedScopes = { "openid", "profile", "email", "offline_access" },
+    });
+}
+```
+
+See [Seeding initial clients](/docs/recipes#seeding-initial-clients).

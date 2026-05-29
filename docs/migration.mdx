@@ -1,0 +1,57 @@
+---
+title: Migration & upgrade guide
+description: Versioning policy, how breaking changes are communicated, and an upgrade checklist.
+---
+
+# Migration & upgrade guide
+
+## Versioning policy
+
+Vefa.CustomAuth follows **semantic versioning** (`MAJOR.MINOR.PATCH`):
+
+- **MAJOR** — breaking public API or protocol-behavior changes.
+- **MINOR** — backward-compatible features.
+- **PATCH** — backward-compatible fixes.
+
+Keep every `Vefa.CustomAuth.*` package on the **same version**, and keep the
+`Microsoft.IdentityModel.*` graph aligned on one major version (see
+[Installation](/docs/getting-started/installation#version-pinning)).
+
+> The library is at **v1.0**. There is no prior public release to migrate *from* yet, so the
+> "breaking changes" section below is a forward-looking template that will be filled in as
+> versions ship.
+
+## Breaking changes
+
+<!-- TODO: Populate per-version breaking-change notes as new releases are published. -->
+
+> _No breaking changes recorded yet (v1.0 is the baseline)._ Future entries will list, per
+> version: the changed API/behavior, the reason, and the migration step.
+
+## Upgrade checklist
+
+When moving between versions:
+
+1. **Bump all packages together.** Update every `Vefa.CustomAuth.*` reference to the same target
+   version.
+2. **Restore and build.** Treat new compiler warnings as signals — the library builds warning-free
+   and recommends `TreatWarningsAsErrors`.
+3. **Read the breaking-changes entry** for the target MAJOR version (above).
+4. **Review the discovery document** after upgrading to confirm advertised endpoints, grant types,
+   and algorithms still match your expectations.
+5. **Run database migrations** if the schema changed. Generate a new EF migration against your
+   context; for MongoDB, re-run index creation.
+6. **Re-check security defaults** you may have overridden (`RequireHttps`, `RequirePkce`, token
+   lifetimes) against the current [Security](/docs/security) guidance.
+7. **Smoke-test the flows** you depend on: authorize → token, refresh, logout, and resource-server
+   validation.
+8. **Verify multi-instance config** (shared signing key/cert and Data Protection key ring) is
+   still in place.
+
+## Data and key compatibility
+
+- **Signing keys:** a fixed certificate is the most upgrade-stable choice — it is unaffected by
+  code changes and keeps issued tokens verifiable across the upgrade.
+- **Stored tokens/codes:** these are short-lived; a brief overlap during deployment is normal.
+- **Sessions / Data Protection:** keep the same application name and key ring across the upgrade so
+  existing SSO cookies keep working.

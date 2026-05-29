@@ -1,0 +1,87 @@
+---
+title: Refresh token flow
+description: Requesting refresh tokens, rotation, sliding and absolute lifetimes, and reuse detection.
+---
+
+# Refresh token flow
+
+Refresh tokens let a client obtain new access tokens without re-prompting the user. In
+Vefa.CustomAuth they are **opaque, hashed at rest, rotated on every use, session-bound, and
+constrained by both a sliding and an absolute lifetime**.
+
+## Getting a refresh token
+
+A refresh token is issued from the Authorization Code exchange only when **both** conditions
+hold:
+
+1. The client has `AllowRefreshTokens = true`.
+2. The `offline_access` scope was requested **and** granted (so it must also be in the client's
+   `AllowedScopes`).
+
+If either is missing, no refresh token is returned. The Admin UI auto-selects `offline_access`
+when you enable refresh tokens on a client to keep this consistent.
+
+## Using a refresh token
+
+```bash
+curl -X POST https://auth.example.com/connect/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=refresh_token" \
+  -d "client_id=<client_id>" \
+  -d "refresh_token=<opaque refresh token>"
+```
+
+A confidential client (`private_key_jwt`) additionally sends its client assertion — see
+[Client authentication](/docs/flows/client-authentication).
+
+The response is the same shape as the code exchange and includes a **new** `refresh_token`
+(rotation).
+
+## Rotation
+
+Every refresh **rotates** the token:
+
+- The presented refresh token is marked consumed (atomic compare-and-swap).
+- A new refresh token is issued, chained to the old one via `ParentTokenId`.
+- The new token's sliding expiry is extended, **but never beyond** the chain's absolute lifetime.
+
+Your client must always store and use the newest refresh token returned. Discard the old value.
+
+## Lifetimes
+
+| Setting | Per-client | Server default | Meaning |
+| --- | --- | --- | --- |
+| Sliding lifetime | `RefreshTokenLifetimeSeconds` (30d) | `RefreshTokenLifetime` (30d) | Extended on each rotation. |
+| Absolute lifetime | `RefreshTokenAbsoluteLifetimeSeconds` (30d) | `RefreshTokenAbsoluteLifetime` (30d) | Hard ceiling for the chain; rotation cannot extend past it. |
+
+When the absolute ceiling is reached, the user must authenticate again.
+
+## Reuse detection
+
+A correctly behaving client uses each refresh token exactly once. If a **consumed** refresh token
+is presented again, that signals theft or a client bug. When
+`CustomAuthOptions.DetectRefreshTokenReuse = true` (the default):
+
+- The reuse attempt fails (`invalid_grant`).
+- The **entire token chain** bound to that session is revoked, cutting off both the attacker and
+  the legitimate client (who must re-authenticate).
+- A `RefreshTokenReuseDetected` entry is written to the audit log.
+
+> **Trade-off.** Reuse detection can produce false positives if a client races two refreshes
+> concurrently or retries after a dropped response. Ensure your client serializes refreshes and
+> persists the rotated token before using it.
+
+## Session binding and revocation
+
+Refresh tokens carry a `SessionId`. Revoking the SSO session (logout, admin action) revokes the
+bound refresh token chain. You can also revoke a refresh token directly at the
+[revocation endpoint](/docs/flows/token-validation-and-revocation#revocation). Because access
+tokens are validated locally and are not revocable, refresh-token revocation is how you cut off
+ongoing access — it takes effect at the access token's next expiry.
+
+## Client integration
+
+With [`AddCustomAuthClient`](/docs/recipes#creating-a-spa-or-web-client-with-pkce), refresh tokens
+are saved in the authentication cookie (`SaveTokens = true`) and the OpenID Connect handler can
+refresh access tokens for you. Request `offline_access` (it is in the default scope list) for
+this to work.

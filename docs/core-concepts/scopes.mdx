@@ -1,0 +1,87 @@
+---
+title: Scopes
+description: Built-in and custom scopes, how they are validated, and how they shape tokens and claims.
+---
+
+# Scopes
+
+A **scope** is a named permission a client requests and the user (implicitly) grants. Scopes
+control which OIDC claims appear in tokens and the UserInfo response, and they act as the
+audience/authorization signal for your APIs. Scopes are represented by `CustomAuthScope` and
+persisted through `ICustomAuthScopeStore`.
+
+## Built-in scopes
+
+`AddCustomAuth` and `AddInMemoryStores` seed a default scope set:
+
+| Scope | Required | Meaning |
+| --- | --- | --- |
+| `openid` | yes | Marks the request as OpenID Connect; causes an ID token to be issued. |
+| `profile` | no | Releases profile claims (e.g. `name`, `preferred_username`) to UserInfo. |
+| `email` | no | Releases `email` / `email_verified` to UserInfo. |
+| `offline_access` | no | Permits issuance of a refresh token. |
+
+## The CustomAuthScope model
+
+```csharp
+public sealed class CustomAuthScope
+{
+    public string Name { get; set; }          // unique, e.g. "orders-api"
+    public string? DisplayName { get; set; }
+    public string? Description { get; set; }
+    public bool Required { get; set; }         // cannot be deselected
+    public bool Emphasize { get; set; }        // highlight on consent screens (UI hint)
+}
+```
+
+## How scopes are validated
+
+On the authorize and token requests:
+
+1. The requested `scope` value is split into individual scopes.
+2. Each requested scope must be in the client's `AllowedScopes`. A scope outside that set yields
+   an `invalid_scope` error.
+3. The granted scopes are recorded on the authorization code and propagated to the issued tokens.
+
+## Scopes and claims
+
+The OIDC scopes gate which claims are returned from `/connect/userinfo`:
+
+- `profile` → name / `preferred_username`–style claims.
+- `email` → `email` and `email_verified`.
+
+The exact claim assembly is controlled by the **profile service**
+(`ICustomAuthProfileService`) and your user store's `AdditionalClaims`. See
+[OpenID Connect](/docs/openid-connect).
+
+## API (resource) scopes
+
+To authorize calls to your own APIs, define a scope per API or per permission and add it to the
+relevant clients' `AllowedScopes`:
+
+```csharp
+await scopeManager.CreateAsync(new CustomAuthScope
+{
+    Name = "orders-api",
+    DisplayName = "Orders API",
+    Description = "Read and write orders.",
+});
+```
+
+A client requests it alongside the OIDC scopes:
+
+```csharp
+options.AdditionalScopes.Add("orders-api");   // on the relying-party CustomAuthClientOptions
+```
+
+Your resource server then checks the `scope` claim on the validated access token. See
+[Protecting an ASP.NET Core API](/docs/recipes#protecting-an-aspnet-core-api).
+
+> **Audience note.** Access tokens are validated by audience on the resource server. Make sure
+> your API's accepted audiences line up with the client/scope configuration. See
+> [Token validation & revocation](/docs/flows/token-validation-and-revocation).
+
+## Managing scopes
+
+- **Programmatically:** `ICustomAuthScopeManager`.
+- **Admin UI:** the **Scopes** tab supports full CRUD. See [Admin UI](/docs/admin-ui).

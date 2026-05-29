@@ -1,0 +1,72 @@
+{
+  "$comment": "Navigation tree for the Vefa.CustomAuth documentation site. Framework-agnostic: map 'slug' to your router (Docusaurus sidebars, Nextra _meta, Mintlify navigation, etc.).",
+  "sidebar": [
+    {
+      "group": "Introduction",
+      "items": [
+        { "label": "Introduction", "slug": "introduction" }
+      ]
+    },
+    {
+      "group": "Getting Started",
+      "items": [
+        { "label": "Installation", "slug": "getting-started/installation" },
+        { "label": "Quick start", "slug": "getting-started/quick-start" },
+        { "label": "Configuration", "slug": "getting-started/configuration" }
+      ]
+    },
+    {
+      "group": "Core Concepts",
+      "items": [
+        { "label": "Overview", "slug": "core-concepts/overview" },
+        { "label": "Clients", "slug": "core-concepts/clients" },
+        { "label": "Scopes", "slug": "core-concepts/scopes" },
+        { "label": "Tokens", "slug": "core-concepts/tokens" },
+        { "label": "Signing keys", "slug": "core-concepts/signing-keys" },
+        { "label": "Sessions & login", "slug": "core-concepts/sessions-and-login" }
+      ]
+    },
+    {
+      "group": "OAuth2 Flows",
+      "items": [
+        { "label": "Authorization Code + PKCE", "slug": "flows/authorization-code-pkce" },
+        { "label": "Refresh token", "slug": "flows/refresh-token" },
+        { "label": "Client authentication", "slug": "flows/client-authentication" },
+        { "label": "Token validation & revocation", "slug": "flows/token-validation-and-revocation" }
+      ]
+    },
+    {
+      "group": "OpenID Connect",
+      "items": [
+        { "label": "OpenID Connect", "slug": "openid-connect" }
+      ]
+    },
+    {
+      "group": "Storage",
+      "items": [
+        { "label": "EF Core", "slug": "storage/entity-framework-core" },
+        { "label": "MongoDB", "slug": "storage/mongodb" },
+        { "label": "In-memory", "slug": "storage/in-memory" },
+        { "label": "Custom providers", "slug": "storage/custom-stores" }
+      ]
+    },
+    {
+      "group": "Guides",
+      "items": [
+        { "label": "Security", "slug": "security" },
+        { "label": "Extensibility", "slug": "extensibility" },
+        { "label": "Admin UI", "slug": "admin-ui" },
+        { "label": "Recipes", "slug": "recipes" }
+      ]
+    },
+    {
+      "group": "Reference",
+      "items": [
+        { "label": "API reference", "slug": "api-reference" },
+        { "label": "Troubleshooting", "slug": "troubleshooting" },
+        { "label": "Migration & upgrade", "slug": "migration" },
+        { "label": "FAQ", "slug": "faq" }
+      ]
+    }
+  ]
+}

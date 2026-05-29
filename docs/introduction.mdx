@@ -1,0 +1,99 @@
+---
+title: Introduction
+description: What Vefa.CustomAuth is, when to use it, its design goals, and what it deliberately does not do.
+---
+
+# Introduction
+
+**Vefa.CustomAuth** is an OAuth2 and OpenID Connect (OIDC) authorization server library for
+ASP.NET Core on **.NET 8**. You add it to your own ASP.NET Core application and map a set of
+protocol endpoints; the result is a standards-based authorization server that issues signed
+JWT access tokens, ID tokens, and rotating refresh tokens to your client applications.
+
+It is distributed as a set of focused NuGet packages under the `Vefa.CustomAuth.*` namespace,
+so you only depend on the pieces you use (protocol, storage provider, admin UI).
+
+## What is Vefa.CustomAuth?
+
+At its core, the library turns a normal ASP.NET Core host into an authorization server:
+
+- It maps OAuth2 / OIDC endpoints onto your `IEndpointRouteBuilder`:
+  discovery, JWKS, `/connect/authorize`, `/connect/token`, `/connect/userinfo`,
+  `/connect/logout`, and `/connect/revoke`.
+- It implements the **Authorization Code flow with PKCE** and the **Refresh Token flow**.
+- It signs tokens with RSA keys (auto-generated and persisted, or a fixed X.509 certificate
+  you supply).
+- It persists protocol state (clients, codes, refresh tokens, sessions, signing keys, scopes,
+  audit logs) through pluggable storage providers: **EF Core**, **MongoDB**, or **in-memory**.
+
+The library is **UI-free and identity-store-agnostic by design**. It does not ship a login
+page and does not own your user database. Your host application renders the login/logout pages
+and owns user accounts and password validation through a small interface
+(`ICustomAuthUserStore`). This keeps the library a protocol engine, not an identity product.
+
+## When should you use it?
+
+Use Vefa.CustomAuth when:
+
+- You are building on **ASP.NET Core (.NET 8)** and want an OAuth2/OIDC authorization server
+  *inside your own application*, rather than running and operating a separate identity product.
+- You want **secure defaults**: mandatory PKCE (S256 only), single-use hashed authorization
+  codes, opaque rotating refresh tokens with reuse detection, and HTTPS enforced by default.
+- You need to issue tokens to first-party apps you control — a SPA, a server-rendered web app,
+  a mobile app — using the Authorization Code + PKCE flow.
+- You want to **own the user store** (existing database, ASP.NET Core Identity, an external
+  user service) and only delegate the protocol mechanics.
+- You want a **provider-based** storage model so you can start with in-memory in development and
+  move to EF Core or MongoDB in production without changing protocol code.
+
+Consider an alternative when:
+
+- You need a hosted, fully-managed identity provider with built-in user management, MFA, social
+  logins, and an admin console out of the box.
+- You require flows this library does not implement (see below).
+
+## Project goals
+
+The library is built around a small number of explicit design goals:
+
+- **Clean integration** — add a few `services.Add…` and `app.Map…` calls to an existing host.
+- **Provider-based architecture** — storage is behind interfaces; swap providers freely.
+- **Extensibility** — custom stores, a profile/claims service, custom signing key sources, and
+  a host-owned login UI are all first-class extension points.
+- **Secure defaults** — the safe configuration is the default; you opt *out* of protections
+  deliberately, not into them.
+- **Easy local development** — an in-memory provider and an HTTP-friendly dev configuration get
+  you a running server in minutes.
+- **Admin UI support** — an optional embedded dashboard (`Vefa.CustomAuth.AdminUI`) for managing
+  clients, scopes, sessions, refresh tokens, signing keys, and audit logs.
+
+## What this library is *not*
+
+To set accurate expectations:
+
+- **It is not a user management system.** It does not store users, hash passwords, manage
+  registration, MFA, or password reset. You implement `ICustomAuthUserStore` against your own
+  identity source.
+- **It does not ship a login or consent UI.** Your host renders the login and logout pages and
+  signs users in via `HttpContext.SignInCustomAuthAsync(...)`. There is currently no built-in
+  consent screen.
+- **It does not implement every OAuth2 flow.** Implemented grant types are
+  `authorization_code` and `refresh_token` only. The **Client Credentials**, **Device
+  Authorization**, **Implicit**, and **Resource Owner Password** flows are **not supported**.
+- **It does not expose a token introspection endpoint** (`/connect/introspect`) at this time.
+  Resource servers validate JWT access tokens locally using the JWKS document. See
+  [Token validation & revocation](/docs/flows/token-validation-and-revocation).
+- **It is not a multi-tenant identity platform.** Multi-tenancy, if needed, is something you
+  build on top using your own user store and claims via the profile service.
+
+> **Project status.** Vefa.CustomAuth is at **version 1.0** with secure defaults and a completed
+> internal security audit against the relevant OAuth2/OIDC RFCs. Before going to production,
+> read the [Security](/docs/security) page and the production hardening guidance. Treat it as a
+> maturing library: review the API surface and pin your package versions.
+
+## Where to go next
+
+- New to the library? Start with [Installation](/docs/getting-started/installation) and the
+  [Quick start](/docs/getting-started/quick-start).
+- Want the mental model first? Read [Core concepts overview](/docs/core-concepts/overview).
+- Integrating a client app or API? Jump to [Recipes](/docs/recipes).

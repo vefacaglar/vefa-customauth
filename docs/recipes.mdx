@@ -1,0 +1,180 @@
+---
+title: Recipes
+description: Task-focused, copy-pasteable solutions for common Vefa.CustomAuth integrations.
+---
+
+# Recipes
+
+Practical, end-to-end snippets. Each assumes you have a working authorization server (see
+[Quick start](/docs/getting-started/quick-start)).
+
+## Protecting an ASP.NET Core API
+
+A resource server validates JWT access tokens locally against the auth server's JWKS — no
+Vefa.CustomAuth package required, just JWT bearer.
+
+```csharp
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.Authority = "https://auth.example.com";  // discovers issuer + JWKS
+        options.RequireHttpsMetadata = true;             // false only for local HTTP
+        options.MapInboundClaims = false;                // keep sub/scope claim names
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidAudiences = new[] { "orders-api" },
+        };
+    });
+
+builder.Services.AddAuthorization();
+
+var app = builder.Build();
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapGet("/orders", (HttpContext ctx) => new { user = ctx.User.FindFirst("sub")?.Value })
+   .RequireAuthorization(p => p.RequireClaim("scope", "orders-api"));
+
+app.Run();
+```
+
+> Add `JwtBearerEvents` (`OnAuthenticationFailed`, `OnChallenge`) that log the failure reason to
+> the server log — it makes audience/issuer/expiry mismatches far quicker to diagnose. Never
+> return the reason to the caller.
+
+## Creating a machine-to-machine client
+
+> **There is no Client Credentials grant.** A purely headless service that has no end user cannot
+> use a client-credentials flow here. If a service must call an API **on behalf of a user**,
+> register it as a confidential client and have it run the Authorization Code flow once, then keep
+> access alive with a refresh token (`offline_access` + `private_key_jwt`). See
+> [Client authentication](/docs/flows/client-authentication) and
+> [Refresh token flow](/docs/flows/refresh-token).
+
+```csharp
+new CustomAuthClient
+{
+    ClientId = "backend-service",
+    DisplayName = "Backend service",
+    RedirectUris = { "https://service.example.com/signin-oidc" },
+    AllowedScopes = { "openid", "offline_access", "orders-api" },
+    AllowRefreshTokens = true,
+    TokenEndpointAuthMethod = CustomAuthClientAuthenticationMethod.PrivateKeyJwt,
+    JwksJson = "{ \"keys\": [ /* the service's public keys */ ] }",
+};
+```
+
+<!-- TODO: If a Client Credentials grant is added in a future version, replace this recipe with a
+direct machine-to-machine example. -->
+
+## Creating a SPA or web client with PKCE
+
+For a server-rendered ASP.NET Core web app, use the relying-party helper from
+`Vefa.CustomAuth.AspNetCore` — it configures cookie + OIDC with PKCE, code flow, saved tokens, and
+`name` claim mapping:
+
+```csharp
+using Vefa.CustomAuth.AspNetCore.Client;
+
+builder.Services.AddCustomAuthClient(options =>
+{
+    options.Authority = "https://auth.example.com";
+    options.ClientId = "web-app";
+    // options.ClientSecret = "...";              // omit for public clients
+    options.AdditionalScopes.Add("orders-api");   // beyond the default openid/profile/email/offline_access
+    // options.RequireHttpsMetadata = false;      // local dev only
+});
+
+builder.Services.AddAuthorization();
+builder.Services.AddRazorPages();
+
+var app = builder.Build();
+app.UseAuthentication();
+app.UseAuthorization();
+app.MapRazorPages();
+app.MapCustomAuthSignOut("/logout");   // cookie + upstream end-session in one call
+app.Run();
+```
+
+Register the client on the server with the matching `redirect_uri` (default callback
+`/signin-oidc`) and `post_logout_redirect_uri` (default `/signout-callback-oidc`):
+
+```csharp
+new CustomAuthClient
+{
+    ClientId = "web-app",
+    DisplayName = "Web app",
+    RedirectUris = { "https://app.example.com/signin-oidc" },
+    PostLogoutRedirectUris = { "https://app.example.com/signout-callback-oidc" },
+    AllowedScopes = { "openid", "profile", "email", "offline_access", "orders-api" },
+};
+```
+
+A browser-only SPA (no server) uses a standard JS OIDC library pointed at the discovery document;
+register it as a public client (`TokenEndpointAuthMethod = None`) with PKCE.
+
+## Using the library with PostgreSQL
+
+```csharp
+// dotnet add package Npgsql.EntityFrameworkCore.PostgreSQL
+builder.Services.AddCustomAuthEntityFrameworkCore(o =>
+    o.UseNpgsql(builder.Configuration.GetConnectionString("Auth")));
+```
+
+```bash
+dotnet ef migrations add InitialCustomAuth --context CustomAuthDbContext
+dotnet ef database update --context CustomAuthDbContext
+```
+
+The cleanup service uses bulk `ExecuteDeleteAsync` on PostgreSQL automatically.
+
+## Using the library with SQL Server
+
+```csharp
+// dotnet add package Microsoft.EntityFrameworkCore.SqlServer
+builder.Services.AddCustomAuthEntityFrameworkCore(o =>
+    o.UseSqlServer(builder.Configuration.GetConnectionString("Auth")));
+```
+
+Migrations are identical to PostgreSQL (`--context CustomAuthDbContext`).
+
+## Seeding initial clients
+
+Seed through `ICustomAuthClientManager` at startup so relational child rows and validation are
+handled:
+
+```csharp
+using (var scope = app.Services.CreateScope())
+{
+    var clients = scope.ServiceProvider.GetRequiredService<ICustomAuthClientManager>();
+    if (await clients.FindByClientIdAsync("web-app") is null)
+    {
+        await clients.CreateAsync(new CustomAuthClient
+        {
+            ClientId = "web-app",
+            DisplayName = "Web app",
+            RedirectUris = { "https://app.example.com/signin-oidc" },
+            AllowedScopes = { "openid", "profile", "email", "offline_access" },
+        });
+    }
+}
+```
+
+## Rotating signing keys
+
+For a load-balanced server, prefer a fixed certificate shared across instances:
+
+```csharp
+customAuthBuilder.AddSigningCertificate("Keys/signing.pfx", config["SigningCertificate:Password"]);
+```
+
+To rotate: deploy the new certificate, let clients/resource servers refresh the JWKS (they fetch
+by `kid`), and retire the old key only after all tokens signed with it have expired. With the
+store-backed key, key state lives in the signing key store; coordinate rotation through it rather
+than per-instance memory. See [Signing keys](/docs/core-concepts/signing-keys).

@@ -1,0 +1,69 @@
+---
+title: In-memory storage
+description: The development-only in-memory provider, seeding clients and users, and its limitations.
+---
+
+# In-memory storage
+
+The in-memory provider (in `Vefa.CustomAuth.AspNetCore`) keeps all protocol state in process
+memory. It is meant for **samples, integration tests, and local development only**.
+
+## Registration and seeding
+
+```csharp
+using Vefa.CustomAuth.AspNetCore.Stores.InMemory;
+
+builder.Services
+    .AddCustomAuth(options => { options.Issuer = "https://localhost:5001"; })
+    .AddJwtTokenSigning()
+    .AddInMemoryStores(stores =>
+    {
+        stores.Clients.Add(new()
+        {
+            ClientId = "spa-client",
+            DisplayName = "Demo SPA",
+            RedirectUris = { "https://localhost:5003/callback" },
+            AllowedScopes = { "openid", "profile", "email", "offline_access" },
+        });
+
+        stores.Users.Add(new InMemoryUserStore.SeedUser
+        {
+            UserId = "user-1",
+            UserName = "demo",
+            Password = "demo",
+            Email = "demo@example.com",
+            AdditionalClaims = new Dictionary<string, object>
+            {
+                ["role"] = new[] { "admin" },
+                ["department"] = "IT",
+            },
+        });
+    });
+```
+
+`AddInMemoryStores` registers in-memory implementations of the client, user, authorization code,
+refresh token, session, signing key, scope, and audit log stores, and seeds the default scope set
+(`openid`, `profile`, `email`, `offline_access`).
+
+> The in-memory `ICustomAuthUserStore` (`InMemoryUserStore`) compares passwords with
+> `CryptographicOperations.FixedTimeEquals`. It is still a demo store — it holds plaintext seed
+> passwords in memory and is **not** for production.
+
+## Limitations
+
+- **Volatile.** All clients, codes, tokens, sessions, and the auto-generated signing key are lost
+  on restart. Issued tokens become unverifiable after a restart because the signing key changes.
+- **Not shared across instances.** Each process has its own state and its own signing key, so it
+  cannot run behind a load balancer.
+- **Demo user store.** No real password hashing policy, lockout durability, or account
+  management.
+
+## When to use it
+
+- The [Quick start](/docs/getting-started/quick-start).
+- Integration tests (the library's own test suite uses it heavily).
+- Local feature work before wiring a real database.
+
+For anything beyond that, switch to [EF Core](/docs/storage/entity-framework-core) or
+[MongoDB](/docs/storage/mongodb). The protocol code is identical across providers — only the
+registration changes.

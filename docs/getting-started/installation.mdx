@@ -1,0 +1,88 @@
+---
+title: Installation
+description: The Vefa.CustomAuth NuGet packages, which one to install, and prerequisites.
+---
+
+# Installation
+
+Vefa.CustomAuth ships as a set of focused NuGet packages under the `Vefa.CustomAuth.*` prefix.
+Install only what your scenario needs.
+
+## Prerequisites
+
+- **.NET 8 SDK** (`net8.0`). The library does not target other framework versions.
+- An ASP.NET Core host application (Minimal API, MVC, or Razor Pages — all work).
+- A storage choice: in-memory (dev), EF Core (SQLite / PostgreSQL / SQL Server), or MongoDB.
+
+## Packages
+
+| Package | Purpose | Install when |
+| --- | --- | --- |
+| `Vefa.CustomAuth.Core` | Domain models, store abstractions, options, managers. No ASP.NET Core / EF / JWT references. | Pulled in transitively; reference directly only for custom providers. |
+| `Vefa.CustomAuth.Tokens` | RSA signing, JWKS, JWT issuance, token hashing. | Pulled in transitively by `AspNetCore`. |
+| `Vefa.CustomAuth.AspNetCore` | Protocol endpoints, DI extensions, the host-side helpers, **and** the relying-party (`AddCustomAuthClient`) integration. | Always, on the authorization server **and** on OIDC client apps. |
+| `Vefa.CustomAuth.EntityFrameworkCore` | EF Core `DbContext` and EF-backed stores. | Production persistence on a relational database. |
+| `Vefa.CustomAuth.MongoDB` | MongoDB-backed stores, index management, cleanup service. | Production persistence on MongoDB. |
+| `Vefa.CustomAuth.AdminUI` | Optional embedded admin dashboard (Alpine.js + Tailwind). | You want a built-in management UI. |
+| `Vefa.CustomAuth.Server` | Aggregate/composition package for the auth-server scenario. | Convenience meta-package. <!-- TODO: confirm exact contents/extension surface of the Server package before documenting its API. --> |
+
+## Authorization server (relational storage)
+
+The typical authorization server installs the protocol package plus the EF Core provider:
+
+```bash
+dotnet add package Vefa.CustomAuth.AspNetCore
+dotnet add package Vefa.CustomAuth.EntityFrameworkCore
+```
+
+For MongoDB instead of EF Core:
+
+```bash
+dotnet add package Vefa.CustomAuth.AspNetCore
+dotnet add package Vefa.CustomAuth.MongoDB
+```
+
+Optionally add the admin dashboard:
+
+```bash
+dotnet add package Vefa.CustomAuth.AdminUI
+```
+
+## Client applications (relying parties)
+
+A web app or API that *consumes* tokens from the server does **not** need the storage packages.
+A server-rendered OIDC client uses the relying-party helper that ships in
+`Vefa.CustomAuth.AspNetCore`:
+
+```bash
+dotnet add package Vefa.CustomAuth.AspNetCore
+```
+
+A resource server (Web API) that only validates JWT access tokens needs only the standard
+ASP.NET Core JWT bearer package — no Vefa.CustomAuth package is required on the API:
+
+```bash
+dotnet add package Microsoft.AspNetCore.Authentication.JwtBearer
+```
+
+See [Protecting an ASP.NET Core API](/docs/recipes#protecting-an-aspnet-core-api).
+
+## Version pinning
+
+> **Note on transitive dependencies.** `Vefa.CustomAuth.Tokens` depends on
+> `Microsoft.IdentityModel.*` **8.x**. The relying-party integration pins
+> `Microsoft.IdentityModel.Protocols(.OpenIdConnect)` to the matching 8.x version to avoid a
+> mixed 7.x/8.x graph that silently breaks OIDC discovery parsing in client apps. If you add
+> other libraries that pull `Microsoft.IdentityModel.*`, keep them aligned on the same major
+> version.
+
+## Verify the build
+
+After adding packages, restore and build:
+
+```bash
+dotnet restore
+dotnet build
+```
+
+Then continue to the [Quick start](/docs/getting-started/quick-start).

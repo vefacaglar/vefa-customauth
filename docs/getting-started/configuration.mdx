@@ -1,0 +1,139 @@
+---
+title: Configuration
+description: The CustomAuthOptions surface, the builder API, options validation, and environment-specific configuration.
+---
+
+# Configuration
+
+Server behavior is configured through `CustomAuthOptions` (passed to `AddCustomAuth`) and the
+`CustomAuthBuilder` chain returned by it. This page is the reference for both. Per-client
+settings (lifetimes, allowed scopes, PKCE) live on `CustomAuthClient` — see
+[Clients](/docs/core-concepts/clients).
+
+## The builder chain
+
+`AddCustomAuth` returns a `CustomAuthBuilder`. Chain the signing and storage registrations onto
+it:
+
+```csharp
+builder.Services
+    .AddCustomAuth(options => { /* CustomAuthOptions */ })
+    .AddJwtTokenSigning()                 // required: RSA signing + JWT issuance
+    .AddInMemoryStores(/* … */);          // or register EF Core / MongoDB stores separately
+```
+
+| Builder method | Effect |
+| --- | --- |
+| `AddJwtTokenSigning()` | Registers the RSA signing credentials provider (auto-generated key, persisted in the signing key store) and the JWT token issuer. **Required.** |
+| `AddSigningCertificate(cert, alg)` | Signs with a fixed `X509Certificate2` instead of the store-backed key. The cert must contain an RSA private key. |
+| `AddSigningCertificate(pfxPath, password, alg)` | Loads a PFX/PKCS#12 file and signs with it. |
+| `AddInMemoryStores(configure)` | Registers in-memory stores; seeds clients/users. **Development only.** |
+
+EF Core and MongoDB stores are registered on `IServiceCollection` directly (not on the builder):
+`AddCustomAuthEntityFrameworkCore(...)` / `AddCustomAuthStores<TContext>()` and
+`AddCustomAuthMongoDbStores(...)`. See [Storage](/docs/storage/entity-framework-core).
+
+## CustomAuthOptions reference
+
+```csharp
+builder.Services.AddCustomAuth(options =>
+{
+    options.Issuer = "https://auth.example.com";
+});
+```
+
+| Property | Type | Default | Description |
+| --- | --- | --- | --- |
+| `Issuer` | `string` | *(required)* | Absolute issuer URI used in discovery metadata and issued tokens. Must be HTTPS unless `RequireHttps = false`. |
+| `AuthorizationCodeLifetime` | `TimeSpan` | `60s` | Lifetime of an authorization code. Codes are single-use and short-lived. |
+| `AccessTokenLifetime` | `TimeSpan` | `1h` | Default access token lifetime (a client can override via `AccessTokenLifetimeSeconds`). |
+| `IdTokenLifetime` | `TimeSpan` | `1h` | ID token lifetime. |
+| `RefreshTokenLifetime` | `TimeSpan` | `30d` | Sliding refresh token lifetime; extended on rotation up to the absolute limit. |
+| `RefreshTokenAbsoluteLifetime` | `TimeSpan` | `30d` | Hard ceiling on a refresh token chain. Rotation does not extend past this. |
+| `DetectRefreshTokenReuse` | `bool` | `true` | When a consumed refresh token is replayed, revoke the related token chain. |
+| `ClientAssertionClockSkew` | `TimeSpan` | `60s` | Allowed clock skew when validating `private_key_jwt` client assertion `exp`/`nbf`. |
+| `LoginPath` | `string` | `/login` | Host-owned login page. The authorize endpoint redirects here with `returnUrl`. |
+| `LogoutPath` | `string` | `/logout` | Host-owned logout confirmation page. Used when an end-session request lacks a valid `id_token_hint`. |
+| `PostLogoutRedirectUri` | `string` | `/` | Fallback redirect after logout when no registered `post_logout_redirect_uri` was supplied. |
+| `CookieName` | `string` | `.Vefa.CustomAuth.Session` | SSO session cookie name. Dynamically prefixed `__Host-` when `RequireHttps = true`. |
+| `RequirePkce` | `bool` | `true` | Require PKCE for authorization code requests (server-wide). Clients also carry their own `RequirePkce`. |
+| `RequireHttps` | `bool` | `true` | Require HTTPS for the issuer URI. Set `false` only for local development. |
+| `IncludeAdditionalClaimsInAccessToken` | `bool` | `true` | Include `AdditionalClaims` from the profile/user store in the JWT access token. |
+| `MapDefaultLoginEndpoint` | `bool` | `true` | Map the built-in `POST {LoginPath}` credential handler. Set `false` to own login POST entirely. |
+
+> **Security note.** Leave `RequireHttps` and `RequirePkce` at their defaults (`true`) outside of
+> local development. See [Security](/docs/security).
+
+## Options validation
+
+`AddCustomAuth` registers an `IValidateOptions<CustomAuthOptions>` and calls `ValidateOnStart()`,
+so invalid configuration fails fast at startup rather than at first request. Validation covers,
+among other things, a present and well-formed `Issuer`, HTTPS consistency with `RequireHttps`,
+and that `LoginPath` / `LogoutPath` / `PostLogoutRedirectUri` are set. If startup throws an
+options validation exception, fix the reported property — do not suppress it.
+
+## Binding from appsettings.json
+
+You can drive configuration from `appsettings.{Environment}.json`. Bind the section manually
+inside the `AddCustomAuth` callback (the options type is a plain POCO):
+
+```jsonc
+// appsettings.json
+{
+  "CustomAuth": {
+    "Issuer": "https://auth.example.com",
+    "RequireHttps": true,
+    "AccessTokenLifetime": "00:15:00"
+  }
+}
+```
+
+```csharp
+builder.Services.AddCustomAuth(options =>
+{
+    builder.Configuration.GetSection("CustomAuth").Bind(options);
+});
+```
+
+## Environment-specific configuration
+
+Keep development and production differences in environment files, not in code branches where
+avoidable. A common split:
+
+```csharp
+builder.Services.AddCustomAuth(options =>
+{
+    builder.Configuration.GetSection("CustomAuth").Bind(options);
+
+    if (builder.Environment.IsDevelopment())
+    {
+        options.Issuer = "https://localhost:5001";
+        options.RequireHttps = false;   // local HTTP only
+    }
+});
+```
+
+- **Development:** in-memory stores, `RequireHttps = false`, the auto-generated signing key.
+- **Production:** EF Core or MongoDB stores, `RequireHttps = true`, a fixed signing certificate
+  shared across instances, and a persisted Data Protection key ring (see below).
+
+## Data Protection (multi-instance hosting)
+
+The SSO session cookie and antiforgery tokens are protected with ASP.NET Core Data Protection.
+When you run more than one instance behind a load balancer, all instances must share the same
+key ring and application name, or they cannot decrypt each other's cookies (symptoms: random
+logouts, antiforgery failures):
+
+```csharp
+builder.Services.AddDataProtection()
+    .SetApplicationName("my-auth-server")          // identical on every instance
+    .PersistKeysToDbContext<MyDataProtectionDbContext>();   // or Redis / file share / blob
+```
+
+See [Security](/docs/security) and [Rotating signing keys](/docs/recipes#rotating-signing-keys).
+
+## Time and testing
+
+The library uses `TimeProvider` for all time, never `DateTime.UtcNow` directly.
+`TimeProvider.System` is registered by default. Tests substitute `FakeTimeProvider`
+(`Microsoft.Extensions.TimeProvider.Testing`) to control token expiry deterministically.

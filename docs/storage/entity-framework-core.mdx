@@ -1,0 +1,98 @@
+---
+title: EF Core storage
+description: Registering the EF Core provider, the DbContext, migrations, and supported databases.
+---
+
+# EF Core storage
+
+The `Vefa.CustomAuth.EntityFrameworkCore` package provides a `CustomAuthDbContext` and EF-backed
+implementations of every protocol store (clients, authorization codes, refresh tokens, sessions,
+signing keys, scopes, audit logs). It also registers an `ICustomAuthCleanupService` for purging
+expired records.
+
+## Registration
+
+### Option A — let the library own the DbContext
+
+```csharp
+builder.Services.AddCustomAuthEntityFrameworkCore(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("Auth")));
+```
+
+This registers `CustomAuthDbContext` with your provider and wires all EF-backed stores.
+
+### Option B — use your own DbContext
+
+When you want the Vefa.CustomAuth tables in a context you control (e.g. to share a connection or
+add your own entities), apply the model configuration to your context and register the stores
+against it:
+
+```csharp
+public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : CustomAuthDbContext(options)
+{
+    // your own DbSet<T> entities here
+}
+```
+
+```csharp
+builder.Services.AddDbContext<AppDbContext>(o =>
+    o.UseSqlServer(builder.Configuration.GetConnectionString("Auth")));
+
+builder.Services.AddCustomAuthStores<AppDbContext>();
+```
+
+> `CustomAuthDbContext` exposes a protected constructor so you can derive from it. If you map the
+> model into a context that does **not** derive from it, ensure you apply the entity
+> configurations from this package.
+
+## Supported databases
+
+The provider is database-agnostic EF Core. It is exercised against:
+
+- **SQLite** — development and tests.
+- **PostgreSQL** (`Npgsql.EntityFrameworkCore.PostgreSQL`).
+- **SQL Server** (`Microsoft.EntityFrameworkCore.SqlServer`).
+
+Add the EF provider package for your database alongside `Vefa.CustomAuth.EntityFrameworkCore`.
+
+> **SQLite caveat.** SQLite cannot translate certain `DateTimeOffset` comparisons. The provider
+> works around this (e.g. ordering signing keys in memory) so SQLite is fine for dev/test. The
+> cleanup service automatically uses high-performance bulk `ExecuteDeleteAsync` on
+> PostgreSQL/SQL Server and safe in-memory deletion on SQLite — you do not configure this.
+
+## Migrations
+
+Vefa.CustomAuth does not ship pre-baked migrations (the schema lives in your context). Generate
+migrations against the context that owns the model:
+
+```bash
+dotnet ef migrations add InitialCustomAuth --context CustomAuthDbContext
+dotnet ef database update --context CustomAuthDbContext
+```
+
+If you use your own derived context, target it instead (`--context AppDbContext`). For quick
+local spikes you can call `db.Database.EnsureCreatedAsync()` instead of migrations, but use real
+migrations for anything you will evolve. See
+[Troubleshooting → migrations](/docs/troubleshooting#database-migration-problems).
+
+## Schema
+
+The model includes tables for clients (with child tables for redirect URIs, post-logout redirect
+URIs, and allowed scopes), authorization codes, refresh tokens, sessions, signing keys, scopes,
+and audit logs. Sensitive values are stored safely: authorization codes and refresh tokens are
+**hashed**, and signing keys store only what is needed to reconstruct the key for signing.
+
+> The library does **not** store users. The `Users` data is owned by your `ICustomAuthUserStore`
+> (your own table, ASP.NET Core Identity, an external service). Keep that in a separate context
+> if you like — the sample app uses a separate Identity database.
+
+## Production notes
+
+- Use a fixed [signing certificate](/docs/core-concepts/signing-keys) or ensure all instances
+  share the same signing key store.
+- Run the cleanup service on a schedule to purge expired codes, tokens, and sessions.
+- Persist the Data Protection key ring (cookies/antiforgery) — see
+  [Security](/docs/security).
+
+See [Using the library with PostgreSQL](/docs/recipes#using-the-library-with-postgresql) and
+[SQL Server](/docs/recipes#using-the-library-with-sql-server).

@@ -1,0 +1,109 @@
+---
+title: Security
+description: Secure defaults, lifetime recommendations, refresh token rotation, PKCE, HTTPS, secret handling, and common mistakes.
+---
+
+# Security
+
+Vefa.CustomAuth is built so that the secure configuration is the **default**. This page documents
+those defaults, the recommendations on top of them, and the mistakes to avoid. The library
+underwent an internal audit against the relevant OAuth2/OIDC RFCs (6749, 7009, 7636, 8414, 9700,
+OIDC Core 1.0); the behaviors below reflect that hardening.
+
+## Secure defaults (do not weaken without reason)
+
+| Default | Why it matters |
+| --- | --- |
+| `RequirePkce = true`, **S256 only** | Protects the code flow from interception; `plain` PKCE is rejected. |
+| Authorization codes single-use, hashed, ≤60s, **atomic** consume | Prevents code replay even under concurrency. |
+| Refresh tokens opaque, hashed, **rotated**, session-bound | Limits blast radius of a leaked refresh token. |
+| `DetectRefreshTokenReuse = true` | Replay of a consumed refresh token revokes the chain. |
+| Exact `redirect_uri` matching | No prefix/wildcard matching; blocks open-redirect token theft. |
+| `RequireHttps = true` | Issuer/metadata served over TLS. |
+| Token responses `Cache-Control: no-store` | Tokens are not cached by intermediaries. |
+| SSO cookie encrypted + signed, `__Host-` prefixed under HTTPS | Cookie integrity/confidentiality and scope. |
+| Antiforgery on `/login` and `/connect/logout` POST | CSRF protection on state-changing requests. |
+| `invalid_client` → 401 + `WWW-Authenticate` | Correct client-auth failure semantics. |
+| Constant-time comparison for PKCE / passwords | Mitigates timing attacks. |
+| Private signing key never leaves the server | Only public JWK is published. |
+
+## Token lifetime recommendations
+
+- **Access tokens:** keep short — **15–60 minutes**. They are validated locally and **cannot be
+  revoked** before expiry, so a short lifetime bounds the damage of a leak. Set per client via
+  `AccessTokenLifetimeSeconds`.
+- **ID tokens:** match or slightly shorter than access tokens.
+- **Authorization codes:** leave at the 60s default; they should be redeemed immediately.
+- **Refresh tokens:** set the **absolute** lifetime to your maximum acceptable offline window
+  (`RefreshTokenAbsoluteLifetimeSeconds`); rotation will not extend past it.
+
+## Refresh token rotation and revocation
+
+Every refresh rotates the token and chains it to its parent. Because access tokens are not
+revocable, **refresh-token revocation is how you cut off access** — it takes effect at the next
+access-token expiry. Combine with:
+
+- `ICustomAuthProfileService.IsUserActiveAsync` to reject token issuance for suspended/deleted
+  users on refresh.
+- Session revocation (logout / Admin UI) to kill the bound chain.
+
+See [Refresh token flow](/docs/flows/refresh-token).
+
+## PKCE requirements
+
+PKCE is required server-wide (`RequirePkce`) and per client (`CustomAuthClient.RequirePkce`).
+Only `S256` is accepted. Do not disable PKCE for public clients — it is their primary protection.
+
+## HTTPS
+
+Keep `RequireHttps = true` in every environment except local development. The issuer in the
+discovery document must be HTTPS, and the `__Host-` cookie prefix (which requires a secure
+context) is applied automatically when HTTPS is required.
+
+## Secret and key handling
+
+- **Signing keys:** prefer a fixed [signing certificate](/docs/core-concepts/signing-keys) from a
+  key vault / secret manager in production, identical across all instances. If you use the
+  store-backed key, encrypt the database at rest. The private key is never published.
+- **Client credentials:** confidential clients use `private_key_jwt` — only their **public** JWKS
+  is stored server-side; private keys stay with the client. There are no shared client secrets to
+  leak.
+- **Never log secrets.** The library does not log raw tokens, codes, passwords, or PII; hold your
+  own code to the same rule.
+
+## Multi-instance / Data Protection
+
+The SSO cookie and antiforgery tokens use ASP.NET Core Data Protection. Behind a load balancer,
+**every instance must share the same key ring and `SetApplicationName`** or users get random
+logouts and antiforgery failures. Persist keys to a shared store (database, Redis, blob, file
+share). See
+[Configuration → Data Protection](/docs/getting-started/configuration#data-protection-multi-instance-hosting).
+
+## Brute-force protection and rate limiting
+
+Login throttling is **host-owned**:
+
+- Implement `ICustomAuthLoginAttemptTracker` for lockout, and register it **before**
+  `AddCustomAuth` so it replaces the default no-op tracker.
+- Add ASP.NET Core rate limiting (`AddRateLimiter`) targeting the login POST. The sample auth
+  server throttles `POST /login` per client IP.
+
+## Admin UI
+
+The Admin UI is **protected by default** — every route requires an authenticated request that
+satisfies the default authorization policy. `AllowAnonymous = true` exists only for local
+development. Never enable it in production: it exposes client CRUD, session and refresh-token
+revocation, and the signing-key viewer to anonymous callers. See [Admin UI](/docs/admin-ui).
+
+## Common mistakes
+
+- **Leaving `RequireHttps = false` in production.** Only acceptable locally.
+- **Long-lived access tokens** assuming you can revoke them — you can't.
+- **Enabling refresh tokens without `offline_access`** in `AllowedScopes` — no refresh token is
+  issued and it looks "broken."
+- **Different signing keys per instance** (in-memory key, no shared cert) — tokens validate on one
+  node and fail on another.
+- **No shared Data Protection key ring** — random logouts / antiforgery failures across instances.
+- **`AllowAnonymous = true` on the Admin UI in production** — full administrative exposure.
+- **Concurrent refreshes** tripping reuse detection — serialize refreshes and persist the rotated
+  token before use.

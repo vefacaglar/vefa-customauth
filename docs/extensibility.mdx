@@ -1,0 +1,85 @@
+---
+title: Extensibility
+description: The extension points — custom stores, profile/claims service, login attempt tracker, and signing key source.
+---
+
+# Extensibility
+
+Vefa.CustomAuth is designed to be extended through well-defined interfaces rather than by
+modifying the library. This page summarizes the extension points and links to their details.
+
+## Custom stores
+
+Replace any persistence component by implementing the corresponding `ICustomAuth*Store`
+interface and registering it. The user store is **always** yours. See
+[Custom storage providers](/docs/storage/custom-stores).
+
+```csharp
+builder.Services.AddScoped<ICustomAuthClientStore, MyClientStore>();
+```
+
+## Claims and token shaping — the profile service
+
+`ICustomAuthProfileService` is the primary hook for what goes into tokens and whether a token is
+issued at all:
+
+- `GetProfileDataAsync(context, ct)` — add/override claims; you have `context.UserId` and
+  `context.Client`, so claims can be conditional per client.
+- `IsUserActiveAsync(userId, ct)` — return `false` to reject issuance (suspended/deleted users),
+  including on refresh.
+
+A default implementation is registered; replace it with your own:
+
+```csharp
+builder.Services.AddScoped<ICustomAuthProfileService, MyProfileService>();
+```
+
+See [OpenID Connect → the profile service](/docs/openid-connect#the-profile-service) for a full
+example.
+
+## Custom user authentication
+
+The library never authenticates users itself. Implement `ICustomAuthUserStore` to validate
+credentials and look up users, then call `HttpContext.SignInCustomAuthAsync(userId)` from your
+own login page. This is where you plug in ASP.NET Core Identity, an external IdP, MFA, or any
+credential scheme. See [Sessions & login](/docs/core-concepts/sessions-and-login).
+
+## Custom signing key source
+
+Two built-in sources cover most needs:
+
+- Store-backed auto-generated RSA key (`AddJwtTokenSigning`).
+- Fixed X.509 certificate (`AddSigningCertificate`).
+
+To source keys from elsewhere (HSM, cloud KMS), implement `ISigningCredentialsProvider`
+(`Vefa.CustomAuth.Tokens.Signing`) and register it, replacing the default. See
+[Signing keys](/docs/core-concepts/signing-keys).
+
+## Brute-force / lockout
+
+Implement `ICustomAuthLoginAttemptTracker` for durable lockout and register it **before**
+`AddCustomAuth`. Combine with ASP.NET Core rate limiting on the login POST. See
+[Security](/docs/security#brute-force-protection-and-rate-limiting).
+
+## Client assertion replay cache
+
+`private_key_jwt` assertions are checked against `IClientAssertionReplayCache` (in-memory by
+default). For a multi-instance deployment, register a distributed implementation so an assertion
+replayed against a different node is still caught.
+
+<!-- TODO: Confirm whether a distributed IClientAssertionReplayCache implementation ships in any
+package, or whether hosts must provide their own (e.g. Redis-backed). -->
+
+## Cleanup service
+
+`ICustomAuthCleanupService` (provided by the EF Core and MongoDB packages) purges expired codes,
+tokens, and sessions. Invoke it from a hosted background service on a schedule, or implement your
+own.
+
+## Events / hooks
+
+> There is **no general-purpose event/hook pipeline** in v1.0. Cross-cutting behavior is achieved
+> through the interfaces above (profile service for claims/issuance decisions, custom stores for
+> persistence side effects, the audit log store for recording events).
+>
+> <!-- TODO: Document a dedicated events/hooks API if one is introduced in a later version. -->

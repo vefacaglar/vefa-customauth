@@ -1,0 +1,131 @@
+---
+title: Authorization Code flow with PKCE
+description: The primary flow in Vefa.CustomAuth — authorize, login, code exchange — and its parameters.
+---
+
+# Authorization Code flow with PKCE
+
+The Authorization Code flow with **PKCE** is the primary (and recommended) flow in
+Vefa.CustomAuth. PKCE is **required by default** and only the **S256** challenge method is
+supported — the `plain` method is intentionally not accepted.
+
+> Most applications should not hand-build this flow. A web app should use
+> [`AddCustomAuthClient`](/docs/recipes#creating-a-spa-or-web-client-with-pkce), which drives it
+> through ASP.NET Core's OpenID Connect handler. This page documents the raw protocol for
+> understanding and for clients on other platforms.
+
+## Overview
+
+```
+1. Client generates code_verifier + code_challenge (S256)
+2. Browser → GET /connect/authorize?…&code_challenge=…&code_challenge_method=S256
+3. Server: no session → 302 to LoginPath?returnUrl=… ; host signs the user in
+4. Server validates request → 302 redirect_uri?code=…&state=…
+5. Client → POST /connect/token (grant_type=authorization_code, code, code_verifier)
+6. Server verifies PKCE, marks code consumed, issues tokens
+```
+
+## Step 1 — PKCE pair
+
+- `code_verifier`: a high-entropy random string (43–128 chars).
+- `code_challenge`: `BASE64URL(SHA256(code_verifier))`.
+- `code_challenge_method`: `S256` (the only accepted value).
+
+## Step 2 — authorize request
+
+```
+GET /connect/authorize
+    ?response_type=code
+    &client_id=<client_id>
+    &redirect_uri=<exact registered URI>
+    &scope=openid profile email offline_access
+    &state=<opaque CSRF value, echoed back>
+    &nonce=<opaque value, echoed into the id_token>
+    &code_challenge=<challenge>
+    &code_challenge_method=S256
+    &prompt=<none|login>        (optional)
+    &max_age=<seconds>          (optional)
+```
+
+Validation order matters for error handling:
+
+1. `client_id` and `redirect_uri` are validated **first**. If either is missing/unknown/invalid,
+   the server returns an error response **without** redirecting (it will not bounce to an
+   unvalidated URI).
+2. After the `redirect_uri` is validated, errors in `response_type` / `scope` / PKCE are returned
+   by **302-redirecting** back to the `redirect_uri` with `error`, `error_description`, and
+   `state` (per RFC 6749 §4.1.2.1).
+
+### `prompt` and `max_age`
+
+- `prompt=none` — if no SSO session exists, the server immediately redirects with
+  `error=login_required` rather than showing a login page.
+- `prompt=login` — forces a fresh login, ignoring any existing session.
+- `max_age` — if the existing session is older than the requested age, re-authentication is
+  required.
+
+## Step 3 — login
+
+If the user is not signed in, the server redirects to `LoginPath?returnUrl=…`. Your host renders
+the login page and, after validating credentials, calls `SignInCustomAuthAsync`. See
+[Sessions & login](/docs/core-concepts/sessions-and-login).
+
+## Step 4 — authorization code
+
+On success the server creates a **single-use, hashed, short-lived** authorization code (default
+60s) and redirects:
+
+```
+302 <redirect_uri>?code=<code>&state=<state>
+```
+
+## Step 5 — token exchange
+
+```bash
+curl -X POST https://auth.example.com/connect/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=authorization_code" \
+  -d "client_id=<client_id>" \
+  -d "code=<code>" \
+  -d "redirect_uri=<same redirect_uri>" \
+  -d "code_verifier=<original verifier>"
+```
+
+The server:
+
+1. Authenticates the client (`none` or `private_key_jwt` — see
+   [Client authentication](/docs/flows/client-authentication)).
+2. Verifies the PKCE `code_verifier` against the stored challenge using a **constant-time**
+   comparison.
+3. **Atomically** marks the code consumed (compare-and-swap) before issuing anything — a code
+   cannot be redeemed twice even under concurrent requests.
+4. Runs the [profile service](/docs/openid-connect#the-profile-service) to assemble claims and
+   confirm the user is still active.
+5. Issues the access token, ID token (if `openid`), and refresh token (if `offline_access` and
+   the client allows it).
+
+### Success response
+
+```json
+{
+  "access_token": "eyJ…",
+  "id_token": "eyJ…",
+  "refresh_token": "<opaque>",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "scope": "openid profile email offline_access"
+}
+```
+
+All token responses carry `Cache-Control: no-store`.
+
+## Errors
+
+Token-endpoint errors are OAuth2 JSON, e.g.:
+
+```json
+{ "error": "invalid_grant", "error_description": "…" }
+```
+
+Common causes: expired or already-consumed code, mismatched `redirect_uri`, failed PKCE
+verification, or an inactive user. See [Troubleshooting](/docs/troubleshooting).

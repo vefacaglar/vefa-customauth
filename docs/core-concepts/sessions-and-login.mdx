@@ -1,0 +1,97 @@
+---
+title: Sessions & login
+description: How the SSO session works, who owns the login page, and how to sign users in and out.
+---
+
+# Sessions & login
+
+Vefa.CustomAuth separates **protocol** (which it owns) from **user authentication and UI** (which
+your host owns). The bridge between them is the **SSO session**.
+
+## The SSO session
+
+When a user authenticates, your host opens an SSO session: a `CustomAuthSession` record in
+`ICustomAuthSessionStore` plus an **encrypted, signed cookie** that references it. The authorize
+endpoint reads this cookie to decide whether the user is already signed in.
+
+Session cookie hardening:
+
+- The cookie value is encrypted and signed via ASP.NET Core **Data Protection**.
+- `Path=/` is set explicitly.
+- The name is dynamically prefixed `__Host-` when `RequireHttps = true`, falling back to the
+  plain `CookieName` under HTTP so browsers don't reject it during local development.
+
+Because the cookie depends on Data Protection, multi-instance deployments **must** share a key
+ring and application name. See [Configuration](/docs/getting-started/configuration#data-protection-multi-instance-hosting).
+
+## The library does not ship a login UI
+
+There is no built-in login page. The authorize endpoint redirects unauthenticated users to
+`CustomAuthOptions.LoginPath` (default `/login`) with a `returnUrl` query parameter pointing back
+at the original authorize request. Your host renders that page (Razor Pages, MVC, Blazor, …).
+
+## Signing a user in
+
+After you validate the user's credentials *yourself*, open the session with the `HttpContext`
+extension:
+
+```csharp
+using Vefa.CustomAuth.AspNetCore.Extensions;
+
+public async Task<IActionResult> OnPostAsync(string returnUrl, CancellationToken ct)
+{
+    // 1. Validate credentials against your own user store / Identity / external IdP.
+    var user = await _users.ValidateCredentialsAsync(Username, Password, ct);
+    if (user is null)
+    {
+        ModelState.AddModelError(string.Empty, "Invalid credentials.");
+        return Page();
+    }
+
+    // 2. Open the SSO session + set the encrypted cookie.
+    await HttpContext.SignInCustomAuthAsync(user.UserId, ct);
+
+    // 3. Return to the authorize request.
+    return Redirect(returnUrl);
+}
+```
+
+## Default vs. host-owned login POST
+
+The `MapDefaultLoginEndpoint` option (default `true`) controls whether the library maps a
+`POST {LoginPath}` handler for you:
+
+| `MapDefaultLoginEndpoint` | Behavior |
+| --- | --- |
+| `true` (default) | Library maps `POST /login`. It validates antiforgery, checks credentials via `ICustomAuthUserStore`, enforces lockout via `ICustomAuthLoginAttemptTracker`, opens the session, and redirects. On failure it 302s back to `LoginPath` with `?error=<code>&returnUrl=…`. You still render the GET page. |
+| `false` | You own the POST entirely. Useful for custom credential checks, MFA, or external logins. Call `SignInCustomAuthAsync` yourself. |
+
+Error codes surfaced by the default handler include `invalid_credentials`,
+`missing_credentials`, `account_locked`, and `antiforgery_failed`. Read `?error=` on your GET
+page and show an appropriate message.
+
+> **CSRF.** The default `/login` POST validates an antiforgery token; your form must render
+> `@Html.AntiForgeryToken()`. `AddCustomAuth` registers antiforgery.
+
+## Signing a user out
+
+The library maps `GET`/`POST` `/connect/logout` (RP-initiated / end-session). The behavior:
+
+- A `GET` **with** a cryptographically valid `id_token_hint` terminates the session and redirects
+  to a validated `post_logout_redirect_uri` (or the `PostLogoutRedirectUri` fallback).
+- A `GET` **without** a valid `id_token_hint` redirects to `CustomAuthOptions.LogoutPath` so your
+  host can confirm intent (forwarding `post_logout_redirect_uri` / `state` / `client_id`).
+- The `POST` validates antiforgery, terminates the session, and redirects.
+
+To sign out the local session programmatically:
+
+```csharp
+await HttpContext.SignOutCustomAuthAsync(ct);  // revokes the session + deletes the cookie
+```
+
+## Brute-force protection
+
+Login throttling and lockout are **host-owned**. Implement `ICustomAuthLoginAttemptTracker`
+(register it **before** `AddCustomAuth` so it wins over the default no-op tracker), and add
+ASP.NET Core rate limiting on the login POST if desired. See
+[Security](/docs/security#brute-force-protection-and-rate-limiting).

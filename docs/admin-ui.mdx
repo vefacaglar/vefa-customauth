@@ -1,0 +1,74 @@
+---
+title: Admin UI
+description: The optional embedded admin dashboard — mounting it, securing it, and what it manages.
+---
+
+# Admin UI
+
+`Vefa.CustomAuth.AdminUI` is an optional, provider-agnostic dashboard for managing the
+authorization server at runtime. It is a single-page app (Alpine.js + Tailwind CSS) served from
+the package, backed by minimal-API CRUD endpoints that go through the core managers and stores.
+
+## Mounting it
+
+```csharp
+app.MapCustomAuthAdminUI();                         // mounts at /customauth
+// or
+app.MapCustomAuthAdminUI("/admin/customauth");      // custom path prefix
+// or with full options
+app.MapCustomAuthAdminUI(options =>
+{
+    options.PathPrefix = "/customauth";
+    options.DefaultPageSize = 10;
+    options.MaxPageSize = 100;
+});
+```
+
+`MapCustomAuthAdminUI` returns a `RouteGroupBuilder` covering **every** Admin UI route (dashboard,
+static assets, and admin APIs), so authorization applies uniformly.
+
+## Securing it (read this before deploying)
+
+> **Protected by default.** By default the entire Admin UI requires an authenticated request that
+> satisfies the application's default authorization policy. Configure your app's authentication so
+> only operators can reach it.
+
+| Option | Effect |
+| --- | --- |
+| *(default)* | Requires the framework's default authorization policy. |
+| `AuthorizationPolicyName = "Admins"` | Requires a specific named policy. |
+| `AllowAnonymous = true` | **Disables** the auth requirement. |
+
+```csharp
+app.MapCustomAuthAdminUI(options =>
+{
+    options.AuthorizationPolicyName = "CustomAuthAdmins";
+});
+```
+
+> **Never set `AllowAnonymous = true` in production.** It exposes client CRUD, session and
+> refresh-token revocation, the scope editor, and the signing-key viewer to anonymous callers.
+> It exists only for local development and tests (the sample auth server uses it because it has
+> no application cookie for dashboard users).
+
+CSRF: all mutating Admin UI API calls (`POST`/`PUT`/`DELETE`) are protected by antiforgery; the
+SPA sends the `RequestVerificationToken` header automatically.
+
+## What it manages
+
+| Screen | Capabilities |
+| --- | --- |
+| **Clients** | Create, edit, delete clients; manage redirect URIs, allowed scopes, lifetimes, refresh-token settings. Includes C#/JSON integration snippet generators. |
+| **Scopes** | Full CRUD over `CustomAuthScope`. |
+| **Sessions** | View active SSO sessions (paged) and revoke them. |
+| **Refresh tokens** | View refresh tokens (paged) with session, parent, sliding and absolute expiry; revoke them. |
+| **Signing keys** | View signing keys. **Private key material is stripped** from the API — only public metadata is shown. |
+| **Audit logs** | Search and page through audit entries (e.g. `RefreshTokenReuseDetected`). |
+
+## Notes
+
+- The dashboard is provider-agnostic — it works the same over EF Core, MongoDB, or in-memory
+  stores because it talks to the managers, not the database.
+- It auto-selects `offline_access` when you enable refresh tokens on a client, matching the
+  protocol requirement (see [Refresh token flow](/docs/flows/refresh-token)).
+- Paging uses `DefaultPageSize` / `MaxPageSize`; the underlying stores implement `GetPagedAsync`.

@@ -1,0 +1,88 @@
+---
+title: Token validation & revocation
+description: How resource servers validate access tokens, the revocation endpoint, and the status of introspection.
+---
+
+# Token validation & revocation
+
+## Validating access tokens (resource servers)
+
+Access tokens are **self-contained JWTs** validated **locally** by the resource server against
+the authorization server's published JWKS. There is no per-request call back to the auth server.
+
+A minimal ASP.NET Core Web API:
+
+```csharp
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.Authority = "https://auth.example.com";  // discovers issuer + jwks_uri
+        options.MapInboundClaims = false;                // keep raw claim names (sub, scope, …)
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidAudiences = new[] { "orders-api" },     // match your API audience(s)
+        };
+    });
+```
+
+The handler validates:
+
+- **Issuer** — matches `Authority`.
+- **Signature** — against a key in the JWKS (selected by `kid`).
+- **Audience** — against `ValidAudiences`.
+- **Expiry** (`exp`) and not-before (`nbf`), with the default clock skew.
+
+> Set `MapInboundClaims = false` so claim types stay as `sub`, `scope`, etc. rather than being
+> remapped to the long XML Soap claim URIs. This keeps `User.FindFirst("scope")` working as
+> written.
+
+Authorize by scope/claim as usual:
+
+```csharp
+app.MapGet("/orders", () => /* … */)
+   .RequireAuthorization(policy => policy.RequireClaim("scope", "orders-api"));
+```
+
+See [Protecting an ASP.NET Core API](/docs/recipes#protecting-an-aspnet-core-api).
+
+### Access tokens are not revocable before expiry
+
+Because validation is local, a JWT access token remains valid until `exp`, even if you revoke the
+session or refresh token. The mitigation is **short access token lifetimes** (15–60 min) plus
+refresh-token revocation, so access is cut off at the next refresh. For an inactive-user check at
+refresh time, use `ICustomAuthProfileService.IsUserActiveAsync` (see
+[OpenID Connect](/docs/openid-connect#the-profile-service)).
+
+## Revocation
+
+The server maps `POST /connect/revoke` (RFC 7009):
+
+```bash
+curl -X POST https://auth.example.com/connect/revoke \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "token=<refresh token>" \
+  -d "token_type_hint=refresh_token" \
+  -d "client_id=<client_id>"
+```
+
+Behavior:
+
+- Revocation is **bound to the requesting client** — a client can only revoke its own tokens.
+- The `token_type_hint` is honored.
+- Revoking a refresh token revokes its **chain**.
+- Revoking an access token is accepted but, since access tokens are validated locally, does not
+  retroactively invalidate already-issued JWTs before expiry.
+
+To revoke at the session level, terminate the SSO session
+([`SignOutCustomAuthAsync`](/docs/core-concepts/sessions-and-login#signing-a-user-out)) or revoke
+the session from the [Admin UI](/docs/admin-ui).
+
+## Introspection
+
+> **Not supported in v1.0.** There is **no** `/connect/introspect` endpoint. Resource servers
+> validate JWT access tokens locally via JWKS, which is the intended model. An introspection
+> endpoint for opaque-token validation or administrative diagnostics is a candidate for a future
+> release.
+>
+> <!-- TODO: Document /connect/introspect once implemented (planned item P2-21). -->

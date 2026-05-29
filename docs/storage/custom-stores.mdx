@@ -1,0 +1,99 @@
+---
+title: Custom storage providers
+description: Implementing the store interfaces to back Vefa.CustomAuth with your own persistence.
+---
+
+# Custom storage providers
+
+Every piece of protocol state sits behind an interface in `Vefa.CustomAuth.Core.Stores`. To use a
+persistence technology that isn't EF Core or MongoDB — or to integrate with an existing data
+layer — implement the interfaces you need and register them in DI.
+
+## The store interfaces
+
+| Interface | Persists |
+| --- | --- |
+| `ICustomAuthClientStore` | Registered clients |
+| `ICustomAuthAuthorizationCodeStore` | Authorization codes (hashed, single-use) |
+| `ICustomAuthRefreshTokenStore` | Refresh tokens (hashed, rotating, chained) |
+| `ICustomAuthSessionStore` | SSO sessions |
+| `ICustomAuthSigningKeyStore` | Signing keys |
+| `ICustomAuthScopeStore` | Scopes |
+| `ICustomAuthAuditLogStore` | Audit log entries |
+| `ICustomAuthUserStore` | **Users — always host-implemented** |
+
+You can mix providers: register the EF Core stores for most things and override a single store
+with your own implementation, since registration uses `TryAdd`-style semantics where a store
+registered earlier wins. Register your custom store **before** the provider's `Add…` call to take
+precedence.
+
+## Implementation rules
+
+When implementing a store, honor the contracts the protocol relies on:
+
+- **Async + `CancellationToken`.** Every method takes a `CancellationToken` and should be truly
+  asynchronous.
+- **Atomic consumption.** `ICustomAuthAuthorizationCodeStore.MarkConsumedAsync` and
+  `ICustomAuthRefreshTokenStore.MarkConsumedAsync` return `Task<bool>` and **must** be a
+  compare-and-swap: return `true` only when the call actually transitioned the record from
+  not-consumed to consumed. This is what prevents code/refresh-token replay under concurrency.
+  (EF Core uses `ExecuteUpdateAsync` with a `WHERE … AND ConsumedAt IS NULL` filter; MongoDB uses
+  `UpdateOneAsync` and checks `ModifiedCount`; in-memory uses a per-entity lock.)
+- **Store hashes, never raw secrets.** Authorization codes and refresh tokens are hashed before
+  they reach the store. Persist what you are given; never log raw token material.
+- **Paging.** `ICustomAuthSessionStore` and `ICustomAuthRefreshTokenStore` expose
+  `GetPagedAsync` (used by the Admin UI). Implement real server-side paging for large datasets.
+
+## The user store (always custom)
+
+The library never ships a production user store. Implement `ICustomAuthUserStore` against your
+identity source:
+
+```csharp
+public sealed class MyUserStore(MyIdentityService identity) : ICustomAuthUserStore
+{
+    public async Task<CustomAuthUserInfo?> ValidateCredentialsAsync(
+        string userName, string password, CancellationToken ct = default)
+    {
+        var user = await identity.CheckPasswordAsync(userName, password, ct);
+        if (user is null) return null;
+        return new CustomAuthUserInfo
+        {
+            UserId = user.Id,
+            UserName = user.DisplayName,
+            Email = user.Email,
+            AdditionalClaims = user.Claims,
+        };
+    }
+
+    public async Task<CustomAuthUserInfo?> FindByIdAsync(string userId, CancellationToken ct = default)
+    {
+        var user = await identity.FindAsync(userId, ct);
+        return user is null ? null : new CustomAuthUserInfo { UserId = user.Id, /* … */ };
+    }
+}
+```
+
+```csharp
+// Register before AddCustomAuth's defaults so it is used.
+builder.Services.AddScoped<ICustomAuthUserStore, MyUserStore>();
+```
+
+ASP.NET Core Identity integrates cleanly through such an adapter (the sample auth server does
+exactly this with an `IdentityUserStore : ICustomAuthUserStore`).
+
+## Registration
+
+```csharp
+// A fully custom set of stores:
+builder.Services.AddScoped<ICustomAuthClientStore, MyClientStore>();
+builder.Services.AddScoped<ICustomAuthAuthorizationCodeStore, MyCodeStore>();
+builder.Services.AddScoped<ICustomAuthRefreshTokenStore, MyRefreshTokenStore>();
+builder.Services.AddScoped<ICustomAuthSessionStore, MySessionStore>();
+builder.Services.AddScoped<ICustomAuthSigningKeyStore, MySigningKeyStore>();
+builder.Services.AddScoped<ICustomAuthScopeStore, MyScopeStore>();
+builder.Services.AddScoped<ICustomAuthAuditLogStore, MyAuditLogStore>();
+```
+
+The protocol endpoints depend only on these abstractions, so a correct implementation is
+transparent to the rest of the system.

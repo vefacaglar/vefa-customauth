@@ -1,0 +1,92 @@
+---
+title: Client authentication
+description: How clients authenticate at the token endpoint — public (none) and private_key_jwt confidential clients.
+---
+
+# Client authentication
+
+The token endpoint authenticates the calling client according to the client's
+`TokenEndpointAuthMethod`. Vefa.CustomAuth supports two methods.
+
+| Method | `CustomAuthClientAuthenticationMethod` | Credential | Use for |
+| --- | --- | --- | --- |
+| Public client | `None` (default) | none — relies on PKCE + exact redirect URI | SPAs, mobile, native |
+| Confidential client | `PrivateKeyJwt` | a signed `private_key_jwt` client assertion | server apps holding a private key |
+
+> There is **no** shared client-secret method (`client_secret_basic` / `client_secret_post`) in
+> the current version. Confidential clients use asymmetric `private_key_jwt`. The discovery
+> document advertises `token_endpoint_auth_methods_supported = ["none", "private_key_jwt"]`.
+
+## Public clients (`none`)
+
+A public client cannot keep a secret (browser SPA, mobile app). It sends no client credential;
+security rests on:
+
+- **PKCE** (`code_verifier` proves possession of the original `code_challenge`).
+- **Exact `redirect_uri` matching.**
+
+No extra configuration is needed — `TokenEndpointAuthMethod` defaults to `None`.
+
+## Confidential clients (`private_key_jwt`)
+
+A confidential client proves its identity by signing a JWT **client assertion** with its private
+key. The server verifies the signature against the client's registered public keys.
+
+### Registering the client
+
+Set the method and provide the client's **public** keys as a JWKS document in `JwksJson`:
+
+```csharp
+new CustomAuthClient
+{
+    ClientId = "backend-service",
+    DisplayName = "Backend service",
+    RedirectUris = { "https://service.example.com/signin-oidc" },
+    AllowedScopes = { "openid", "profile", "offline_access" },
+    TokenEndpointAuthMethod = CustomAuthClientAuthenticationMethod.PrivateKeyJwt,
+    JwksJson = "{ \"keys\": [ { \"kty\": \"RSA\", \"kid\": \"…\", \"n\": \"…\", \"e\": \"AQAB\" } ] }",
+}
+```
+
+Only public key material goes in `JwksJson`; the private key never leaves the client.
+
+### Sending the assertion
+
+On the token request, the client adds:
+
+```
+client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer
+client_assertion=<signed JWT>
+```
+
+The assertion JWT is signed with the client's private key. Supported assertion signing algorithms
+(per discovery `token_endpoint_auth_signing_alg_values_supported`): `RS256`, `RS384`, `RS512`,
+`PS256`, `ES256`, `ES384`, `ES512`.
+
+### Assertion validation
+
+The server validates:
+
+- Signature against the registered `JwksJson`.
+- Standard JWT lifetime claims (`exp` / `nbf`) within `CustomAuthOptions.ClientAssertionClockSkew`
+  (default 60s).
+- **Replay protection** — the assertion's `jti` is cached so an assertion cannot be reused
+  (`IClientAssertionReplayCache`, in-memory by default).
+
+```bash
+curl -X POST https://auth.example.com/connect/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=authorization_code" \
+  -d "client_id=backend-service" \
+  -d "code=<code>" \
+  -d "redirect_uri=https://service.example.com/signin-oidc" \
+  -d "code_verifier=<verifier>" \
+  -d "client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer" \
+  -d "client_assertion=<signed JWT>"
+```
+
+## Failed client authentication
+
+If client validation fails, the token endpoint returns **HTTP 401** with
+`WWW-Authenticate: Basic realm="Vefa.CustomAuth"` and an `invalid_client` error body. See
+[Troubleshooting → Invalid client](/docs/troubleshooting#invalid-client).

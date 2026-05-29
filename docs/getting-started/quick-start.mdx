@@ -1,0 +1,170 @@
+---
+title: Quick start
+description: Stand up a working Vefa.CustomAuth authorization server, register a client, and complete your first token request.
+---
+
+# Quick start
+
+This walkthrough builds a minimal but functional authorization server using the **in-memory**
+storage provider, registers one public client, and completes an Authorization Code + PKCE
+exchange. In-memory storage is for development only — see [Storage](/docs/storage/in-memory).
+
+## 1. Create the host and add the services
+
+In an ASP.NET Core (.NET 8) project, wire up the core services, JWT signing, and a user store.
+Because the library does not own users, you must provide an `ICustomAuthUserStore`. The
+in-memory provider includes a seedable demo store.
+
+```csharp
+using Vefa.CustomAuth.AspNetCore.Extensions;
+using Vefa.CustomAuth.AspNetCore.Stores.InMemory;
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services
+    .AddCustomAuth(options =>
+    {
+        options.Issuer = "https://localhost:5001";
+        // Development only: allow the HTTP issuer / metadata. Defaults to true (HTTPS required).
+        // options.RequireHttps = false;
+    })
+    .AddJwtTokenSigning()           // RSA signing key, auto-generated and persisted in the store
+    .AddInMemoryStores(stores =>
+    {
+        stores.Clients.Add(new()
+        {
+            ClientId = "spa-client",
+            DisplayName = "Demo SPA",
+            RedirectUris = { "https://localhost:5003/callback" },
+            AllowedScopes = { "openid", "profile", "email", "offline_access" },
+            RequirePkce = true,
+            AllowRefreshTokens = true,
+            // TokenEndpointAuthMethod defaults to None (public client, PKCE only).
+        });
+
+        stores.Users.Add(new InMemoryUserStore.SeedUser
+        {
+            UserId = "user-1",
+            UserName = "demo",
+            Password = "demo",
+            Email = "demo@example.com",
+        });
+    });
+
+builder.Services.AddRazorPages(); // the host owns the login page (see step 3)
+
+var app = builder.Build();
+```
+
+> **Refresh tokens require `offline_access`.** A client that sets `AllowRefreshTokens = true`
+> must include `offline_access` in `AllowedScopes`, and the request must be granted that scope.
+> Otherwise no refresh token is issued. See [Refresh token flow](/docs/flows/refresh-token).
+
+## 2. Map the protocol endpoints
+
+```csharp
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapCustomAuthEndpoints();   // discovery, JWKS, authorize, token, userinfo, logout, revoke
+app.MapRazorPages();
+
+app.Run();
+```
+
+`MapCustomAuthEndpoints()` maps:
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/.well-known/openid-configuration` | Discovery document |
+| `GET` | `/.well-known/jwks.json` | Public signing keys (JWKS) |
+| `GET` | `/connect/authorize` | Authorization endpoint |
+| `POST` | `/connect/token` | Token endpoint |
+| `GET`/`POST` | `/connect/userinfo` | UserInfo endpoint |
+| `GET`/`POST` | `/connect/logout` | RP-initiated logout (end session) |
+| `POST` | `/connect/revoke` | Token revocation |
+| `POST` | `/login` | Default credential-validation handler (see note below) |
+
+## 3. Provide the login page
+
+The authorization endpoint redirects unauthenticated users to `CustomAuthOptions.LoginPath`
+(default `/login`) with a `returnUrl` query parameter. **Your host owns this page.** After you
+have validated the user's credentials, call `SignInCustomAuthAsync` to open an SSO session and
+set the encrypted session cookie:
+
+```csharp
+using Vefa.CustomAuth.AspNetCore.Extensions;
+
+// Inside your login POST handler, after validating credentials yourself:
+var session = await HttpContext.SignInCustomAuthAsync(userId, cancellationToken);
+return Redirect(returnUrl);
+```
+
+If you set `MapDefaultLoginEndpoint = true` (the default), the library also maps a `POST /login`
+handler that validates credentials against your `ICustomAuthUserStore`, opens the session, and
+redirects. You still render the GET login page yourself. Set `MapDefaultLoginEndpoint = false`
+to own the POST entirely (custom credential checks, MFA, external logins). See
+[Sessions & login](/docs/core-concepts/sessions-and-login).
+
+> **CSRF.** The default `/login` POST handler validates an antiforgery token. Your login form
+> must include `@Html.AntiForgeryToken()`. `AddCustomAuth` registers antiforgery for you.
+
+## 4. Run the discovery check
+
+Start the app and request the discovery document:
+
+```bash
+curl https://localhost:5001/.well-known/openid-configuration
+```
+
+You should see the `issuer`, the endpoint URLs, `grant_types_supported`
+(`authorization_code`, `refresh_token`), `code_challenge_methods_supported` (`S256`), and
+`id_token_signing_alg_values_supported` (`RS256`).
+
+## 5. Complete a token request (Authorization Code + PKCE)
+
+**Step 5a — generate a PKCE pair.** The `code_challenge` is the base64url-encoded SHA-256 of the
+`code_verifier`. Only the `S256` method is supported.
+
+**Step 5b — authorize.** Send the user's browser to:
+
+```
+GET https://localhost:5001/connect/authorize
+    ?response_type=code
+    &client_id=spa-client
+    &redirect_uri=https://localhost:5003/callback
+    &scope=openid%20profile%20email%20offline_access
+    &state=<random>
+    &nonce=<random>
+    &code_challenge=<base64url-sha256-of-verifier>
+    &code_challenge_method=S256
+```
+
+If there is no SSO session, the server redirects to `/login?returnUrl=…`. After sign-in, it
+redirects back to the `redirect_uri` with `?code=…&state=…`.
+
+**Step 5c — exchange the code:**
+
+```bash
+curl -X POST https://localhost:5001/connect/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=authorization_code" \
+  -d "client_id=spa-client" \
+  -d "code=<authorization_code>" \
+  -d "redirect_uri=https://localhost:5003/callback" \
+  -d "code_verifier=<original_verifier>"
+```
+
+The response is `Cache-Control: no-store` JSON with `access_token`, `id_token`,
+`refresh_token` (when `offline_access` was granted), `token_type=Bearer`, and `expires_in`.
+
+In practice you rarely hand-build this exchange — for a real client app use
+[`AddCustomAuthClient`](/docs/recipes#creating-a-spa-or-web-client-with-pkce), which wires the
+flow through ASP.NET Core's OpenID Connect handler.
+
+## Next steps
+
+- Move off in-memory: [EF Core](/docs/storage/entity-framework-core) or
+  [MongoDB](/docs/storage/mongodb).
+- Understand the building blocks: [Core concepts](/docs/core-concepts/overview).
+- Wire a real client app: [Recipes](/docs/recipes).

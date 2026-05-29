@@ -1,0 +1,135 @@
+---
+title: OpenID Connect
+description: Discovery, ID tokens, the UserInfo endpoint, claims mapping, and the profile service.
+---
+
+# OpenID Connect
+
+Vefa.CustomAuth implements the OpenID Connect layer on top of OAuth2: discovery, ID tokens, the
+UserInfo endpoint, and scope-gated claims. OIDC is activated by requesting the `openid` scope.
+
+## Discovery document
+
+`MapCustomAuthEndpoints()` publishes the discovery document at
+`/.well-known/openid-configuration`. Clients and resource servers use it to locate endpoints and
+keys. The document advertises:
+
+```jsonc
+{
+  "issuer": "https://auth.example.com",
+  "authorization_endpoint": ".../connect/authorize",
+  "token_endpoint": ".../connect/token",
+  "jwks_uri": ".../.well-known/jwks.json",
+  "userinfo_endpoint": ".../connect/userinfo",
+  "end_session_endpoint": ".../connect/logout",
+  "revocation_endpoint": ".../connect/revoke",
+  "response_types_supported": ["code"],
+  "grant_types_supported": ["authorization_code", "refresh_token"],
+  "subject_types_supported": ["public"],
+  "id_token_signing_alg_values_supported": ["RS256"],
+  "scopes_supported": ["openid", "profile", "email", "offline_access"],
+  "token_endpoint_auth_methods_supported": ["none", "private_key_jwt"],
+  "code_challenge_methods_supported": ["S256"]
+}
+```
+
+> The `issuer` value must exactly match `CustomAuthOptions.Issuer` and the URL clients use. A
+> mismatch is the most common cause of discovery and token-validation failures. See
+> [Troubleshooting](/docs/troubleshooting#discovery-endpoint-not-working).
+
+## ID tokens
+
+The ID token is a signed JWT issued when `openid` is granted. It authenticates the **user** to
+the **client** (it is not for calling APIs). Notable claims:
+
+- `iss`, `sub`, `aud`, `exp`, `iat` — standard.
+- `nonce` — echoed from the authorize request when supplied; the client must verify it.
+- `at_hash` — leftmost-half hash of the access token, binding the ID token to it.
+- Identity claims released according to the granted scopes.
+
+ID token lifetime is `CustomAuthOptions.IdTokenLifetime` (default 1h).
+
+## UserInfo endpoint
+
+`/connect/userinfo` (both `GET` and `POST`) returns claims about the authenticated user. The
+caller presents the **access token** as a bearer token:
+
+```bash
+curl https://auth.example.com/connect/userinfo \
+  -H "Authorization: Bearer <access_token>"
+```
+
+The returned claims are **filtered strictly by the scopes granted** to the access token:
+
+| Granted scope | Claims released |
+| --- | --- |
+| `openid` | `sub` |
+| `profile` | name / `preferred_username`–style claims |
+| `email` | `email`, `email_verified` |
+
+## Claims and the profile service
+
+Claims come from two places, combined by the **profile service**:
+
+1. **The user store** — `CustomAuthUserInfo.AdditionalClaims` returned from your
+   `ICustomAuthUserStore`.
+2. **The profile service** — `ICustomAuthProfileService`, which can add, override, or compute
+   claims dynamically per request and per client.
+
+### The profile service
+
+`ICustomAuthProfileService` is the main extension point for shaping tokens:
+
+```csharp
+public interface ICustomAuthProfileService
+{
+    Task GetProfileDataAsync(CustomAuthProfileContext context, CancellationToken ct = default);
+    Task<bool> IsUserActiveAsync(string userId, CancellationToken ct = default);
+}
+```
+
+- `GetProfileDataAsync` — populate `context.Claims`. You have access to `context.UserId` and
+  `context.Client`, so you can inject claims conditionally per client.
+- `IsUserActiveAsync` — return `false` to reject token issuance (e.g. the user was suspended or
+  deleted). Called on token requests, including refresh, so it is your hook for cutting off
+  access despite non-revocable access tokens.
+
+A default implementation is registered. Replace it by registering your own **after** (or in place
+of) `AddCustomAuth`:
+
+```csharp
+builder.Services.AddScoped<ICustomAuthProfileService, MyProfileService>();
+```
+
+```csharp
+public sealed class MyProfileService(ICustomAuthUserStore users) : ICustomAuthProfileService
+{
+    public async Task GetProfileDataAsync(CustomAuthProfileContext context, CancellationToken ct = default)
+    {
+        var user = await users.FindByIdAsync(context.UserId, ct);
+        if (user is null) return;
+
+        if (!string.IsNullOrWhiteSpace(user.UserName)) context.Claims["name"] = user.UserName;
+        if (!string.IsNullOrWhiteSpace(user.Email))    context.Claims["email"] = user.Email;
+
+        if (user.AdditionalClaims is not null)
+            foreach (var claim in user.AdditionalClaims)
+                context.Claims[claim.Key] = claim.Value;
+
+        // Inject a claim only for a specific client:
+        if (context.Client.ClientId == "internal-portal")
+            context.Claims["portal_admin"] = true;
+    }
+
+    public async Task<bool> IsUserActiveAsync(string userId, CancellationToken ct = default)
+        => await users.FindByIdAsync(userId, ct) is not null;
+}
+```
+
+> Whether `AdditionalClaims` also land in the **access token** (not just UserInfo/ID token) is
+> controlled by `CustomAuthOptions.IncludeAdditionalClaimsInAccessToken` (default `true`).
+
+## OIDC scopes recap
+
+`openid` triggers OIDC behavior (ID token issuance); `profile` and `email` gate identity claims;
+`offline_access` permits refresh tokens. See [Scopes](/docs/core-concepts/scopes).

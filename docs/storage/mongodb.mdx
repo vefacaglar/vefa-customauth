@@ -1,0 +1,69 @@
+---
+title: MongoDB storage
+description: Registering the MongoDB provider, options, collections, and index management.
+---
+
+# MongoDB storage
+
+The `Vefa.CustomAuth.MongoDB` package provides MongoDB-backed implementations of every protocol
+store, an index manager, and a cleanup service for expiring records.
+
+## Registration
+
+```csharp
+builder.Services.AddCustomAuthMongoDbStores(options =>
+{
+    options.ConnectionString = builder.Configuration.GetConnectionString("Mongo")!;
+    options.DatabaseName = "customauth";
+    // Collection names have sensible defaults; override if needed.
+});
+```
+
+`AddCustomAuthMongoDbStores`:
+
+- Registers a singleton `IMongoClient` and `IMongoDatabase`.
+- Registers all seven protocol stores plus `ICustomAuthCleanupService`.
+- Registers the BSON class maps (`MongoCustomAuthClassMap.Register()`).
+- Validates the options at registration time (connection string, database name, and all
+  collection names must be non-empty).
+
+## Options
+
+`CustomAuthMongoDbOptions` carries the connection string, database name, and a configurable
+collection name for each store (clients, authorization codes, refresh tokens, sessions, signing
+keys, scopes, audit logs). The collection names default to sensible values; override only if you
+need to coexist with existing collections.
+
+```csharp
+builder.Services.AddCustomAuthMongoDbStores(options =>
+{
+    options.ConnectionString = "mongodb://localhost:27017";
+    options.DatabaseName = "customauth";
+    options.ClientsCollectionName = "oauth_clients";   // example override
+});
+```
+
+## Indexes
+
+The package includes a `MongoCustomAuthIndexManager` that creates the indexes the stores rely on
+(e.g. lookups by client id, hashed token, session id, and expiry). Run index creation as part of
+your startup/deployment so queries stay efficient and uniqueness is enforced.
+
+<!-- TODO: Document the exact public method/hosted-service used to trigger index creation
+(MongoCustomAuthIndexManager) once its invocation surface is confirmed. -->
+
+## Cleanup
+
+`MongoCustomAuthCleanupService` deletes expired authorization codes, refresh tokens, and sessions.
+Schedule it (e.g. from a hosted background service) to keep collections from accumulating dead
+records.
+
+## Notes
+
+- Authorization codes and refresh tokens are stored **hashed**, identical to the EF Core
+  provider.
+- The same signing-key considerations apply: with MongoDB the auto-generated key persists in the
+  signing key collection and is shared across instances. For operator-controlled keys, use a
+  fixed [signing certificate](/docs/core-concepts/signing-keys).
+- As with EF Core, the library does **not** store users — implement `ICustomAuthUserStore`
+  yourself.

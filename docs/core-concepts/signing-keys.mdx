@@ -1,0 +1,91 @@
+---
+title: Signing keys
+description: How tokens are signed, how the JWKS document is published, and how to control key material.
+---
+
+# Signing keys
+
+Vefa.CustomAuth signs JWT access and ID tokens with an RSA key. The **public** half is published
+as a JSON Web Key Set (JWKS); the **private** half never leaves the server. Resource servers and
+clients fetch the JWKS to validate signatures.
+
+## Two key sources
+
+### 1. Store-backed auto-generated key (default)
+
+`AddJwtTokenSigning()` registers an RSA signing provider that **auto-generates** a key on first
+use and **persists** it through `ICustomAuthSigningKeyStore`. With a durable store (EF Core /
+MongoDB) the key survives restarts and is shared by every instance that reads the same store.
+
+```csharp
+builder.Services
+    .AddCustomAuth(options => { /* … */ })
+    .AddJwtTokenSigning();   // store-backed RSA key
+```
+
+This is the simplest option and works well when all instances share a persistent store.
+
+> **Warning — in-memory storage.** With the in-memory signing key store, a freshly generated key
+> exists only for the lifetime of the process and is **not shared** across instances. Every
+> restart invalidates previously issued tokens, and multiple instances sign with different keys.
+> Use a durable store or a fixed certificate outside of single-process development.
+
+### 2. Fixed X.509 signing certificate
+
+For operator-controlled key material that is identical across a load-balanced farm, supply a
+certificate. This **replaces** the store-backed provider:
+
+```csharp
+// From an X509Certificate2 you load yourself:
+customAuthBuilder.AddSigningCertificate(certificate);                 // RS256 by default
+customAuthBuilder.AddSigningCertificate(certificate, SecurityAlgorithms.RsaSha384);
+
+// Or from a PFX/PKCS#12 file:
+customAuthBuilder.AddSigningCertificate("Keys/signing.pfx", pfxPassword);
+```
+
+The certificate must contain an **RSA private key**. When configured, the certificate wins over
+the store-backed provider regardless of registration order.
+
+## The JWKS endpoint
+
+`MapCustomAuthEndpoints()` publishes the public keys at `/.well-known/jwks.json`. The discovery
+document advertises this via `jwks_uri`. A typical resource-server setup points JWT bearer
+validation at the issuer, and ASP.NET Core fetches and caches the JWKS automatically:
+
+```csharp
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.Authority = "https://auth.example.com"; // discovers jwks_uri
+        // …
+    });
+```
+
+The published JWK exposes only `kty`, `use`, `alg`, `kid`, `n`, `e` — public RSA parameters. No
+private material is ever included.
+
+## Algorithm support
+
+- The store-backed provider signs with **RS256**, and the discovery document advertises
+  `id_token_signing_alg_values_supported = ["RS256"]`.
+- The certificate path accepts an explicit algorithm argument (default `RS256`).
+
+## Key rotation
+
+Because validators fetch keys by `kid` from the JWKS, rotation is a matter of introducing a new
+key and retiring the old one once outstanding tokens have expired. See
+[Rotating signing keys](/docs/recipes#rotating-signing-keys).
+
+## Protecting private key material at rest
+
+When using the store-backed key, the private material lives in your database. Protect it with the
+same controls you apply to other secrets:
+
+- Encrypt the database / collection at rest.
+- Restrict database access.
+- Prefer a fixed certificate sourced from a secret manager or key vault for production.
+
+<!-- TODO: Document a built-in encryption/extension point for signing key material at rest if/when
+the library adds one. As of v1.0, encryption of the store-backed private key is the operator's
+responsibility. -->

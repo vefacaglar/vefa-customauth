@@ -1,0 +1,118 @@
+---
+title: Troubleshooting
+description: Common errors — invalid client, redirect URI, scope, token validation, discovery, migrations, clock skew — and how to fix them.
+---
+
+# Troubleshooting
+
+Symptoms, likely causes, and fixes for the issues you are most likely to hit.
+
+## Invalid client
+
+**Symptom:** `POST /connect/token` returns **HTTP 401** with
+`WWW-Authenticate: Basic realm="Vefa.CustomAuth"` and `{ "error": "invalid_client" }`.
+
+**Causes & fixes:**
+
+- Unknown `client_id` — verify the client is registered.
+- A confidential client (`private_key_jwt`) sent a missing/invalid `client_assertion`, or its
+  signature didn't verify against the registered `JwksJson`. Check the assertion algorithm and
+  that the public keys match the signing private key.
+- The assertion's `exp`/`nbf` is outside `ClientAssertionClockSkew` (default 60s) — sync clocks.
+- The assertion `jti` was already used (replay cache) — generate a fresh assertion per request.
+
+See [Client authentication](/docs/flows/client-authentication).
+
+## Invalid redirect URI
+
+**Symptom:** the authorize request fails with an error response **and does not redirect**.
+
+**Cause:** `redirect_uri` validation happens **before** any redirect, and matching is **exact**.
+
+**Fixes:**
+
+- The `redirect_uri` must be in the client's `RedirectUris`, character-for-character (scheme,
+  host, port, path, trailing slash).
+- It must be an **absolute** URI, contain **no fragment** (`#`), and use **HTTPS** unless the host
+  is loopback (`localhost`, `127.0.0.1`, `[::1]`).
+
+## Invalid scope
+
+**Symptom:** `{ "error": "invalid_scope" }`.
+
+**Fixes:**
+
+- Every requested scope must be in the client's `AllowedScopes`.
+- For refresh tokens, `offline_access` must be in `AllowedScopes` **and** requested — otherwise no
+  refresh token is issued (which can look like a missing scope). See
+  [Refresh token flow](/docs/flows/refresh-token).
+
+## Token validation failed (resource server returns 401)
+
+**Symptom:** a valid-looking bearer token is rejected by your API.
+
+**Checklist:**
+
+- **Issuer mismatch** — the API's `Authority` must equal the token `iss` and the auth server's
+  `CustomAuthOptions.Issuer` exactly (including scheme and trailing slash).
+- **Audience mismatch** — set `TokenValidationParameters.ValidAudiences` to match the token's
+  `aud`.
+- **Signature failure** — the API couldn't fetch/match the JWKS key. If the auth server uses an
+  in-memory signing key and restarted, previously issued tokens are now unverifiable. Use a
+  durable store or a fixed certificate.
+- **Claim names look wrong** — set `MapInboundClaims = false` so `sub`/`scope` aren't remapped.
+- Turn on `JwtBearerEvents` logging to see the exact reason. See
+  [Recipes](/docs/recipes#protecting-an-aspnet-core-api).
+
+## Discovery endpoint not working
+
+**Symptom:** clients report "configuration may be missing or invalid" or
+`AuthorizationEndpoint` comes back empty.
+
+**Fixes:**
+
+- Confirm `/.well-known/openid-configuration` returns valid JSON with a correct `issuer`.
+- **Issuer must match** the URL the client uses for `Authority`.
+- **Mixed `Microsoft.IdentityModel.*` versions** are a known cause: a 7.x/8.x graph silently
+  breaks discovery parsing in client apps even when the JSON is correct. Keep those packages on
+  the same major version (the library pins 8.x). See
+  [Installation](/docs/getting-started/installation#version-pinning).
+- For local HTTP, set `RequireHttpsMetadata = false` on the client (`AddCustomAuthClient` /
+  `AddJwtBearer`).
+
+## Database migration problems
+
+- **No migrations exist** — Vefa.CustomAuth ships none; generate them against the context that
+  owns the model (`--context CustomAuthDbContext`, or your derived context).
+- **SQLite `DateTimeOffset` errors** — the provider works around SQLite's translation limits; if
+  you hit one in your own queries over the model, order/filter in memory or move to
+  PostgreSQL/SQL Server. See [EF Core storage](/docs/storage/entity-framework-core).
+- **Tables missing at runtime** — run `dotnet ef database update`, or `EnsureCreatedAsync()` for
+  throwaway local databases (not both — they don't mix).
+
+## Clock skew problems
+
+- **Tokens "expired" immediately or rejected intermittently** — the auth server and resource
+  server clocks differ. Sync via NTP.
+- **Client assertions rejected** — widen `CustomAuthOptions.ClientAssertionClockSkew` modestly, or
+  fix clock drift on the confidential client.
+- JWT bearer validation applies a default clock skew on `exp`/`nbf`; very short access token
+  lifetimes plus skew can cause edge rejections — prefer ≥15-minute access tokens.
+
+## Random logouts / antiforgery failures across instances
+
+**Cause:** instances don't share a Data Protection key ring / application name, so they can't
+decrypt each other's SSO cookies and antiforgery tokens.
+
+**Fix:** `AddDataProtection().SetApplicationName("…").PersistKeysTo…()` with the **same** name and
+a **shared** store on every instance. See
+[Security](/docs/security#multi-instance--data-protection).
+
+## Refresh suddenly fails and the user is logged out
+
+**Cause:** reuse detection. A consumed refresh token was presented again (theft, or a client
+racing/retrying refreshes), so the chain was revoked.
+
+**Fix:** serialize refreshes in the client and persist the rotated token before using it. If you
+must tolerate races, you can disable `DetectRefreshTokenReuse` (not recommended). See
+[Refresh token flow](/docs/flows/refresh-token#reuse-detection).

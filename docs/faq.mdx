@@ -1,0 +1,87 @@
+---
+title: FAQ
+description: Short answers to common questions about Vefa.CustomAuth.
+---
+
+# FAQ
+
+### Does Vefa.CustomAuth manage users and passwords?
+
+No. It is protocol-only. You implement `ICustomAuthUserStore` against your own identity source
+(your database, ASP.NET Core Identity, an external IdP) and render your own login page. See
+[Sessions & login](/docs/core-concepts/sessions-and-login).
+
+### Which OAuth2 flows are supported?
+
+`authorization_code` (with PKCE) and `refresh_token`. **Client Credentials, Device, Implicit, and
+Resource Owner Password are not supported.** See
+[Authorization Code + PKCE](/docs/flows/authorization-code-pkce).
+
+### Is there a Client Credentials (machine-to-machine) flow?
+
+Not in v1.0. A service that needs to call APIs on behalf of a user can run the Authorization Code
+flow once and keep access alive with a refresh token (`offline_access` + `private_key_jwt`). See
+[Recipes](/docs/recipes#creating-a-machine-to-machine-client).
+
+### How do clients authenticate at the token endpoint?
+
+Public clients use `none` (PKCE only). Confidential clients use `private_key_jwt` with a registered
+public JWKS. There is **no** shared-secret method. See
+[Client authentication](/docs/flows/client-authentication).
+
+### Is there a token introspection endpoint?
+
+No (`/connect/introspect` is not implemented). Resource servers validate JWT access tokens locally
+via the JWKS document. See
+[Token validation & revocation](/docs/flows/token-validation-and-revocation).
+
+### Can I revoke an access token immediately?
+
+No — JWT access tokens are self-contained and validated locally, so they stay valid until `exp`.
+Use short access-token lifetimes plus refresh-token/session revocation; revocation takes effect at
+the next refresh. See [Security](/docs/security).
+
+### Why isn't a refresh token issued?
+
+Both conditions must hold: the client has `AllowRefreshTokens = true`, **and** `offline_access` is
+in `AllowedScopes` and was granted on the request. See
+[Refresh token flow](/docs/flows/refresh-token).
+
+### Which databases are supported?
+
+EF Core (SQLite for dev/test; PostgreSQL and SQL Server for production), MongoDB, and an in-memory
+provider for development. You can also implement custom stores. See [Storage](/docs/storage/entity-framework-core).
+
+### Can I run multiple instances behind a load balancer?
+
+Yes, with two requirements: a **shared signing key** (a fixed certificate, or a shared durable
+signing-key store), and a **shared Data Protection key ring + application name** for cookies and
+antiforgery. See [Security](/docs/security#multi-instance--data-protection).
+
+### Does it ship a login or consent UI?
+
+A login page is host-owned (no built-in UI). There is no consent screen in v1.0. There is an
+optional **admin dashboard** (`Vefa.CustomAuth.AdminUI`) for managing the server. See
+[Admin UI](/docs/admin-ui).
+
+### What signing algorithms are used?
+
+Tokens are signed with **RS256** by default (the store-backed key). The fixed-certificate path
+accepts other algorithms (e.g. RS384/RS512). `private_key_jwt` client assertions accept RS/PS/ES
+families. See [Signing keys](/docs/core-concepts/signing-keys).
+
+### What .NET version is required?
+
+**.NET 8** (`net8.0`). No other target frameworks are supported.
+
+### How do I add custom claims to tokens?
+
+Implement `ICustomAuthProfileService.GetProfileDataAsync` (claims can be conditional per client),
+and/or return `AdditionalClaims` from your user store. See
+[OpenID Connect](/docs/openid-connect#the-profile-service).
+
+### Is it production-ready?
+
+It is at v1.0 with secure defaults and a completed internal RFC audit. Before production, follow
+the [Security](/docs/security) page (HTTPS, lifetimes, signing key, Data Protection,
+Admin UI protection) and pin your package versions.

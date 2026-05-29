@@ -1,0 +1,104 @@
+---
+title: API reference
+description: Packages, key services, options classes, interfaces, extension methods, and the endpoint table.
+---
+
+# API reference
+
+A condensed reference to the public surface. For full XML doc comments, use IntelliSense or the
+generated docs from the packages.
+
+## Packages
+
+| Package | Namespace root | Contents |
+| --- | --- | --- |
+| `Vefa.CustomAuth.Core` | `Vefa.CustomAuth.Core` | Models, store/manager/service interfaces, options |
+| `Vefa.CustomAuth.Tokens` | `Vefa.CustomAuth.Tokens` | Signing providers, JWT issuance, hashing, client assertion validation |
+| `Vefa.CustomAuth.AspNetCore` | `Vefa.CustomAuth.AspNetCore` | Endpoints, DI extensions, host helpers, in-memory stores, RP client integration |
+| `Vefa.CustomAuth.EntityFrameworkCore` | `Vefa.CustomAuth.EntityFrameworkCore` | `CustomAuthDbContext`, EF stores, cleanup service |
+| `Vefa.CustomAuth.MongoDB` | `Vefa.CustomAuth.MongoDB` | Mongo stores, index manager, cleanup service |
+| `Vefa.CustomAuth.AdminUI` | `Vefa.CustomAuth.AdminUI` | Embedded admin dashboard |
+| `Vefa.CustomAuth.Server` | `Vefa.CustomAuth.Server` | Aggregate composition package <!-- TODO: confirm public API --> |
+
+## Extension methods
+
+### Service registration (`IServiceCollection`)
+
+| Method | Returns | Purpose |
+| --- | --- | --- |
+| `AddCustomAuth(Action<CustomAuthOptions>)` | `CustomAuthBuilder` | Core services + options. Registers antiforgery, memory cache, managers, default scope/audit stores, profile service, login-attempt tracker. |
+| `AddCustomAuthEntityFrameworkCore(Action<DbContextOptionsBuilder>)` | `IServiceCollection` | Registers `CustomAuthDbContext` + EF stores. |
+| `AddCustomAuthStores<TContext>()` | `IServiceCollection` | Registers EF stores against your own `DbContext`. |
+| `AddCustomAuthMongoDbStores(Action<CustomAuthMongoDbOptions>)` | `IServiceCollection` | Registers Mongo stores + cleanup. |
+| `AddCustomAuthClient(Action<CustomAuthClientOptions>)` | `AuthenticationBuilder` | Relying-party cookie + OIDC integration. |
+
+### Builder (`CustomAuthBuilder`)
+
+| Method | Purpose |
+| --- | --- |
+| `AddJwtTokenSigning()` | Store-backed RSA signing + JWT issuer. **Required.** |
+| `AddSigningCertificate(X509Certificate2, string alg = RS256)` | Sign with a fixed certificate. |
+| `AddSigningCertificate(string pfxPath, string? password, string alg = RS256)` | Sign with a PFX file. |
+| `AddInMemoryStores(Action<InMemoryStoresBuilder>?)` | In-memory stores (dev/test). |
+
+### Endpoint mapping (`IEndpointRouteBuilder`)
+
+| Method | Purpose |
+| --- | --- |
+| `MapCustomAuthEndpoints()` | Maps all protocol endpoints (see table below). |
+| `MapCustomAuthAdminUI(...)` | Maps the admin dashboard; returns a `RouteGroupBuilder`. |
+| `MapCustomAuthSignOut(string pattern = "/logout")` | RP convenience sign-out (cookie + upstream OIDC). |
+
+### HttpContext helpers (`Vefa.CustomAuth.AspNetCore.Extensions`)
+
+| Method | Purpose |
+| --- | --- |
+| `HttpContext.SignInCustomAuthAsync(userId, ct)` | Opens an SSO session + sets the cookie. Returns `CustomAuthSession`. |
+| `HttpContext.SignOutCustomAuthAsync(ct)` | Revokes the current session + clears the cookie. |
+
+## Options classes
+
+| Class | Used by |
+| --- | --- |
+| `CustomAuthOptions` | `AddCustomAuth` — server behavior. See [Configuration](/docs/getting-started/configuration). |
+| `CustomAuthClientOptions` | `AddCustomAuthClient` — relying-party integration. |
+| `CustomAuthMongoDbOptions` | `AddCustomAuthMongoDbStores`. |
+| `CustomAuthAdminUIOptions` | `MapCustomAuthAdminUI`. |
+
+## Models (`Vefa.CustomAuth.Core.Models`)
+
+`CustomAuthClient`, `CustomAuthScope`, `CustomAuthAuthorizationCode`, `CustomAuthRefreshToken`,
+`CustomAuthSession`, `CustomAuthSigningKey`, `CustomAuthAuditLog`,
+`CustomAuthClientAuthenticationMethod` (enum: `None`, `PrivateKeyJwt`), `CustomAuthPagedRequest`,
+`CustomAuthPagedResult<T>`, and the relational child entities (`CustomAuthClientRedirectUri`,
+`CustomAuthClientPostLogoutRedirectUri`, `CustomAuthClientAllowedScope`).
+
+## Key interfaces
+
+**Stores** (`Vefa.CustomAuth.Core.Stores`): `ICustomAuthClientStore`,
+`ICustomAuthAuthorizationCodeStore`, `ICustomAuthRefreshTokenStore`, `ICustomAuthSessionStore`,
+`ICustomAuthSigningKeyStore`, `ICustomAuthScopeStore`, `ICustomAuthAuditLogStore`,
+`ICustomAuthUserStore` (host-implemented). The user store returns `CustomAuthUserInfo`.
+
+**Managers** (`Vefa.CustomAuth.Core.Managers`): `ICustomAuthClientManager`,
+`ICustomAuthScopeManager`, `ICustomAuthSessionManager`, `ICustomAuthTokenManager`,
+`ICustomAuthSigningKeyManager`, `ICustomAuthAuditLogManager`.
+
+**Services** (`Vefa.CustomAuth.Core.Services`): `ICustomAuthProfileService` (+
+`CustomAuthProfileContext`), `ICustomAuthLoginAttemptTracker`, `ICustomAuthCleanupService`.
+
+**Tokens** (`Vefa.CustomAuth.Tokens`): `ISigningCredentialsProvider`, `ITokenIssuer`,
+`IClientAssertionValidator`.
+
+## Endpoint summary
+
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| `GET` | `/.well-known/openid-configuration` | public | Discovery metadata |
+| `GET` | `/.well-known/jwks.json` | public | Public signing keys |
+| `GET` | `/connect/authorize` | SSO session | Authorization endpoint |
+| `POST` | `/connect/token` | client auth | Token endpoint |
+| `GET`/`POST` | `/connect/userinfo` | bearer access token | OIDC claims |
+| `GET`/`POST` | `/connect/logout` | — | RP-initiated logout / end session |
+| `POST` | `/connect/revoke` | client | Token revocation |
+| `POST` | `/login` | antiforgery | Default credential-validation handler (when `MapDefaultLoginEndpoint = true`) |
