@@ -149,6 +149,44 @@ public sealed class AdminUIEndpointTests
     }
 
     [Fact]
+    public async Task AdminClientCrudRoundTripsPropertiesBag()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        var antiforgery = await AntiforgeryTestHelpers.GetAdminUiAntiforgeryAsync(client);
+
+        var clientWithProperties = new CustomAuthClient
+        {
+            ClientId = "client-with-properties",
+            DisplayName = "Client With Properties",
+            RedirectUris = new List<string> { "https://localhost/callback" },
+            AllowedScopes = new List<string> { "openid" },
+            AllowRefreshTokens = false,
+            Properties = new Dictionary<string, string>
+            {
+                ["audience"] = "https://api.example.com",
+                ["tier"] = "gold",
+            },
+        };
+
+        using var createRequest = new HttpRequestMessage(HttpMethod.Post, "/customauth/api/clients")
+        {
+            Content = JsonContent.Create(clientWithProperties),
+        };
+        createRequest.Headers.Add("Cookie", antiforgery.Cookie);
+        createRequest.Headers.Add("RequestVerificationToken", antiforgery.RequestToken);
+        var createResponse = await client.SendAsync(createRequest);
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+
+        var listResponse = await client.GetAsync("/customauth/api/clients?page=1&pageSize=10");
+        var result = await listResponse.Content.ReadFromJsonAsync<CustomAuthPagedResult<CustomAuthClient>>();
+        var persisted = Assert.Single(result!.Items, c => c.ClientId == "client-with-properties");
+        Assert.Equal("https://api.example.com", persisted.Properties["audience"]);
+        Assert.Equal("gold", persisted.Properties["tier"]);
+    }
+
+    [Fact]
     public async Task AdminScopeEndpointsWorkCorrectly()
     {
         await using var app = await CreateAppAsync();

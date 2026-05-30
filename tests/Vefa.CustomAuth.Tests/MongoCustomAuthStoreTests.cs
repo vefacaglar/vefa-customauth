@@ -335,6 +335,60 @@ public sealed class MongoCustomAuthStoreTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task PropertiesBagRoundTripsForClientScopeAndSession()
+    {
+        var sessionId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+
+        await using (var scope = _provider.CreateAsyncScope())
+        {
+            var clientStore = scope.ServiceProvider.GetRequiredService<ICustomAuthClientStore>();
+            var scopeStore = scope.ServiceProvider.GetRequiredService<ICustomAuthScopeStore>();
+            var sessionStore = scope.ServiceProvider.GetRequiredService<ICustomAuthSessionStore>();
+
+            await clientStore.StoreAsync(new CustomAuthClient
+            {
+                ClientId = "client-props",
+                DisplayName = "Client With Properties",
+                Properties = { ["audience"] = "https://api.example.com", ["tier"] = "gold" }
+            });
+            await scopeStore.StoreAsync(new CustomAuthScope
+            {
+                Name = "scope-props",
+                Properties = { ["resource"] = "orders" }
+            });
+            await sessionStore.StoreAsync(new CustomAuthSession
+            {
+                Id = sessionId,
+                UserId = "user-1",
+                CreatedAt = now,
+                ExpiresAt = now.AddHours(1),
+                Properties = { ["amr"] = "pwd" }
+            });
+        }
+
+        await using (var scope = _provider.CreateAsyncScope())
+        {
+            var clientStore = scope.ServiceProvider.GetRequiredService<ICustomAuthClientStore>();
+            var scopeStore = scope.ServiceProvider.GetRequiredService<ICustomAuthScopeStore>();
+            var sessionStore = scope.ServiceProvider.GetRequiredService<ICustomAuthSessionStore>();
+
+            var client = await clientStore.FindByClientIdAsync("client-props");
+            Assert.NotNull(client);
+            Assert.Equal("https://api.example.com", client!.Properties["audience"]);
+            Assert.Equal("gold", client.Properties["tier"]);
+
+            var configuredScope = await scopeStore.FindByNameAsync("scope-props");
+            Assert.NotNull(configuredScope);
+            Assert.Equal("orders", configuredScope!.Properties["resource"]);
+
+            var session = await sessionStore.FindAsync(sessionId);
+            Assert.NotNull(session);
+            Assert.Equal("pwd", session!.Properties["amr"]);
+        }
+    }
+
+    [Fact]
     public async Task AuditLogStorePersistsAndPagesLogs()
     {
         var now = DateTimeOffset.UtcNow;

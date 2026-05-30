@@ -66,6 +66,7 @@
         { "label": "API reference", "slug": "api-reference" },
         { "label": "Troubleshooting", "slug": "troubleshooting" },
         { "label": "Migration & upgrade", "slug": "migration" },
+        { "label": "Schema changelog", "slug": "schema-changelog" },
         { "label": "FAQ", "slug": "faq" }
       ]
     }

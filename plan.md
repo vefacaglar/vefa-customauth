@@ -179,6 +179,14 @@ ICustomAuthUserStore
 
 A sample user model can exist in the sample project, but the main package should not force consumers to use a specific user table or identity model.
 
+Extensibility: `CustomAuthClient`, `CustomAuthScope`, and `CustomAuthSession` expose a free-form
+`IDictionary<string, string> Properties` bag (IdentityServer-style). It is the forward-compatibility
+escape hatch for additive features (e.g. resource/audience values, custom claim mappings, feature
+flags, `acr`/`amr`, device binding) so they can ship without a new relational column per feature.
+Relational (EF Core) providers persist it as a single JSON text column; MongoDB stores it as a BSON
+sub-document via `AutoMap`; in-memory keeps it on the object. Schema changes are tracked in
+`docs/schema-changelog.md`.
+
 ---
 
 ## 6. Client Model

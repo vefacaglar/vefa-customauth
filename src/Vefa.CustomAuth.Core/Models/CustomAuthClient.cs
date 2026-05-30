@@ -93,4 +93,13 @@ public sealed class CustomAuthClient
     /// This holds public key material only; private keys never leave the client.
     /// </summary>
     public string? JwksJson { get; set; }
+
+    /// <summary>
+    /// Gets or sets a free-form bag of additional string properties associated with the client.
+    /// This is a forward-compatibility extension point: features that need extra per-client
+    /// configuration (for example resource/audience values, custom claim mappings, or feature
+    /// flags) can store it here without requiring a relational schema change. Relational providers
+    /// persist this as a single JSON column. Never store secrets or private key material here.
+    /// </summary>
+    public IDictionary<string, string> Properties { get; set; } = new Dictionary<string, string>();
 }

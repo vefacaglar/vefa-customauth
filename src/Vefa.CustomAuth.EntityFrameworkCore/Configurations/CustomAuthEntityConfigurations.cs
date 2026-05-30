@@ -1,8 +1,53 @@
+using System;
+using System.Collections.Generic;
+using System.Linq.Expressions;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Vefa.CustomAuth.Core.Models;
 
 namespace Vefa.CustomAuth.EntityFrameworkCore.Configurations;
+
+/// <summary>
+/// Shared mapping for the free-form <c>Properties</c> extensibility bag exposed by several
+/// CustomAuth models. The dictionary is persisted as a single JSON text column so that additive
+/// features can store extra string properties without requiring a new relational column.
+/// </summary>
+internal static class CustomAuthPropertiesBagConfiguration
+{
+    private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+
+    private static readonly ValueConverter<IDictionary<string, string>, string> Converter = new(
+        value => Serialize(value),
+        json => Deserialize(json));
+
+    private static readonly ValueComparer<IDictionary<string, string>> Comparer = new(
+        (left, right) => Serialize(left) == Serialize(right),
+        value => Serialize(value).GetHashCode(StringComparison.Ordinal),
+        value => Deserialize(Serialize(value)));
+
+    /// <summary>
+    /// Maps the supplied dictionary property to a JSON text column with change-tracking support.
+    /// </summary>
+    public static void Configure<TEntity>(
+        EntityTypeBuilder<TEntity> builder,
+        Expression<Func<TEntity, IDictionary<string, string>>> propertySelector)
+        where TEntity : class
+    {
+        var property = builder.Property(propertySelector).HasConversion(Converter);
+        property.Metadata.SetValueComparer(Comparer);
+    }
+
+    private static string Serialize(IDictionary<string, string>? value)
+        => JsonSerializer.Serialize(value ?? new Dictionary<string, string>(), SerializerOptions);
+
+    private static IDictionary<string, string> Deserialize(string? json)
+        => string.IsNullOrEmpty(json)
+            ? new Dictionary<string, string>()
+            : JsonSerializer.Deserialize<Dictionary<string, string>>(json, SerializerOptions) ?? new Dictionary<string, string>();
+}
 
 internal sealed class CustomAuthClientConfiguration : IEntityTypeConfiguration<CustomAuthClient>
 {
@@ -37,6 +82,8 @@ internal sealed class CustomAuthClientConfiguration : IEntityTypeConfiguration<C
 
         builder.Property(x => x.JwksJson)
             .HasMaxLength(8000);
+
+        CustomAuthPropertiesBagConfiguration.Configure(builder, x => x.Properties);
     }
 }
 
@@ -114,6 +161,8 @@ internal sealed class CustomAuthSessionConfiguration : IEntityTypeConfiguration<
         builder.ToTable("CustomAuthSessions");
         builder.HasKey(x => x.Id);
         builder.Property(x => x.UserId).HasMaxLength(200);
+
+        CustomAuthPropertiesBagConfiguration.Configure(builder, x => x.Properties);
     }
 }
 
@@ -137,6 +186,8 @@ internal sealed class CustomAuthScopeConfiguration : IEntityTypeConfiguration<Cu
         builder.Property(x => x.Name).HasMaxLength(200);
         builder.Property(x => x.DisplayName).HasMaxLength(200);
         builder.Property(x => x.Description).HasMaxLength(1000);
+
+        CustomAuthPropertiesBagConfiguration.Configure(builder, x => x.Properties);
     }
 }
 

@@ -502,6 +502,74 @@ public sealed class EfCustomAuthStoreTests
         }
     }
 
+    [Fact]
+    public async Task PropertiesBagRoundTripsAsJsonColumnForClientScopeAndSession()
+    {
+        await using var provider = CreateSqliteProvider();
+        var sessionId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<CustomAuthDbContext>();
+
+            context.Clients.Add(new CustomAuthClient
+            {
+                ClientId = "client-props",
+                DisplayName = "Client With Properties",
+                Properties = { ["audience"] = "https://api.example.com", ["tier"] = "gold" }
+            });
+            context.Scopes.Add(new CustomAuthScope
+            {
+                Name = "scope-props",
+                Properties = { ["resource"] = "orders" }
+            });
+            context.Sessions.Add(new CustomAuthSession
+            {
+                Id = sessionId,
+                UserId = "user-1",
+                CreatedAt = now,
+                ExpiresAt = now.AddHours(1),
+                Properties = { ["amr"] = "pwd", ["acr"] = "urn:mace:incommon:iap:silver" }
+            });
+
+            // A second client saved without any properties verifies the empty-dictionary default.
+            context.Clients.Add(new CustomAuthClient
+            {
+                ClientId = "client-no-props",
+                DisplayName = "Client Without Properties"
+            });
+
+            await context.SaveChangesAsync();
+        }
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var clientStore = scope.ServiceProvider.GetRequiredService<ICustomAuthClientStore>();
+            var scopeStore = scope.ServiceProvider.GetRequiredService<ICustomAuthScopeStore>();
+            var sessionStore = scope.ServiceProvider.GetRequiredService<ICustomAuthSessionStore>();
+
+            var client = await clientStore.FindByClientIdAsync("client-props");
+            Assert.NotNull(client);
+            Assert.Equal("https://api.example.com", client!.Properties["audience"]);
+            Assert.Equal("gold", client.Properties["tier"]);
+
+            var emptyClient = await clientStore.FindByClientIdAsync("client-no-props");
+            Assert.NotNull(emptyClient);
+            Assert.NotNull(emptyClient!.Properties);
+            Assert.Empty(emptyClient.Properties);
+
+            var configuredScope = await scopeStore.FindByNameAsync("scope-props");
+            Assert.NotNull(configuredScope);
+            Assert.Equal("orders", configuredScope!.Properties["resource"]);
+
+            var session = await sessionStore.FindAsync(sessionId);
+            Assert.NotNull(session);
+            Assert.Equal("pwd", session!.Properties["amr"]);
+            Assert.Equal("urn:mace:incommon:iap:silver", session.Properties["acr"]);
+        }
+    }
+
     private static ServiceProvider CreateProvider()
     {
         var services = new ServiceCollection();

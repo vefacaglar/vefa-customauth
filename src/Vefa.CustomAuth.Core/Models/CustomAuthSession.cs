@@ -30,4 +30,13 @@ public sealed class CustomAuthSession
     /// Gets or sets the date and time when the session was actively ended (revoked).
     /// </summary>
     public DateTimeOffset? RevokedAt { get; set; }
+
+    /// <summary>
+    /// Gets or sets a free-form bag of additional string properties associated with the session.
+    /// This is a forward-compatibility extension point: features that need extra per-session
+    /// state (for example authentication context class/methods, authentication time, or device
+    /// binding identifiers) can store it here without requiring a relational schema change.
+    /// Relational providers persist this as a single JSON column.
+    /// </summary>
+    public IDictionary<string, string> Properties { get; set; } = new Dictionary<string, string>();
 }
