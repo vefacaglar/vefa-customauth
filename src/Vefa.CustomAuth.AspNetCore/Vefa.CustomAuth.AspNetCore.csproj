@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -15,15 +15,27 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
-  <ItemGroup>
+  <!--
+    On net8.0, OpenIdConnect 8.0.10 pulls Microsoft.IdentityModel.Protocols(.OpenIdConnect)
+    7.1.2, which is binary-incompatible with the 8.x Microsoft.IdentityModel.Tokens /
+    JsonWebTokens we already use in Vefa.CustomAuth.Tokens. The mismatch silently breaks
+    discovery parsing (AuthorizationEndpoint comes back empty). Pin both to 8.x explicitly
+    so the whole graph aligns.
+
+    The OpenIdConnect handler is a standalone NuGet package (not part of the
+    Microsoft.AspNetCore.App shared framework), so it must be referenced per target
+    framework with a matching major version. The Microsoft.IdentityModel.Protocols pins
+    keep the discovery-parsing graph aligned with the 8.x Microsoft.IdentityModel.Tokens
+    used by Vefa.CustomAuth.Tokens.
+  -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="8.0.10" />
-    <!--
-      OpenIdConnect 8.0.10 pulls Microsoft.IdentityModel.Protocols(.OpenIdConnect) 7.1.2,
-      which is binary-incompatible with the 8.x Microsoft.IdentityModel.Tokens /
-      JsonWebTokens we already use in Vefa.CustomAuth.Tokens. The mismatch silently
-      breaks discovery parsing (AuthorizationEndpoint comes back empty). Pin both to
-      8.x explicitly so the whole graph aligns.
-    -->
+    <PackageReference Include="Microsoft.IdentityModel.Protocols" Version="8.18.0" />
+    <PackageReference Include="Microsoft.IdentityModel.Protocols.OpenIdConnect" Version="8.18.0" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.8" />
     <PackageReference Include="Microsoft.IdentityModel.Protocols" Version="8.18.0" />
     <PackageReference Include="Microsoft.IdentityModel.Protocols.OpenIdConnect" Version="8.18.0" />
   </ItemGroup>

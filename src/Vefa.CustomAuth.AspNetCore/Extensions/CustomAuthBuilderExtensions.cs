@@ -67,7 +67,15 @@ public static class CustomAuthBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(pfxFilePath);
 
+#if NET10_0_OR_GREATER
+        // X509Certificate2 file/Import constructors are obsolete (SYSLIB0057) from .NET 9 on.
+        var certificate = X509CertificateLoader.LoadPkcs12FromFile(
+            pfxFilePath,
+            password,
+            X509KeyStorageFlags.Exportable);
+#else
         var certificate = new X509Certificate2(pfxFilePath, password, X509KeyStorageFlags.Exportable);
+#endif
         return builder.AddSigningCertificate(certificate, algorithm);
     }
 }

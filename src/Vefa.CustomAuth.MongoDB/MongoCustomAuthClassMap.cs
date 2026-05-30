@@ -24,6 +24,11 @@ internal static class MongoCustomAuthClassMap
             if (_registered)
                 return;
 
+            // MongoDB.Driver 3.x removed the global BsonDefaults.GuidRepresentation and
+            // now requires an explicit representation; register the standard (RFC 4122)
+            // GUID serializer so Guid members serialize without throwing.
+            BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
+
             BsonClassMap.RegisterClassMap<CustomAuthClient>(map =>
             {
                 map.AutoMap();
