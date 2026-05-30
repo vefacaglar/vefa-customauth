@@ -29,10 +29,16 @@ POST /connect/token
 GET  /connect/logout
 POST /connect/logout
 GET  /connect/userinfo
+POST /connect/userinfo
 POST /connect/revoke
-GET  /login
 POST /login
 ```
+
+This package ships no HTML. The host application owns the login and logout
+confirmation pages. `POST /login` validates the antiforgery token and credentials,
+opens an SSO session, and redirects; on failure it redirects back to `LoginPath`
+with `?error=<code>&returnUrl=<orig>`. The host renders the GET login page and
+surfaces the error code.
 
 ## Grant types
 
@@ -47,6 +53,26 @@ The token endpoint dispatches each request to a registered `ICustomAuthGrantHand
 
 Register an additional `ICustomAuthGrantHandler` to add a custom grant; a registration whose
 `GrantType` matches a built-in grant overrides it (last registration wins).
+
+## Relying-Party Integration
+
+The same package ships the client-side OpenID Connect integration so relying-party
+applications do not have to hand-wire cookie and OpenID Connect authentication.
+
+```csharp
+builder.Services.AddCustomAuthClient(options =>
+{
+    options.Authority = "https://auth.example.com";
+    options.ClientId = "web-app";
+    options.AdditionalScopes.Add("sample-api");
+});
+
+app.MapCustomAuthSignOut("/logout");
+```
+
+`AddCustomAuthClient` configures code flow with PKCE, saves tokens, and requests
+`openid profile email offline_access` by default. `MapCustomAuthSignOut` pairs cookie
+sign-out with the upstream OpenID Connect end-session call.
 
 ## Security Notes
 
