@@ -8,15 +8,18 @@ internal sealed class RevocationEndpointService
 {
     private readonly ICustomAuthClientManager _clientManager;
     private readonly ICustomAuthTokenManager _tokenManager;
+    private readonly ClientAuthenticationService _clientAuthentication;
     private readonly TimeProvider _timeProvider;
 
     public RevocationEndpointService(
         ICustomAuthClientManager clientManager,
         ICustomAuthTokenManager tokenManager,
+        ClientAuthenticationService clientAuthentication,
         TimeProvider timeProvider)
     {
         _clientManager = clientManager ?? throw new ArgumentNullException(nameof(clientManager));
         _tokenManager = tokenManager ?? throw new ArgumentNullException(nameof(tokenManager));
+        _clientAuthentication = clientAuthentication ?? throw new ArgumentNullException(nameof(clientAuthentication));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
@@ -58,6 +61,14 @@ internal sealed class RevocationEndpointService
                 ["WWW-Authenticate"] = "Basic realm=\"Vefa.CustomAuth\""
             };
             return EndpointResults.OAuthError("invalid_client", "The client is not registered.", StatusCodes.Status401Unauthorized, headers);
+        }
+
+        // RFC 7009 §2.1: confidential clients must authenticate to revoke a token.
+        // Public clients pass through unchanged.
+        var authError = await _clientAuthentication.AuthenticateAsync(client, form, cancellationToken).ConfigureAwait(false);
+        if (authError is not null)
+        {
+            return authError;
         }
 
         // Hashing the token because we store refresh tokens as hashes.

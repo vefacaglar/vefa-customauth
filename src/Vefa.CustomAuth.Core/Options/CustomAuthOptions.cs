@@ -48,6 +48,14 @@ public sealed class CustomAuthOptions
     public TimeSpan ClientAssertionClockSkew { get; set; } = TimeSpan.FromSeconds(60);
 
     /// <summary>
+    /// Gets or sets the maximum accepted remaining lifetime (<c>exp</c> minus now) of a
+    /// <c>private_key_jwt</c> client assertion. Assertions that expire further in the future are
+    /// rejected, as recommended by RFC 9700: they widen the replay window and pin replay-cache
+    /// entries in memory until they expire. Defaults to 5 minutes.
+    /// </summary>
+    public TimeSpan ClientAssertionMaxLifetime { get; set; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>
     /// Gets or sets the path to the host-provided login page. The authorization endpoint
     /// redirects unauthenticated users here with a <c>returnUrl</c> query parameter.
     /// The host owns this page (Razor Pages, MVC, Blazor, etc.) and is expected to

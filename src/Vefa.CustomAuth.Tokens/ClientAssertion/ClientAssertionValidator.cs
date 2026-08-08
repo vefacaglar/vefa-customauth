@@ -27,11 +27,13 @@ public sealed class ClientAssertionValidator : IClientAssertionValidator
     };
 
     private readonly IOptionsMonitor<CustomAuthOptions> _options;
+    private readonly TimeProvider _timeProvider;
     private readonly JsonWebTokenHandler _handler = new();
 
-    public ClientAssertionValidator(IOptionsMonitor<CustomAuthOptions> options)
+    public ClientAssertionValidator(IOptionsMonitor<CustomAuthOptions> options, TimeProvider timeProvider)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     public async Task<ClientAssertionValidationResult> ValidateAsync(
@@ -124,6 +126,17 @@ public sealed class ClientAssertionValidator : IClientAssertionValidator
             return ClientAssertionValidationResult.Failure("the assertion is missing jti.");
         }
 
-        return ClientAssertionValidationResult.Success(issuer, jwt.Id, new DateTimeOffset(jwt.ValidTo, TimeSpan.Zero));
+        // RFC 9700: cap the assertion lifetime. A far-future exp widens the replay window and
+        // keeps the jti replay-cache entry alive until the assertion expires.
+        var opts = _options.CurrentValue;
+        var expiresAt = new DateTimeOffset(jwt.ValidTo, TimeSpan.Zero);
+        var maxExpiresAt = _timeProvider.GetUtcNow() + opts.ClientAssertionMaxLifetime + opts.ClientAssertionClockSkew;
+        if (expiresAt > maxExpiresAt)
+        {
+            return ClientAssertionValidationResult.Failure(
+                $"the assertion exp exceeds the maximum accepted lifetime of {opts.ClientAssertionMaxLifetime}.");
+        }
+
+        return ClientAssertionValidationResult.Success(issuer, jwt.Id, expiresAt);
     }
 }

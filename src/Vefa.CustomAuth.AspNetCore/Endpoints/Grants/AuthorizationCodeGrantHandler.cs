@@ -87,7 +87,10 @@ internal sealed partial class AuthorizationCodeGrantHandler : GrantHandlerBase
 
         if (code.ConsumedAt is not null)
         {
+            // RFC 6749 §4.1.2: a code presented more than once may be stolen — revoke the tokens
+            // previously issued from it (via its session-bound refresh token chain).
             LogCodeAlreadyConsumed(clientId, code.Id);
+            await TokenManager.HandleAuthorizationCodeReuseAsync(code, now, cancellationToken).ConfigureAwait(false);
             return InvalidAuthorizationCode();
         }
 
@@ -138,7 +141,10 @@ internal sealed partial class AuthorizationCodeGrantHandler : GrantHandlerBase
         var consumed = await TokenManager.MarkAuthorizationCodeConsumedAsync(code.Id, now, cancellationToken).ConfigureAwait(false);
         if (!consumed)
         {
+            // Lost the atomic check-and-set: another caller redeemed the code concurrently.
+            // Treat it as reuse, same as the ConsumedAt path above.
             LogCodeConcurrentConsume(clientId, code.Id);
+            await TokenManager.HandleAuthorizationCodeReuseAsync(code, now, cancellationToken).ConfigureAwait(false);
             return InvalidAuthorizationCode();
         }
 
@@ -151,7 +157,8 @@ internal sealed partial class AuthorizationCodeGrantHandler : GrantHandlerBase
                 Subject = user.UserId,
                 ClientId = clientId,
                 Scope = code.Scope,
-                AuthTime = code.CreatedAt,
+                // Codes created before AuthTime existed fall back to CreatedAt.
+                AuthTime = code.AuthTime ?? code.CreatedAt,
                 Nonce = code.Nonce,
                 AdditionalClaims = profileContext.Claims.Count > 0 ? profileContext.Claims : null,
             },

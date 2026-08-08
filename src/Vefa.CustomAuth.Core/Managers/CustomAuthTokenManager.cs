@@ -212,4 +212,33 @@ public sealed class CustomAuthTokenManager : ICustomAuthTokenManager
             Metadata = token.SessionId is null ? null : $"{{\"SessionId\":\"{token.SessionId}\"}}"
         }, cancellationToken).ConfigureAwait(false);
     }
+
+    /// <inheritdoc/>
+    public async Task HandleAuthorizationCodeReuseAsync(CustomAuthAuthorizationCode code, DateTimeOffset detectedAt, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(code);
+        if (code.Id == Guid.Empty)
+        {
+            throw new ArgumentException("Code ID cannot be empty.", nameof(code));
+        }
+
+        // The refresh token issued from this code (and its rotation descendants) is bound to the
+        // same session, so revoking by session covers everything the code produced. Codes without
+        // a session leave nothing traceable to revoke; only the audit record is written.
+        if (code.SessionId is Guid sessionId)
+        {
+            await _refreshTokenStore.RevokeBySessionIdAsync(sessionId, detectedAt, cancellationToken).ConfigureAwait(false);
+        }
+
+        await _auditLogStore.StoreAsync(new CustomAuthAuditLog
+        {
+            Id = Guid.NewGuid(),
+            Action = "AuthorizationCodeReuseDetected",
+            TargetType = "AuthorizationCode",
+            TargetId = code.Id.ToString(),
+            ActorUserId = code.UserId,
+            Timestamp = detectedAt,
+            Metadata = code.SessionId is null ? null : $"{{\"SessionId\":\"{code.SessionId}\"}}"
+        }, cancellationToken).ConfigureAwait(false);
+    }
 }

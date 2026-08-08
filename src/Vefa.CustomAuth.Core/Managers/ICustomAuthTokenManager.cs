@@ -96,4 +96,15 @@ public interface ICustomAuthTokenManager
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     Task HandleRefreshTokenReuseAsync(CustomAuthRefreshToken token, DateTimeOffset detectedAt, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Records authorization code reuse and revokes the tokens previously issued from that code
+    /// when possible (RFC 6749 §4.1.2). When the code is session-bound, the session's refresh
+    /// token chain is revoked.
+    /// </summary>
+    /// <param name="code">The reused authorization code.</param>
+    /// <param name="detectedAt">The timestamp when reuse was detected.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    Task HandleAuthorizationCodeReuseAsync(CustomAuthAuthorizationCode code, DateTimeOffset detectedAt, CancellationToken cancellationToken = default);
 }

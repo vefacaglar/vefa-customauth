@@ -16,6 +16,29 @@ own migrations (or call `EnsureCreated`). Use this page to know what changed whe
   automatically via `AutoMap`.
 - **In-memory hosts** need no action.
 
+## v1.2 — `AuthTime` on authorization codes
+
+Added a nullable `AuthTime` column to `CustomAuthAuthorizationCodes`. It records when the end user
+originally authenticated for the SSO session that issued the code, and is emitted as the
+`auth_time` claim of the ID token (previously the claim used the code's `CreatedAt`, which
+overstated authentication freshness under SSO).
+
+| Table | New column | Type |
+| --- | --- | --- |
+| `CustomAuthAuthorizationCodes` | `AuthTime` | `datetimeoffset` / `TEXT`, nullable |
+
+Codes stored before the upgrade have a `NULL` `AuthTime`; token issuance falls back to `CreatedAt`
+for them.
+
+**Host action (EF Core):**
+
+```bash
+dotnet ef migrations add AddAuthorizationCodeAuthTime
+dotnet ef database update
+```
+
+No action required for MongoDB or in-memory hosts.
+
 ## v1.1 — `Properties` extensibility bag
 
 Added a free-form `IDictionary<string, string> Properties` bag to three models as a

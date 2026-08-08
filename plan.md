@@ -691,6 +691,39 @@ behavior is unchanged.
 
 ---
 
+## 20. Post-Audit Hardening Round 2 (2026-08-08)
+
+Status: completed
+
+A follow-up review of the code added after the original audit (grant handler refactor,
+client credentials, private_key_jwt, signing certificate) surfaced four gaps, all fixed:
+
+```text
+[x] H2-1  auth_time claim now reports the SSO session's original authentication time.
+          CustomAuthAuthorizationCode gains a nullable AuthTime (set from session.CreatedAt at
+          /authorize); token issuance falls back to CreatedAt for pre-upgrade codes.
+          See docs/schema-changelog.md v1.2 for the EF migration.
+[x] H2-2  /connect/revoke authenticates confidential clients (RFC 7009 §2.1): private_key_jwt
+          clients must present a valid client_assertion; public clients are unchanged.
+[x] H2-3  Authorization code reuse revokes previously issued tokens (RFC 6749 §4.1.2):
+          ICustomAuthTokenManager.HandleAuthorizationCodeReuseAsync revokes the session-bound
+          refresh token chain and writes an AuthorizationCodeReuseDetected audit log. Fires on
+          both the consumed-code path and the concurrent-consume (CAS-lost) path.
+[x] H2-4  Client assertion lifetime cap: CustomAuthOptions.ClientAssertionMaxLifetime
+          (default 5 min) rejects assertions whose exp is too far in the future (RFC 9700),
+          bounding the replay window and replay-cache retention.
+```
+
+## 21. Resource / Audience Model (open)
+
+Access tokens still carry `aud = client_id` (the "v0.1 simplification" in `JwtTokenIssuer`).
+With the client credentials grant now shipped, a proper resource/audience model is the main
+remaining protocol gap: support RFC 8707 `resource` parameters (or scope→audience mapping via
+`CustomAuthScope`), emit real API audiences in access tokens, and document audience validation
+for resource servers. Until then, every API must validate the calling client's id as its audience.
+
+---
+
 ## Recommended First Milestone
 
 The first milestone should be:

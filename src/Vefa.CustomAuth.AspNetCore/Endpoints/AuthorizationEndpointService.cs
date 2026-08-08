@@ -142,6 +142,7 @@ internal sealed partial class AuthorizationEndpointService
                 CodeChallengeMethod = codeChallengeMethod,
                 Scope = scope,
                 Nonce = string.IsNullOrEmpty(nonce) ? null : nonce,
+                AuthTime = session.CreatedAt,
                 CreatedAt = now,
                 ExpiresAt = now.Add(_options.CurrentValue.AuthorizationCodeLifetime),
             },

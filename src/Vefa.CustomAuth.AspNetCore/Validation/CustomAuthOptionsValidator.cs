@@ -61,6 +61,11 @@ public sealed class CustomAuthOptionsValidator : IValidateOptions<CustomAuthOpti
             failures.Add($"{nameof(options.RefreshTokenAbsoluteLifetime)} must be greater than or equal to {nameof(options.RefreshTokenLifetime)}.");
         }
 
+        if (options.ClientAssertionMaxLifetime <= TimeSpan.Zero)
+        {
+            failures.Add($"{nameof(options.ClientAssertionMaxLifetime)} must be greater than zero.");
+        }
+
         if (string.IsNullOrWhiteSpace(options.LoginPath))
         {
             failures.Add($"{nameof(options.LoginPath)} must not be empty.");

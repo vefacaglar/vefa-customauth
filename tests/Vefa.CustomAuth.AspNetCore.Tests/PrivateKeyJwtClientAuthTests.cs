@@ -119,6 +119,33 @@ public sealed class PrivateKeyJwtClientAuthTests
         Assert.Equal("invalid_client", await ReadJsonPropertyAsync(secondResponse, "error"));
     }
 
+    [Fact]
+    public async Task RevocationRequiresClientAssertionForPrivateKeyJwtClient()
+    {
+        using var rsa = RSA.Create(2048);
+        await using var app = await CreateAppAsync(BuildJwks(rsa, "kid-1"));
+        using var client = app.GetTestClient();
+
+        // RFC 7009 §2.1: a confidential client must authenticate to revoke a token.
+        var unauthenticated = await client.PostAsync("/connect/revoke", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["token"] = "some-refresh-token",
+            ["client_id"] = ClientId,
+        }));
+        Assert.Equal(HttpStatusCode.Unauthorized, unauthenticated.StatusCode);
+
+        // With a valid assertion the request is accepted (RFC 7009 returns 200 even for unknown tokens).
+        var assertion = SignAssertion(rsa, "kid-1", ClientId, TokenAudience, Guid.NewGuid().ToString("N"));
+        var authenticated = await client.PostAsync("/connect/revoke", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["token"] = "some-refresh-token",
+            ["client_id"] = ClientId,
+            ["client_assertion_type"] = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+            ["client_assertion"] = assertion,
+        }));
+        Assert.Equal(HttpStatusCode.OK, authenticated.StatusCode);
+    }
+
     // --- Direct validator unit tests ---
 
     [Fact]
@@ -171,6 +198,20 @@ public sealed class PrivateKeyJwtClientAuthTests
     }
 
     [Fact]
+    public async Task ValidatorRejectsAssertionWithExcessiveLifetime()
+    {
+        using var rsa = RSA.Create(2048);
+        var validator = CreateValidator();
+        var longLived = SignAssertion(rsa, "kid-1", ClientId, TokenAudience, Guid.NewGuid().ToString("N"),
+            expires: DateTime.UtcNow.AddHours(1));
+
+        var result = await validator.ValidateAsync(longLived, BuildJwks(rsa, "kid-1"), ClientId, new[] { Issuer, TokenAudience });
+
+        Assert.False(result.Succeeded);
+        Assert.Contains("maximum accepted lifetime", result.FailureReason, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ValidatorAcceptsValidAssertion()
     {
         using var rsa = RSA.Create(2048);
@@ -186,7 +227,7 @@ public sealed class PrivateKeyJwtClientAuthTests
     }
 
     private static ClientAssertionValidator CreateValidator()
-        => new(new StaticOptionsMonitor<CustomAuthOptions>(new CustomAuthOptions { Issuer = Issuer }));
+        => new(new StaticOptionsMonitor<CustomAuthOptions>(new CustomAuthOptions { Issuer = Issuer }), TimeProvider.System);
 
     private static string BuildJwks(RSA rsa, string kid)
     {

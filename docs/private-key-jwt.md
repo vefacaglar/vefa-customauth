@@ -23,7 +23,8 @@ its RSA key and publishes the public JWK at `/.well-known/jwks.json`). `private_
    - `client_assertion=<signed JWT>`
 3. The server verifies the assertion: signature against the registered JWKS, asymmetric algorithm
    only (`none`/HMAC rejected), `aud` is the issuer or the token endpoint URL, `iss == sub == client_id`,
-   `exp` present and unexpired (within `CustomAuthOptions.ClientAssertionClockSkew`), and `jti`
+   `exp` present, unexpired (within `CustomAuthOptions.ClientAssertionClockSkew`), and not further in
+   the future than `CustomAuthOptions.ClientAssertionMaxLifetime` (default 5 minutes), and `jti`
    present and not replayed.
 4. On failure the caller receives an opaque `401 invalid_client` (with `WWW-Authenticate`); the
    precise reason is written to the server log only.
@@ -107,7 +108,8 @@ grant_type=authorization_code
 &client_assertion=<signed_jwt>
 ```
 
-The same `client_assertion` fields apply to the `refresh_token` grant.
+The same `client_assertion` fields apply to the `refresh_token` and `client_credentials` grants,
+and to `/connect/revoke` (RFC 7009 requires confidential clients to authenticate when revoking).
 
 ## Replay protection and scaling
 

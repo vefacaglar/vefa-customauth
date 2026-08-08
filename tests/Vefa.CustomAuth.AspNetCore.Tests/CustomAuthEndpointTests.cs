@@ -114,6 +114,80 @@ public sealed class CustomAuthEndpointTests
     }
 
     [Fact]
+    public async Task ReusedAuthorizationCodeRevokesSessionTokenChainAndAudits()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        var verifier = CreateVerifier();
+        var code = await IssueAuthorizationCodeAsync(client, verifier);
+        var tokenResponse = await ExchangeCodeAsync(client, code, verifier);
+        Assert.Equal(HttpStatusCode.OK, tokenResponse.StatusCode);
+        var refreshToken = await ReadJsonPropertyAsync(tokenResponse, "refresh_token");
+
+        var replayResponse = await ExchangeCodeAsync(client, code, verifier);
+        Assert.Equal(HttpStatusCode.BadRequest, replayResponse.StatusCode);
+        Assert.Equal("invalid_grant", await ReadJsonPropertyAsync(replayResponse, "error"));
+
+        var refreshTokenStore = app.Services.GetRequiredService<ICustomAuthRefreshTokenStore>();
+        var storedToken = await refreshTokenStore.FindByHashAsync(TokenHasher.Hash(refreshToken));
+        Assert.NotNull(storedToken);
+        Assert.NotNull(storedToken!.RevokedAt);
+
+        var refreshResponse = await ExchangeRefreshTokenAsync(client, refreshToken);
+        Assert.Equal(HttpStatusCode.BadRequest, refreshResponse.StatusCode);
+
+        var auditLogStore = app.Services.GetRequiredService<ICustomAuthAuditLogStore>();
+        var auditLogs = await auditLogStore.GetPagedAsync(new CustomAuthPagedRequest { Page = 1, PageSize = 20 });
+        Assert.Contains(auditLogs.Items, log => log.Action == "AuthorizationCodeReuseDetected");
+    }
+
+    [Fact]
+    public async Task IdTokenAuthTimeReflectsOriginalSessionAuthenticationTime()
+    {
+        var sessionStart = new DateTimeOffset(2026, 5, 28, 0, 0, 0, TimeSpan.Zero);
+        var timeProvider = new ManualTimeProvider(sessionStart);
+        await using var app = await CreateAppAsync(timeProvider);
+        using var client = app.GetTestClient();
+
+        // Authenticate once; the SSO session is created at sessionStart.
+        var firstAuthorizeUrl = BuildAuthorizeUrl(CreateVerifier());
+        var antiforgery = await GetAntiforgeryAsync(client);
+        using var loginRequest = new HttpRequestMessage(HttpMethod.Post, "/login")
+        {
+            Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["userName"] = UserName,
+                ["password"] = Password,
+                ["returnUrl"] = firstAuthorizeUrl,
+                [antiforgery.FormFieldName] = antiforgery.RequestToken,
+            }),
+        };
+        loginRequest.Headers.Add("Cookie", antiforgery.Cookie);
+        var loginResponse = await client.SendAsync(loginRequest);
+        Assert.Equal(HttpStatusCode.Redirect, loginResponse.StatusCode);
+        var sessionCookie = GetCookie(loginResponse, ".Vefa.CustomAuth.Session");
+
+        // Two hours later the same session silently authorizes a new code (SSO, no fresh login).
+        timeProvider.Advance(TimeSpan.FromHours(2));
+        var verifier = CreateVerifier();
+        using var authorizeRequest = new HttpRequestMessage(HttpMethod.Get, BuildAuthorizeUrl(verifier));
+        authorizeRequest.Headers.Add("Cookie", sessionCookie);
+        var authorizeResponse = await client.SendAsync(authorizeRequest);
+        Assert.Equal(HttpStatusCode.Redirect, authorizeResponse.StatusCode);
+        var code = QueryHelpers.ParseQuery(authorizeResponse.Headers.Location!.Query)["code"].ToString();
+
+        var tokenResponse = await ExchangeCodeAsync(client, code, verifier);
+        Assert.Equal(HttpStatusCode.OK, tokenResponse.StatusCode);
+        var idToken = await ReadJsonPropertyAsync(tokenResponse, "id_token");
+
+        // auth_time must report the original authentication, not the code issuance two hours later.
+        var jwt = new JsonWebTokenHandler().ReadJsonWebToken(idToken);
+        Assert.True(jwt.TryGetPayloadValue<long>("auth_time", out var authTime));
+        Assert.Equal(sessionStart.ToUnixTimeSeconds(), authTime);
+    }
+
+    [Fact]
     public async Task ExpiredAuthorizationCodeIsRejected()
     {
         var timeProvider = new ManualTimeProvider(new DateTimeOffset(2026, 5, 28, 0, 0, 0, TimeSpan.Zero));

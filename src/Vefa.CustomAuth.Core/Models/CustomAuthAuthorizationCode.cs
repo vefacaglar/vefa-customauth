@@ -59,6 +59,13 @@ public sealed class CustomAuthAuthorizationCode
     public string? Nonce { get; set; }
 
     /// <summary>
+    /// Gets or sets the date and time when the end user originally authenticated for the SSO
+    /// session that issued this code. Emitted as the <c>auth_time</c> claim of the ID token.
+    /// Under SSO this can be much earlier than <see cref="CreatedAt"/>.
+    /// </summary>
+    public DateTimeOffset? AuthTime { get; set; }
+
+    /// <summary>
     /// Gets or sets the exact date and time when the authorization code will expire.
     /// </summary>
     public DateTimeOffset ExpiresAt { get; set; }
