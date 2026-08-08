@@ -59,6 +59,13 @@ public sealed class CustomAuthAuthorizationCode
     public string? Nonce { get; set; }
 
     /// <summary>
+    /// Gets or sets the space-delimited RFC 8707 resource indicators requested (and validated)
+    /// at the authorization endpoint, or null when the request carried none. The token request
+    /// may narrow the final audience to a subset of these values.
+    /// </summary>
+    public string? Resources { get; set; }
+
+    /// <summary>
     /// Gets or sets the date and time when the end user originally authenticated for the SSO
     /// session that issued this code. Emitted as the <c>auth_time</c> claim of the ID token.
     /// Under SSO this can be much earlier than <see cref="CreatedAt"/>.

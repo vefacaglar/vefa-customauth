@@ -23,10 +23,11 @@ internal sealed partial class ClientCredentialsGrantHandler : GrantHandlerBase
         ICustomAuthTokenManager tokenManager,
         ITokenIssuer tokenIssuer,
         ClientAuthenticationService clientAuthentication,
+        Services.TokenAudienceResolver audienceResolver,
         IOptionsMonitor<CustomAuthOptions> options,
         TimeProvider timeProvider,
         ILogger<ClientCredentialsGrantHandler> logger)
-        : base(clientManager, tokenManager, tokenIssuer, clientAuthentication, options, timeProvider)
+        : base(clientManager, tokenManager, tokenIssuer, clientAuthentication, audienceResolver, options, timeProvider)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -76,12 +77,21 @@ internal sealed partial class ClientCredentialsGrantHandler : GrantHandlerBase
             return EndpointResults.OAuthError("invalid_scope", "One or more requested scopes are not allowed for this client.");
         }
 
+        // RFC 8707: requested resources must be within the audiences the granted scopes map to.
+        var allowedAudiences = await AudienceResolver.ResolveAudiencesAsync(scope, cancellationToken).ConfigureAwait(false);
+        if (!TryResolveGrantAudiences(ParseRequestedResources(form), allowedAudiences, out var audiences, out var rejectedResource))
+        {
+            LogResourceNotPermitted(clientId, rejectedResource!);
+            return InvalidTarget();
+        }
+
         var issued = await TokenIssuer.IssueClientCredentialsTokenAsync(
             new TokenIssueRequest
             {
                 Subject = client.ClientId,
                 ClientId = client.ClientId,
                 Scope = scope,
+                Audiences = audiences,
             },
             cancellationToken).ConfigureAwait(false);
 
@@ -131,4 +141,8 @@ internal sealed partial class ClientCredentialsGrantHandler : GrantHandlerBase
     [LoggerMessage(EventId = 2065, Level = LogLevel.Information,
         Message = "Client credentials exchange succeeded (client: {ClientId}, scope: '{Scope}').")]
     private partial void LogExchangeSucceeded(string clientId, string scope);
+
+    [LoggerMessage(EventId = 2066, Level = LogLevel.Warning,
+        Message = "Client credentials exchange rejected (invalid_target): resource '{Resource}' is not within the audiences of the granted scopes (client: {ClientId}).")]
+    private partial void LogResourceNotPermitted(string clientId, string resource);
 }

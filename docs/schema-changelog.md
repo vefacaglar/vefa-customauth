@@ -16,6 +16,29 @@ own migrations (or call `EnsureCreated`). Use this page to know what changed whe
   automatically via `AutoMap`.
 - **In-memory hosts** need no action.
 
+## v1.3 — Audience model (scope audiences + RFC 8707 resources)
+
+Added the resource/audience model: scopes can map to an API audience, and grants record the
+RFC 8707 resource indicators they were issued for.
+
+| Table | New column | Type |
+| --- | --- | --- |
+| `CustomAuthScopes` | `Audience` | `nvarchar(512)` / `TEXT`, nullable |
+| `CustomAuthAuthorizationCodes` | `Resources` | `nvarchar(2000)` / `TEXT`, nullable (space-delimited) |
+| `CustomAuthRefreshTokens` | `Resources` | `nvarchar(2000)` / `TEXT`, nullable (space-delimited) |
+
+Rows with `NULL` values keep the previous behavior: access tokens fall back to `aud = client_id`
+when no granted scope maps to an audience.
+
+**Host action (EF Core):**
+
+```bash
+dotnet ef migrations add AddCustomAuthAudienceModel
+dotnet ef database update
+```
+
+No action required for MongoDB or in-memory hosts.
+
 ## v1.2 — `AuthTime` on authorization codes
 
 Added a nullable `AuthTime` column to `CustomAuthAuthorizationCodes`. It records when the end user

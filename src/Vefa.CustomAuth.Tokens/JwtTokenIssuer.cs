@@ -100,14 +100,27 @@ public sealed class JwtTokenIssuer : ITokenIssuer
         var descriptor = new SecurityTokenDescriptor
         {
             Issuer = opts.Issuer,
-            // NOTE: v0.1 simplification — access_token aud = client_id. A resource/audience model will be introduced in v0.2.
-            Audience = request.ClientId,
             IssuedAt = now.UtcDateTime,
             NotBefore = now.UtcDateTime,
             Expires = now.Add(opts.AccessTokenLifetime).UtcDateTime,
             SigningCredentials = credentials,
             Claims = claims,
         };
+
+        // Audiences come from the scope→audience mapping (optionally narrowed by RFC 8707
+        // resource parameters). When no granted scope maps to an audience, fall back to
+        // aud = client_id so resource servers always have a value to validate.
+        if (request.Audiences is { Count: > 0 })
+        {
+            foreach (var audience in request.Audiences)
+            {
+                descriptor.Audiences.Add(audience);
+            }
+        }
+        else
+        {
+            descriptor.Audience = request.ClientId;
+        }
 
         return _handler.CreateToken(descriptor);
     }

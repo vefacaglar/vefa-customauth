@@ -61,6 +61,7 @@ window.adminApp = function() {
             name: '',
             displayName: '',
             description: '',
+            audience: '',
             required: false,
             emphasize: false
         },
@@ -377,6 +378,7 @@ builder.Services
                     name: scope.name,
                     displayName: scope.displayName || '',
                     description: scope.description || '',
+                    audience: scope.audience || '',
                     required: scope.required || false,
                     emphasize: scope.emphasize || false
                 };
@@ -386,6 +388,7 @@ builder.Services
                     name: '',
                     displayName: '',
                     description: '',
+                    audience: '',
                     required: false,
                     emphasize: false
                 };
@@ -403,6 +406,7 @@ builder.Services
                 name: this.scopeForm.name.trim(),
                 displayName: this.scopeForm.displayName.trim(),
                 description: this.scopeForm.description.trim(),
+                audience: this.scopeForm.audience.trim() || null,
                 required: this.scopeForm.required,
                 emphasize: this.scopeForm.emphasize
             };

@@ -33,6 +33,7 @@
         { "label": "Refresh token", "slug": "flows/refresh-token" },
         { "label": "Client credentials", "slug": "flows/client-credentials" },
         { "label": "Client authentication", "slug": "flows/client-authentication" },
+        { "label": "Audiences & resource indicators", "slug": "flows/resource-indicators" },
         { "label": "Token validation & revocation", "slug": "flows/token-validation-and-revocation" }
       ]
     },

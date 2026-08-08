@@ -14,6 +14,7 @@ internal sealed partial class AuthorizationEndpointService
     private readonly ICustomAuthClientManager _clientManager;
     private readonly ICustomAuthTokenManager _tokenManager;
     private readonly SessionCookieService _sessionCookieService;
+    private readonly Services.TokenAudienceResolver _audienceResolver;
     private readonly IOptionsMonitor<CustomAuthOptions> _options;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<AuthorizationEndpointService> _logger;
@@ -22,6 +23,7 @@ internal sealed partial class AuthorizationEndpointService
         ICustomAuthClientManager clientManager,
         ICustomAuthTokenManager tokenManager,
         SessionCookieService sessionCookieService,
+        Services.TokenAudienceResolver audienceResolver,
         IOptionsMonitor<CustomAuthOptions> options,
         TimeProvider timeProvider,
         ILogger<AuthorizationEndpointService> logger)
@@ -29,6 +31,7 @@ internal sealed partial class AuthorizationEndpointService
         _clientManager = clientManager ?? throw new ArgumentNullException(nameof(clientManager));
         _tokenManager = tokenManager ?? throw new ArgumentNullException(nameof(tokenManager));
         _sessionCookieService = sessionCookieService ?? throw new ArgumentNullException(nameof(sessionCookieService));
+        _audienceResolver = audienceResolver ?? throw new ArgumentNullException(nameof(audienceResolver));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -74,6 +77,39 @@ internal sealed partial class AuthorizationEndpointService
         if (validationError is not null)
         {
             return validationError;
+        }
+
+        // RFC 8707 resource indicators: each requested resource must be a valid resource URI and
+        // must correspond to an audience reachable through the granted scopes.
+        var resources = request.Query["resource"]
+            .Where(r => !string.IsNullOrWhiteSpace(r))
+            .Select(r => r!.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (resources.Length > 0)
+        {
+            var invalidFormat = resources.FirstOrDefault(r => !Services.TokenAudienceResolver.HasValidResourceFormat(r));
+            if (invalidFormat is not null)
+            {
+                LogInvalidResourceFormat(clientId, invalidFormat);
+                return EndpointResults.OAuthAuthorizeRedirectError(
+                    redirectUri,
+                    "invalid_target",
+                    "The resource parameter must be an absolute URI without a fragment.",
+                    state);
+            }
+
+            var scopeAudiences = await _audienceResolver.ResolveAudiencesAsync(scope, cancellationToken).ConfigureAwait(false);
+            var unknownResource = resources.FirstOrDefault(r => !scopeAudiences.Contains(r, StringComparer.Ordinal));
+            if (unknownResource is not null)
+            {
+                LogUnknownResource(clientId, unknownResource);
+                return EndpointResults.OAuthAuthorizeRedirectError(
+                    redirectUri,
+                    "invalid_target",
+                    "The requested resource is not associated with the requested scopes.",
+                    state);
+            }
         }
 
         var prompt = request.Query["prompt"].ToString();
@@ -142,6 +178,7 @@ internal sealed partial class AuthorizationEndpointService
                 CodeChallengeMethod = codeChallengeMethod,
                 Scope = scope,
                 Nonce = string.IsNullOrEmpty(nonce) ? null : nonce,
+                Resources = resources.Length > 0 ? string.Join(' ', resources) : null,
                 AuthTime = session.CreatedAt,
                 CreatedAt = now,
                 ExpiresAt = now.Add(_options.CurrentValue.AuthorizationCodeLifetime),
@@ -302,4 +339,12 @@ internal sealed partial class AuthorizationEndpointService
     [LoggerMessage(EventId = 2110, Level = LogLevel.Information,
         Message = "Authorization code issued (client: {ClientId}, scope: '{Scope}').")]
     private partial void LogAuthorizationCodeIssued(string clientId, string scope);
+
+    [LoggerMessage(EventId = 2111, Level = LogLevel.Warning,
+        Message = "Authorize request rejected (invalid_target): resource '{Resource}' is not an absolute URI without a fragment (client: {ClientId}).")]
+    private partial void LogInvalidResourceFormat(string clientId, string resource);
+
+    [LoggerMessage(EventId = 2112, Level = LogLevel.Warning,
+        Message = "Authorize request rejected (invalid_target): resource '{Resource}' does not match any audience of the requested scopes (client: {ClientId}).")]
+    private partial void LogUnknownResource(string clientId, string resource);
 }

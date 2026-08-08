@@ -570,6 +570,66 @@ public sealed class EfCustomAuthStoreTests
         }
     }
 
+    [Fact]
+    public async Task ScopeAudienceAndGrantResourcesRoundTrip()
+    {
+        await using var provider = CreateSqliteProvider();
+        var codeId = Guid.NewGuid();
+        var tokenId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<CustomAuthDbContext>();
+            context.Scopes.Add(new CustomAuthScope
+            {
+                Name = "orders-api",
+                Audience = "https://orders.example.com"
+            });
+            context.AuthorizationCodes.Add(new CustomAuthAuthorizationCode
+            {
+                Id = codeId,
+                CodeHash = "code-hash-resources",
+                ClientId = "client-1",
+                UserId = "user-1",
+                RedirectUri = "https://client.example.com/cb",
+                Scope = "openid orders-api",
+                Resources = "https://orders.example.com https://billing.example.com",
+                CreatedAt = now,
+                ExpiresAt = now.AddMinutes(1)
+            });
+            context.RefreshTokens.Add(new CustomAuthRefreshToken
+            {
+                Id = tokenId,
+                TokenHash = "token-hash-resources",
+                ClientId = "client-1",
+                UserId = "user-1",
+                Scope = "openid orders-api offline_access",
+                Resources = "https://orders.example.com",
+                CreatedAt = now,
+                ExpiresAt = now.AddDays(1),
+                AbsoluteExpiresAt = now.AddDays(30)
+            });
+            await context.SaveChangesAsync();
+        }
+
+        await using (var scope = provider.CreateAsyncScope())
+        {
+            var scopeStore = scope.ServiceProvider.GetRequiredService<ICustomAuthScopeStore>();
+            var codeStore = scope.ServiceProvider.GetRequiredService<ICustomAuthAuthorizationCodeStore>();
+            var tokenStore = scope.ServiceProvider.GetRequiredService<ICustomAuthRefreshTokenStore>();
+
+            var configuredScope = await scopeStore.FindByNameAsync("orders-api");
+            Assert.Equal("https://orders.example.com", configuredScope!.Audience);
+
+            var code = await codeStore.FindByHashAsync("code-hash-resources");
+            Assert.Equal("https://orders.example.com https://billing.example.com", code!.Resources);
+
+            var token = await tokenStore.FindByHashAsync("token-hash-resources");
+            Assert.Equal("https://orders.example.com", token!.Resources);
+        }
+    }
+
     private static ServiceProvider CreateProvider()
     {
         var services = new ServiceCollection();

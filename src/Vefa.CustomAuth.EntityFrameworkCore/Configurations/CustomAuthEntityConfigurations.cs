@@ -134,6 +134,7 @@ internal sealed class CustomAuthAuthorizationCodeConfiguration : IEntityTypeConf
         builder.Property(x => x.RedirectUri).HasMaxLength(2000);
         builder.Property(x => x.Scope).HasMaxLength(2000);
         builder.Property(x => x.Nonce).HasMaxLength(512);
+        builder.Property(x => x.Resources).HasMaxLength(2000);
     }
 }
 
@@ -151,6 +152,7 @@ internal sealed class CustomAuthRefreshTokenConfiguration : IEntityTypeConfigura
         builder.Property(x => x.ClientId).HasMaxLength(200);
         builder.Property(x => x.UserId).HasMaxLength(200);
         builder.Property(x => x.Scope).HasMaxLength(2000);
+        builder.Property(x => x.Resources).HasMaxLength(2000);
     }
 }
 
@@ -186,6 +188,7 @@ internal sealed class CustomAuthScopeConfiguration : IEntityTypeConfiguration<Cu
         builder.Property(x => x.Name).HasMaxLength(200);
         builder.Property(x => x.DisplayName).HasMaxLength(200);
         builder.Property(x => x.Description).HasMaxLength(1000);
+        builder.Property(x => x.Audience).HasMaxLength(512);
 
         CustomAuthPropertiesBagConfiguration.Configure(builder, x => x.Properties);
     }

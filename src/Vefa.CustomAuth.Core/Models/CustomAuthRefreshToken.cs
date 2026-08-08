@@ -42,6 +42,13 @@ public sealed class CustomAuthRefreshToken
     public string Scope { get; set; } = default!;
 
     /// <summary>
+    /// Gets or sets the space-delimited RFC 8707 resource indicators of the originating grant,
+    /// or null when the grant carried none. Preserved across rotation; each refresh request may
+    /// narrow the issued access token's audience to a subset of these values.
+    /// </summary>
+    public string? Resources { get; set; }
+
+    /// <summary>
     /// Gets or sets the exact date and time when the refresh token will expire.
     /// </summary>
     public DateTimeOffset ExpiresAt { get; set; }

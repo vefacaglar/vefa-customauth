@@ -39,6 +39,7 @@ public static class CustomAuthServiceCollectionExtensions
         services.TryAddScoped<AuthorizationEndpointService>();
         services.TryAddScoped<LoginEndpointService>();
         services.TryAddScoped<ClientAuthenticationService>();
+        services.TryAddScoped<Services.TokenAudienceResolver>();
         services.TryAddScoped<TokenEndpointService>();
 
         // Token-endpoint grant handlers. Hosts can register additional ICustomAuthGrantHandler

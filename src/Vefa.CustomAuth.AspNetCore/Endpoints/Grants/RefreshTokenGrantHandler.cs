@@ -24,12 +24,13 @@ internal sealed partial class RefreshTokenGrantHandler : GrantHandlerBase
         ICustomAuthTokenManager tokenManager,
         ITokenIssuer tokenIssuer,
         ClientAuthenticationService clientAuthentication,
+        Services.TokenAudienceResolver audienceResolver,
         ICustomAuthUserStore userStore,
         ICustomAuthProfileService profileService,
         IOptionsMonitor<CustomAuthOptions> options,
         TimeProvider timeProvider,
         ILogger<RefreshTokenGrantHandler> logger)
-        : base(clientManager, tokenManager, tokenIssuer, clientAuthentication, options, timeProvider)
+        : base(clientManager, tokenManager, tokenIssuer, clientAuthentication, audienceResolver, options, timeProvider)
     {
         _userStore = userStore ?? throw new ArgumentNullException(nameof(userStore));
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
@@ -139,6 +140,16 @@ internal sealed partial class RefreshTokenGrantHandler : GrantHandlerBase
             return EndpointResults.OAuthError("invalid_grant", "The user is no longer active.");
         }
 
+        // RFC 8707: resources requested on refresh may only narrow the originating grant's
+        // resource set (or the scope-mapped audiences when the grant carried none). Checked
+        // before consumption so an invalid_target does not rotate the token.
+        var allowedAudiences = await GetAllowedAudiencesAsync(refreshToken.Resources, refreshToken.Scope, cancellationToken).ConfigureAwait(false);
+        if (!TryResolveGrantAudiences(ParseRequestedResources(form), allowedAudiences, out var audiences, out var rejectedResource))
+        {
+            LogResourceNotPermitted(clientId, rejectedResource!);
+            return InvalidTarget();
+        }
+
         var consumed = await TokenManager.MarkRefreshTokenConsumedAsync(refreshToken.Id, now, cancellationToken).ConfigureAwait(false);
         if (!consumed)
         {
@@ -162,6 +173,7 @@ internal sealed partial class RefreshTokenGrantHandler : GrantHandlerBase
                 Subject = user.UserId,
                 ClientId = clientId,
                 Scope = refreshToken.Scope,
+                Audiences = audiences,
                 AdditionalClaims = profileContext.Claims.Count > 0 ? profileContext.Claims : null,
             },
             cancellationToken).ConfigureAwait(false);
@@ -171,6 +183,7 @@ internal sealed partial class RefreshTokenGrantHandler : GrantHandlerBase
             client,
             user.UserId,
             refreshToken.Scope,
+            refreshToken.Resources,
             refreshToken.SessionId,
             refreshToken.Id,
             refreshToken.AbsoluteExpiresAt,
@@ -238,4 +251,8 @@ internal sealed partial class RefreshTokenGrantHandler : GrantHandlerBase
     [LoggerMessage(EventId = 2040, Level = LogLevel.Information,
         Message = "Refresh token exchange succeeded (client: {ClientId}, scope: '{Scope}').")]
     private partial void LogRefreshExchangeSucceeded(string clientId, string scope);
+
+    [LoggerMessage(EventId = 2041, Level = LogLevel.Warning,
+        Message = "Refresh token exchange rejected (invalid_target): resource '{Resource}' is not within the grant's allowed audiences (client: {ClientId}).")]
+    private partial void LogResourceNotPermitted(string clientId, string resource);
 }

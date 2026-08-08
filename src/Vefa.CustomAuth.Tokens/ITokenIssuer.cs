@@ -32,6 +32,13 @@ public sealed class TokenIssueRequest
     public string? Nonce { get; set; }
 
     /// <summary>
+    /// Gets or sets the audiences (resource identifiers) the access token is issued for.
+    /// When null or empty the access token falls back to a single audience equal to
+    /// <see cref="ClientId"/>. The ID token audience is always <see cref="ClientId"/>.
+    /// </summary>
+    public IReadOnlyCollection<string>? Audiences { get; set; }
+
+    /// <summary>
     /// Gets or sets optional additional claims to include in user-facing tokens.
     /// </summary>
     public IReadOnlyDictionary<string, object>? AdditionalClaims { get; set; }

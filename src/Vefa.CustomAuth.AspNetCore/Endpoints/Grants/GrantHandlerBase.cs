@@ -24,6 +24,7 @@ internal abstract class GrantHandlerBase : ICustomAuthGrantHandler
         ICustomAuthTokenManager tokenManager,
         ITokenIssuer tokenIssuer,
         ClientAuthenticationService clientAuthentication,
+        Services.TokenAudienceResolver audienceResolver,
         IOptionsMonitor<CustomAuthOptions> options,
         TimeProvider timeProvider)
     {
@@ -31,6 +32,7 @@ internal abstract class GrantHandlerBase : ICustomAuthGrantHandler
         TokenManager = tokenManager ?? throw new ArgumentNullException(nameof(tokenManager));
         TokenIssuer = tokenIssuer ?? throw new ArgumentNullException(nameof(tokenIssuer));
         ClientAuthentication = clientAuthentication ?? throw new ArgumentNullException(nameof(clientAuthentication));
+        AudienceResolver = audienceResolver ?? throw new ArgumentNullException(nameof(audienceResolver));
         Options = options ?? throw new ArgumentNullException(nameof(options));
         TimeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
@@ -42,6 +44,8 @@ internal abstract class GrantHandlerBase : ICustomAuthGrantHandler
     protected ITokenIssuer TokenIssuer { get; }
 
     protected ClientAuthenticationService ClientAuthentication { get; }
+
+    protected Services.TokenAudienceResolver AudienceResolver { get; }
 
     protected IOptionsMonitor<CustomAuthOptions> Options { get; }
 
@@ -69,6 +73,61 @@ internal abstract class GrantHandlerBase : ICustomAuthGrantHandler
 
         var requestedScopes = scope.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         return requestedScopes.All(requested => client.AllowedScopes.Contains(requested, StringComparer.Ordinal));
+    }
+
+    protected static IResult InvalidTarget()
+        => EndpointResults.OAuthError("invalid_target", "The requested resource is invalid, unknown, or not permitted for this grant.");
+
+    /// <summary>
+    /// Extracts the distinct RFC 8707 <c>resource</c> values from the token request form.
+    /// </summary>
+    protected static string[] ParseRequestedResources(IFormCollection form)
+        => form["resource"]
+            .Where(r => !string.IsNullOrWhiteSpace(r))
+            .Select(r => r!.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+    /// <summary>
+    /// Applies RFC 8707 narrowing: with no requested resources the grant's full audience set is
+    /// used; otherwise every requested resource must be within the allowed set and the audiences
+    /// narrow to exactly the requested resources. Returns false (with the first offending value
+    /// in <paramref name="rejectedResource"/>) when a requested resource is not allowed.
+    /// </summary>
+    protected static bool TryResolveGrantAudiences(
+        string[] requestedResources,
+        IReadOnlyList<string> allowedAudiences,
+        out IReadOnlyList<string> audiences,
+        out string? rejectedResource)
+    {
+        if (requestedResources.Length == 0)
+        {
+            audiences = allowedAudiences;
+            rejectedResource = null;
+            return true;
+        }
+
+        rejectedResource = requestedResources.FirstOrDefault(r => !allowedAudiences.Contains(r, StringComparer.Ordinal));
+        if (rejectedResource is not null)
+        {
+            audiences = Array.Empty<string>();
+            return false;
+        }
+
+        audiences = requestedResources;
+        return true;
+    }
+
+    /// <summary>
+    /// Returns the allowed audience set of a grant: the resources bound to the grant when it has
+    /// any, otherwise the audiences mapped by its granted scopes.
+    /// </summary>
+    protected async Task<IReadOnlyList<string>> GetAllowedAudiencesAsync(string? grantResources, string scope, CancellationToken cancellationToken)
+    {
+        IReadOnlyList<string> boundResources = Services.TokenAudienceResolver.SplitResources(grantResources);
+        return boundResources.Count > 0
+            ? boundResources
+            : await AudienceResolver.ResolveAudiencesAsync(scope, cancellationToken).ConfigureAwait(false);
     }
 
     protected static bool CanIssueRefreshToken(CustomAuthClient client, string scope)
@@ -102,6 +161,7 @@ internal abstract class GrantHandlerBase : ICustomAuthGrantHandler
         CustomAuthClient client,
         string userId,
         string scope,
+        string? resources,
         Guid? sessionId,
         Guid? parentTokenId,
         DateTimeOffset absoluteExpiresAt,
@@ -123,6 +183,7 @@ internal abstract class GrantHandlerBase : ICustomAuthGrantHandler
                 SessionId = sessionId,
                 ParentTokenId = parentTokenId,
                 Scope = scope,
+                Resources = resources,
                 CreatedAt = now,
                 ExpiresAt = GetRefreshTokenExpiresAt(client, now, absoluteExpiresAt),
                 AbsoluteExpiresAt = absoluteExpiresAt,

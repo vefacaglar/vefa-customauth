@@ -13,6 +13,7 @@ using Vefa.CustomAuth.AspNetCore.Extensions;
 using Vefa.CustomAuth.AspNetCore.Stores.InMemory;
 using Vefa.CustomAuth.Core.Models;
 using Vefa.CustomAuth.Core.Options;
+using Vefa.CustomAuth.Core.Stores;
 
 namespace Vefa.CustomAuth.AspNetCore.Tests;
 
@@ -83,6 +84,42 @@ public sealed class ClientCredentialsGrantTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         using var doc = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
         Assert.True(doc.RootElement.TryGetProperty("access_token", out _));
+    }
+
+    [Fact]
+    public async Task ResourceParameterSetsAudienceAndUnknownResourceIsRejected()
+    {
+        using var rsa = RSA.Create(2048);
+        await using var app = await CreateAppAsync(rsa);
+        await app.Services.GetRequiredService<ICustomAuthScopeStore>()
+            .StoreAsync(new CustomAuthScope { Name = "api1", Audience = "https://api1.example.com" });
+        using var client = app.GetTestClient();
+
+        var form = new Dictionary<string, string>
+        {
+            ["grant_type"] = "client_credentials",
+            ["client_id"] = ConfidentialClientId,
+            ["scope"] = "api1",
+            ["resource"] = "https://api1.example.com",
+            ["client_assertion_type"] = AssertionType,
+            ["client_assertion"] = SignAssertion(rsa, ConfidentialClientId),
+        };
+        using var response = await client.PostAsync("/connect/token", new FormUrlEncodedContent(form));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var accessToken = await ReadJsonPropertyAsync(response, "access_token");
+        var jwt = new JsonWebTokenHandler().ReadJsonWebToken(accessToken);
+        Assert.Equal(new[] { "https://api1.example.com" }, jwt.Audiences.ToArray());
+
+        // A resource outside the granted scopes' audiences is rejected with invalid_target.
+        var badForm = new Dictionary<string, string>(form)
+        {
+            ["resource"] = "https://unknown.example.com",
+            ["client_assertion"] = SignAssertion(rsa, ConfidentialClientId),
+        };
+        using var badResponse = await client.PostAsync("/connect/token", new FormUrlEncodedContent(badForm));
+        Assert.Equal(HttpStatusCode.BadRequest, badResponse.StatusCode);
+        Assert.Equal("invalid_target", await ReadJsonPropertyAsync(badResponse, "error"));
     }
 
     [Fact]

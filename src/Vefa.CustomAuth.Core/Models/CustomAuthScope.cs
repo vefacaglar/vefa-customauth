@@ -21,6 +21,15 @@ public sealed class CustomAuthScope
     public string? Description { get; set; }
 
     /// <summary>
+    /// Gets or sets the audience (resource identifier) of the API this scope belongs to, e.g.
+    /// <c>https://api.example.com</c>. When set, access tokens whose granted scopes include this
+    /// scope carry the value in their <c>aud</c> claim, and clients may target it explicitly with
+    /// the RFC 8707 <c>resource</c> parameter. When no granted scope maps to an audience, the
+    /// access token falls back to <c>aud = client_id</c>.
+    /// </summary>
+    public string? Audience { get; set; }
+
+    /// <summary>
     /// Gets or sets a value indicating whether this scope is required and cannot be deselected by the user.
     /// </summary>
     public bool Required { get; set; }

@@ -1,0 +1,77 @@
+---
+title: Audiences & resource indicators
+description: Scope→audience mapping for access tokens and RFC 8707 resource parameters for targeting a specific API.
+---
+
+# Audiences & resource indicators
+
+Access tokens carry an `aud` (audience) claim that tells a resource server whether a token was
+meant for it. Vefa.CustomAuth derives audiences from the **scope→audience mapping** and lets
+clients narrow them per request with the **RFC 8707 `resource` parameter**.
+
+## Scope→audience mapping
+
+Each scope may declare the API it belongs to via `CustomAuthScope.Audience`:
+
+```csharp
+new CustomAuthScope
+{
+    Name = "orders-api",
+    DisplayName = "Orders API",
+    Audience = "https://orders.example.com",
+};
+```
+
+When tokens are issued, the granted scopes are resolved against the scope store and the access
+token's `aud` becomes the distinct set of mapped audiences. Identity scopes (`openid`, `profile`,
+`email`, `offline_access`) typically have no audience and contribute nothing.
+
+**Fallback:** when no granted scope maps to an audience, the access token keeps `aud = client_id`
+(the pre-1.2 behavior), so existing deployments continue to validate unchanged. The ID token's
+audience is always the client id, per OpenID Connect.
+
+The Admin UI scope editor exposes the audience field, and audiences can also be managed through
+the scope CRUD API.
+
+## RFC 8707 `resource` parameter
+
+A client calling multiple APIs can pin a token to one of them by sending one or more `resource`
+parameters:
+
+```text
+GET /connect/authorize?...&resource=https%3A%2F%2Forders.example.com
+```
+
+```text
+POST /connect/token
+grant_type=authorization_code&...&resource=https%3A%2F%2Forders.example.com
+```
+
+Rules enforced by the server:
+
+- A `resource` value must be an **absolute URI without a fragment** (RFC 8707 §2); violations are
+  rejected with `error=invalid_target`.
+- At `/connect/authorize`, each resource must match an audience mapped by the requested scopes.
+  Validated resources are stored on the authorization code.
+- At `/connect/token`, requested resources may only **narrow** the grant: they must be a subset of
+  the resources bound at the authorization endpoint (or, when none were bound, of the audiences
+  mapped by the granted scopes). Violations return `400 invalid_target` — without consuming the
+  authorization code or rotating the refresh token.
+- Refresh tokens inherit the originating grant's resources and preserve them across rotation; each
+  refresh request may narrow again.
+- The `client_credentials` grant validates resources against the granted scopes' audiences.
+
+## Validating audience at the resource server
+
+Point `TokenValidationParameters.ValidAudience` at the API's own resource identifier:
+
+```csharp
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.Authority = "https://auth.example.com";
+        options.TokenValidationParameters.ValidAudience = "https://orders.example.com";
+    });
+```
+
+Never disable audience validation: a token minted for another API would then be accepted.

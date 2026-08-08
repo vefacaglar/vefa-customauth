@@ -493,6 +493,99 @@ public sealed class CustomAuthEndpointTests
     }
 
     [Fact]
+    public async Task AccessTokenAudienceComesFromScopeMapping()
+    {
+        await using var app = await CreateAppAsync();
+        await SeedScopeAsync(app, "test-api", "https://api.example.com");
+        using var client = app.GetTestClient();
+
+        var accessToken = await IssueAccessTokenAsync(client);
+
+        var mappedAudience = await ValidateAccessTokenAsync(client, accessToken, "http://localhost", "https://api.example.com");
+        Assert.True(mappedAudience.IsValid, mappedAudience.Exception?.Message);
+
+        // Once a granted scope maps to an audience, aud no longer falls back to the client id.
+        var clientIdAudience = await ValidateAccessTokenAsync(client, accessToken, "http://localhost", ClientId);
+        Assert.False(clientIdAudience.IsValid);
+    }
+
+    [Fact]
+    public async Task ResourceParameterNarrowsAccessTokenAudience()
+    {
+        await using var app = await CreateAppAsync(configureClient: c => c.AllowedScopes.Add("other-api"));
+        await SeedScopeAsync(app, "test-api", "https://api.example.com");
+        await SeedScopeAsync(app, "other-api", "https://other.example.com");
+        using var client = app.GetTestClient();
+
+        var verifier = CreateVerifier();
+        var code = await IssueAuthorizationCodeAsync(client, verifier, scope: Scope + " other-api", resource: "https://api.example.com");
+        var tokenResponse = await ExchangeCodeAsync(client, code, verifier);
+        Assert.Equal(HttpStatusCode.OK, tokenResponse.StatusCode);
+        var accessToken = await ReadJsonPropertyAsync(tokenResponse, "access_token");
+
+        // The authorization request pinned the grant to api.example.com, so the token must not be
+        // valid for the other audience even though its scope would have mapped to it.
+        var requestedAudience = await ValidateAccessTokenAsync(client, accessToken, "http://localhost", "https://api.example.com");
+        Assert.True(requestedAudience.IsValid, requestedAudience.Exception?.Message);
+        var otherAudience = await ValidateAccessTokenAsync(client, accessToken, "http://localhost", "https://other.example.com");
+        Assert.False(otherAudience.IsValid);
+    }
+
+    [Fact]
+    public async Task TokenRequestWithUnpermittedResourceReturnsInvalidTargetWithoutBurningTheCode()
+    {
+        await using var app = await CreateAppAsync();
+        await SeedScopeAsync(app, "test-api", "https://api.example.com");
+        using var client = app.GetTestClient();
+
+        var verifier = CreateVerifier();
+        var code = await IssueAuthorizationCodeAsync(client, verifier);
+
+        var rejected = await ExchangeCodeAsync(client, code, verifier, resource: "https://unknown.example.com");
+        Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+        Assert.Equal("invalid_target", await ReadJsonPropertyAsync(rejected, "error"));
+
+        // invalid_target must not consume the single-use code; a corrected retry succeeds.
+        var retry = await ExchangeCodeAsync(client, code, verifier, resource: "https://api.example.com");
+        Assert.Equal(HttpStatusCode.OK, retry.StatusCode);
+    }
+
+    [Fact]
+    public async Task AuthorizeWithMalformedResourceRedirectsWithInvalidTarget()
+    {
+        await using var app = await CreateAppAsync();
+        using var client = app.GetTestClient();
+
+        var response = await client.GetAsync(BuildAuthorizeUrl(CreateVerifier(), resource: "not-a-valid-uri"));
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        var location = response.Headers.Location;
+        Assert.NotNull(location);
+        Assert.Equal(RedirectUri, location!.GetLeftPart(UriPartial.Path));
+        Assert.Equal("invalid_target", QueryHelpers.ParseQuery(location.Query)["error"].ToString());
+    }
+
+    [Fact]
+    public async Task RefreshedAccessTokenKeepsResourceBoundAudience()
+    {
+        await using var app = await CreateAppAsync();
+        await SeedScopeAsync(app, "test-api", "https://api.example.com");
+        using var client = app.GetTestClient();
+
+        var verifier = CreateVerifier();
+        var code = await IssueAuthorizationCodeAsync(client, verifier, resource: "https://api.example.com");
+        var tokenResponse = await ExchangeCodeAsync(client, code, verifier);
+        var refreshToken = await ReadJsonPropertyAsync(tokenResponse, "refresh_token");
+
+        var refreshResponse = await ExchangeRefreshTokenAsync(client, refreshToken);
+        Assert.Equal(HttpStatusCode.OK, refreshResponse.StatusCode);
+        var refreshedAccessToken = await ReadJsonPropertyAsync(refreshResponse, "access_token");
+
+        var result = await ValidateAccessTokenAsync(client, refreshedAccessToken, "http://localhost", "https://api.example.com");
+        Assert.True(result.IsValid, result.Exception?.Message);
+    }
+
+    [Fact]
     public async Task DiscoveryAndJwksExposeSigningMetadata()
     {
         await using var app = await CreateAppAsync();
@@ -718,9 +811,9 @@ public sealed class CustomAuthEndpointTests
         return app;
     }
 
-    private static async Task<string> IssueAuthorizationCodeAsync(HttpClient client, string verifier, string scope = Scope, string? nonce = null)
+    private static async Task<string> IssueAuthorizationCodeAsync(HttpClient client, string verifier, string scope = Scope, string? nonce = null, string? resource = null)
     {
-        var authorizeUrl = BuildAuthorizeUrl(verifier, scope: scope, nonce: nonce);
+        var authorizeUrl = BuildAuthorizeUrl(verifier, scope: scope, nonce: nonce, resource: resource);
         var antiforgery = await GetAntiforgeryAsync(client);
 
         using var loginRequest = new HttpRequestMessage(HttpMethod.Post, "/login")
@@ -752,17 +845,23 @@ public sealed class CustomAuthEndpointTests
         return code;
     }
 
-    private static Task<HttpResponseMessage> ExchangeCodeAsync(HttpClient client, string code, string verifier)
-        => client.PostAsync(
-            "/connect/token",
-            new FormUrlEncodedContent(new Dictionary<string, string>
-            {
-                ["grant_type"] = "authorization_code",
-                ["client_id"] = ClientId,
-                ["redirect_uri"] = RedirectUri,
-                ["code"] = code,
-                ["code_verifier"] = verifier,
-            }));
+    private static Task<HttpResponseMessage> ExchangeCodeAsync(HttpClient client, string code, string verifier, string? resource = null)
+    {
+        var form = new Dictionary<string, string>
+        {
+            ["grant_type"] = "authorization_code",
+            ["client_id"] = ClientId,
+            ["redirect_uri"] = RedirectUri,
+            ["code"] = code,
+            ["code_verifier"] = verifier,
+        };
+        if (!string.IsNullOrEmpty(resource))
+        {
+            form["resource"] = resource;
+        }
+
+        return client.PostAsync("/connect/token", new FormUrlEncodedContent(form));
+    }
 
     private static Task<HttpResponseMessage> ExchangeRefreshTokenAsync(HttpClient client, string refreshToken)
         => client.PostAsync(
@@ -808,7 +907,7 @@ public sealed class CustomAuthEndpointTests
             });
     }
 
-    private static string BuildAuthorizeUrl(string verifier, string redirectUri = RedirectUri, string scope = Scope, string? nonce = null)
+    private static string BuildAuthorizeUrl(string verifier, string redirectUri = RedirectUri, string scope = Scope, string? nonce = null, string? resource = null)
     {
         var challenge = Base64UrlEncoder.Encode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
         var url = "/connect/authorize?client_id=" + Uri.EscapeDataString(ClientId)
@@ -823,6 +922,11 @@ public sealed class CustomAuthEndpointTests
             url += "&nonce=" + Uri.EscapeDataString(nonce);
         }
 
+        if (!string.IsNullOrEmpty(resource))
+        {
+            url += "&resource=" + Uri.EscapeDataString(resource);
+        }
+
         return url;
     }
 
@@ -832,6 +936,10 @@ public sealed class CustomAuthEndpointTests
         RandomNumberGenerator.Fill(bytes);
         return Base64UrlEncoder.Encode(bytes.ToArray());
     }
+
+    private static Task SeedScopeAsync(WebApplication app, string name, string? audience)
+        => app.Services.GetRequiredService<ICustomAuthScopeStore>()
+            .StoreAsync(new CustomAuthScope { Name = name, Audience = audience });
 
     private static Task<AntiforgeryTokens> GetAntiforgeryAsync(HttpClient client)
         => AntiforgeryTestHelpers.GetAntiforgeryAsync(client);

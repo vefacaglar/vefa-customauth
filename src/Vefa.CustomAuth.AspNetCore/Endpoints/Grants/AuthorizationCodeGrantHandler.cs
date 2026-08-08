@@ -24,12 +24,13 @@ internal sealed partial class AuthorizationCodeGrantHandler : GrantHandlerBase
         ICustomAuthTokenManager tokenManager,
         ITokenIssuer tokenIssuer,
         ClientAuthenticationService clientAuthentication,
+        Services.TokenAudienceResolver audienceResolver,
         ICustomAuthUserStore userStore,
         ICustomAuthProfileService profileService,
         IOptionsMonitor<CustomAuthOptions> options,
         TimeProvider timeProvider,
         ILogger<AuthorizationCodeGrantHandler> logger)
-        : base(clientManager, tokenManager, tokenIssuer, clientAuthentication, options, timeProvider)
+        : base(clientManager, tokenManager, tokenIssuer, clientAuthentication, audienceResolver, options, timeProvider)
     {
         _userStore = userStore ?? throw new ArgumentNullException(nameof(userStore));
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
@@ -138,6 +139,16 @@ internal sealed partial class AuthorizationCodeGrantHandler : GrantHandlerBase
             return EndpointResults.OAuthError("invalid_grant", "The user is no longer active.");
         }
 
+        // RFC 8707: resources requested here may only narrow what the authorization request
+        // established (or, absent any, what the granted scopes map to). Checked before the code
+        // is consumed so an invalid_target does not burn the single-use code.
+        var allowedAudiences = await GetAllowedAudiencesAsync(code.Resources, code.Scope, cancellationToken).ConfigureAwait(false);
+        if (!TryResolveGrantAudiences(ParseRequestedResources(form), allowedAudiences, out var audiences, out var rejectedResource))
+        {
+            LogResourceNotPermitted(clientId, rejectedResource!);
+            return InvalidTarget();
+        }
+
         var consumed = await TokenManager.MarkAuthorizationCodeConsumedAsync(code.Id, now, cancellationToken).ConfigureAwait(false);
         if (!consumed)
         {
@@ -157,6 +168,7 @@ internal sealed partial class AuthorizationCodeGrantHandler : GrantHandlerBase
                 Subject = user.UserId,
                 ClientId = clientId,
                 Scope = code.Scope,
+                Audiences = audiences,
                 // Codes created before AuthTime existed fall back to CreatedAt.
                 AuthTime = code.AuthTime ?? code.CreatedAt,
                 Nonce = code.Nonce,
@@ -171,6 +183,7 @@ internal sealed partial class AuthorizationCodeGrantHandler : GrantHandlerBase
             client,
             user.UserId,
             code.Scope,
+            code.Resources,
             code.SessionId,
             parentTokenId: null,
             absoluteExpiresAt,
@@ -239,4 +252,8 @@ internal sealed partial class AuthorizationCodeGrantHandler : GrantHandlerBase
     [LoggerMessage(EventId = 2020, Level = LogLevel.Information,
         Message = "Authorization code exchange succeeded (client: {ClientId}, scope: '{Scope}', refreshTokenIssued: {RefreshTokenIssued}).")]
     private partial void LogCodeExchangeSucceeded(string clientId, string scope, bool refreshTokenIssued);
+
+    [LoggerMessage(EventId = 2021, Level = LogLevel.Warning,
+        Message = "Authorization code exchange rejected (invalid_target): resource '{Resource}' is not within the grant's allowed audiences (client: {ClientId}).")]
+    private partial void LogResourceNotPermitted(string clientId, string resource);
 }

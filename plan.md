@@ -714,13 +714,29 @@ client credentials, private_key_jwt, signing certificate) surfaced four gaps, al
           bounding the replay window and replay-cache retention.
 ```
 
-## 21. Resource / Audience Model (open)
+## 21. Resource / Audience Model
 
-Access tokens still carry `aud = client_id` (the "v0.1 simplification" in `JwtTokenIssuer`).
-With the client credentials grant now shipped, a proper resource/audience model is the main
-remaining protocol gap: support RFC 8707 `resource` parameters (or scope→audience mapping via
-`CustomAuthScope`), emit real API audiences in access tokens, and document audience validation
-for resource servers. Until then, every API must validate the calling client's id as its audience.
+Status: completed (2026-08-08)
+
+Replaces the "v0.1 simplification" (`aud = client_id`) with a real audience model:
+
+- **Scope→audience mapping**: `CustomAuthScope.Audience` names the API a scope belongs to. Token
+  issuance resolves granted scopes via `TokenAudienceResolver` and emits the distinct mapped
+  audiences in the access token `aud` (array-capable). When no scope maps to an audience the token
+  falls back to `aud = client_id`, so existing deployments validate unchanged. ID token `aud`
+  remains the client id per OIDC.
+- **RFC 8707 resource indicators**: `resource` parameters are accepted at `/connect/authorize`
+  (validated: absolute URI, no fragment, must match a scope-mapped audience; persisted on the
+  code) and at the token endpoint for all three grants, where they may only narrow the grant's
+  resource set. Violations return `invalid_target` without consuming the code or rotating the
+  refresh token. Refresh tokens carry `Resources` and preserve them across rotation.
+- **Admin UI**: scope editor exposes the audience field (verified in the browser).
+- **Schema**: `CustomAuthScopes.Audience`, `CustomAuthAuthorizationCodes.Resources`,
+  `CustomAuthRefreshTokens.Resources` — see `docs/schema-changelog.md` v1.3.
+- **Docs**: `docs/flows/resource-indicators.mdx` covers mapping, narrowing rules, and resource
+  server validation.
+- **Tests**: integration coverage for scope-mapped `aud`, narrowing, `invalid_target` (code not
+  burned), refresh preservation, client_credentials resources, and EF/Mongo store round-trips.
 
 ---
 
